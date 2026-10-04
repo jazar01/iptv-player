@@ -222,6 +222,7 @@ A small web service I host stores each device's saved document.
 ## Open questions
 
 - [ ] Which Roku models are in use? Older models have much less memory, which limits catalog caching.
-- [ ] Does the provider's `allowed_output_formats` include HLS (`m3u8`)?
-- [ ] What is the account's `max_connections`, and is it enough for the households sharing it?
+- [x] Does the provider's `allowed_output_formats` include HLS (`m3u8`)? **Yes:** `m3u8` and `ts` (login response, Oct 4, 2026).
+- [x] What is the account's `max_connections`? **3** (login response, Oct 4, 2026). One was already in use at the time.
+- [ ] Are 3 simultaneous streams enough for the households sharing the account? Depends on how often several TVs watch at once; the connection-limit message matters more as a result.
 - [ ] Confirm current beta channel limits (device count, expiry) before relying on it.
