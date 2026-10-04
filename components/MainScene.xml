@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Owns the screens and the services. Screens talk only to MainScene; only the
+  services touch the network (ApiTask) or saved state (StateStore).
+-->
+<component name="MainScene" extends="Scene">
+  <children>
+    <Rectangle id="background" width="1920" height="1080" color="0x101418FF" />
+    <Group id="screenHost" />
+    <Label id="message" translation="[160,480]" width="1600" wrap="true"
+      horizAlign="center" font="font:MediumSystemFont" color="0xD0D6DCFF" />
+
+    <StateStore id="stateStore" />
+    <ApiTask id="api" />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
+</component>

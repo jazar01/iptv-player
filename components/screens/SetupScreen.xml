@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  First-run setup: server URL, username, password and device name, entered
+  with the on-screen keyboard. Talks only to MainScene: MainScene sets
+  `values`, `status` and `busy`; the screen sets `submit` when the user picks
+  Connect.
+-->
+<component name="SetupScreen" extends="Group">
+  <interface>
+    <field id="values" type="assocarray" onChange="onValues" />
+    <field id="status" type="string" onChange="onStatus" />
+    <field id="busy" type="boolean" value="false" />
+    <field id="submit" type="assocarray" alwaysNotify="true" />
+  </interface>
+
+  <children>
+    <Label id="title" translation="[160,120]" width="1600"
+      font="font:LargeBoldSystemFont" color="0xFFFFFFFF"
+      text="Set up IPTV Player" />
+    <Label id="subtitle" translation="[160,200]" width="1600" wrap="true"
+      font="font:SmallSystemFont" color="0xA0A8B0FF"
+      text="Enter your Xtream Codes account. You only do this once on each Roku." />
+
+    <LabelList id="menu" translation="[160,300]" itemSize="[1200,80]"
+      font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont"
+      color="0xD0D6DCFF" focusedColor="0x101418FF" />
+
+    <Label id="status" translation="[160,780]" width="1600" wrap="true"
+      font="font:MediumSystemFont" color="0xFFB060FF" />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/screens/SetupScreen.brs" />
+</component>

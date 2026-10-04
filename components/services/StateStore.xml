@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  The only path to saved state. Callers use these functions via callFunc and
+  never touch the registry. The storage backend (registry in version 1) sits
+  behind read()/write() so a remote backend can be added later.
+
+  Every mutating function saves immediately and returns true only if the
+  write reached the registry.
+-->
+<component name="StateStore" extends="Node">
+  <interface>
+    <function name="isConfigured" />
+    <function name="getCredentials" />
+    <function name="setCredentials" />
+    <function name="getDevice" />
+    <function name="setDeviceName" />
+
+    <function name="getFavorites" />
+    <function name="isFavorite" />
+    <function name="addFavorite" />
+    <function name="removeFavorite" />
+
+    <function name="getResume" />
+    <function name="getPosition" />
+    <function name="savePosition" />
+    <function name="clearPosition" />
+  </interface>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/services/RegistryBackend.brs" />
+  <script type="text/brightscript" uri="pkg:/components/services/StateStore.brs" />
+</component>

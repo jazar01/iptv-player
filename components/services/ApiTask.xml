@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Every HTTP call goes through this task: roUrlTransfer can't run on the render
+  thread, and retries/error handling live in one place.
+
+  Set `credentials` once, then set `request`; requests run in order and each
+  produces one `response`.
+
+  request:  { id, action, params?, timeoutMs? }   Xtream player_api.php call
+            { id, url, timeoutMs? }               plain GET returning JSON
+  response: { id, action, ok, code, error, data, ms }
+-->
+<component name="ApiTask" extends="Task">
+  <interface>
+    <field id="credentials" type="assocarray" />
+    <field id="request" type="assocarray" alwaysNotify="true" />
+    <field id="response" type="assocarray" alwaysNotify="true" />
+  </interface>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/services/ApiTask.brs" />
+</component>

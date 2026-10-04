@@ -1,0 +1,5 @@
+# Build output
+out/
+
+# Per-machine deploy settings (Roku IP and developer password)
+scripts/deploy.local.ps1
