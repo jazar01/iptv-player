@@ -17,5 +17,6 @@
       font="font:SmallestBoldSystemFont" color="0xFFC94DFF" />
   </children>
 
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
   <script type="text/brightscript" uri="pkg:/components/catalog/CatalogItem.brs" />
 </component>

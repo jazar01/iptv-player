@@ -7,6 +7,21 @@
     { "text": "ᴸᶦᵛᵉ", "flag": "live" },
     { "text": "ᴺᵉʷ", "flag": "new" }
   ],
+  "nameTimesComment": "Event times written into channel names, shown in the Roku's local time instead. pattern: a regex whose capture groups are listed in order (year, month, day, hour, minute, ampm); zone: a key in timezones. A missing year means the current year. The first matching rule wins.",
+  "nameTimes": [
+    {
+      "comment": "NFL Game Pass style: 'NFL GP 03 | Rams @ Eagles (2026-10-04 17:00:00)'. UTC: a 1:00 PM ET kickoff is listed as 17:00.",
+      "pattern": "\\((\\d{4})-(\\d{1,2})-(\\d{1,2}) (\\d{1,2}):(\\d{2})(?::\\d{2})?\\)",
+      "order": ["year", "month", "day", "hour", "minute"],
+      "zone": "UTC"
+    },
+    {
+      "comment": "ESPN style: 'ESPN UNLTD 092: Volleyball: Alabama vs. #8 Texas (10.04 01:00 PM ET)'.",
+      "pattern": "\\((\\d{1,2})\\.(\\d{1,2}) (\\d{1,2}):(\\d{2}) ?([AP]M) ET\\)",
+      "order": ["month", "day", "hour", "minute", "ampm"],
+      "zone": "America/New_York"
+    }
+  ],
   "timeshiftComment": "Catch-up archive. archiveLagSeconds: how far behind live the archive is reliably recorded (it's written in one-minute segments, each available only after its minute ends). Rewind and resume never ask for anything newer.",
   "timeshift": {
     "archiveLagSeconds": 300

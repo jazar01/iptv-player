@@ -124,6 +124,78 @@ function serverTimeString(utc as Integer, rule as Dynamic) as String
     return dt.GetYear().ToStr() + "-" + pad2(dt.GetMonth()) + "-" + pad2(dt.GetDayOfMonth()) + ":" + pad2(dt.GetHours()) + "-" + pad2(dt.GetMinutes())
 end function
 
+' Event times written into channel names, rewritten in the Roku's local time:
+' "Rams @ Eagles (2026-10-04 17:00:00)" -> "Rams @ Eagles (Sun 1:00 PM)".
+' Patterns and their time zones are "nameTimes" in data/guide-rules.json.
+' For display only; saved names keep the provider's text.
+function localizeName(name as String) as String
+    if m.nameTimeRules = invalid then m.nameTimeRules = loadNameTimeRules()
+    for each rule in m.nameTimeRules
+        match = rule.regex.Match(name)
+        if match.Count() > 1
+            utc = nameTimeUtc(match, rule)
+            if utc > 0 then return name.Replace(match[0], "(" + formatDayTime(utc) + ")")
+        end if
+    end for
+    return name
+end function
+
+function loadNameTimeRules() as Object
+    rules = []
+    json = ParseJson(ReadAsciiFile("pkg:/data/guide-rules.json"))
+    if type(json) <> "roAssociativeArray" or type(json.nameTimes) <> "roArray" then return rules
+    zones = json.timezones
+    if type(zones) <> "roAssociativeArray" then zones = {}
+    for each r in json.nameTimes
+        if type(r) = "roAssociativeArray" and asString(r.pattern) <> "" and type(r.order) = "roArray"
+            zone = zones[asString(r.zone)]
+            if zone = invalid then zone = { standard: 0, daylight: 0, dst: "" }
+            rules.Push({ regex: CreateObject("roRegex", r.pattern, "i"), order: r.order, zone: zone })
+        end if
+    end for
+    return rules
+end function
+
+' Capture groups -> UTC seconds, reading them as local time in the rule's zone.
+function nameTimeUtc(match as Object, rule as Object) as Integer
+    year = CreateObject("roDateTime").GetYear()
+    month = 0
+    day = 0
+    hour = 0
+    minute = 0
+    ampm = ""
+    for i = 0 to rule.order.Count() - 1
+        if i + 1 < match.Count()
+            value = match[i + 1]
+            part = rule.order[i]
+            if part = "year" then year = Val(value, 10)
+            if part = "month" then month = Val(value, 10)
+            if part = "day" then day = Val(value, 10)
+            if part = "hour" then hour = Val(value, 10)
+            if part = "minute" then minute = Val(value, 10)
+            if part = "ampm" then ampm = UCase(value)
+        end if
+    end for
+    if ampm = "PM" and hour < 12 then hour = hour + 12
+    if ampm = "AM" and hour = 12 then hour = 0
+    if month < 1 or month > 12 or day < 1 or day > 31 or hour > 23 or minute > 59 then return 0
+
+    dt = CreateObject("roDateTime")
+    dt.FromISO8601String(year.ToStr() + "-" + pad2(month) + "-" + pad2(day) + "T" + pad2(hour) + ":" + pad2(minute) + ":00Z")
+    localAsUtc = dt.AsSeconds()
+    ' The offset in effect then (approximate only within a DST changeover hour).
+    offset = utcOffsetMinutes(localAsUtc - toInt(rule.zone.standard) * 60, rule.zone)
+    return localAsUtc - offset * 60
+end function
+
+' UTC seconds -> local "Sun 1:00 PM".
+function formatDayTime(utc as Integer) as String
+    dt = CreateObject("roDateTime")
+    dt.FromSeconds(utc)
+    dt.ToLocalTime()
+    return Left(dt.GetWeekday(), 3) + " " + formatClock(utc)
+end function
+
 ' "example.com:8080/" -> "http://example.com:8080". Also drops a pasted
 ' "/player_api.php..." suffix.
 function normalizeServer(server as String) as String

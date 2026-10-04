@@ -42,7 +42,7 @@ sub redraw()
 end sub
 
 sub drawChannel(c as Object)
-    m.name.text = c.name
+    m.name.text = localizeName(c.name)
     now = nowSeconds()
 
     if c.nowTitle <> "" and c.nowEnd > now

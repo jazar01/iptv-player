@@ -340,7 +340,7 @@ sub drawOverlay()
         m.hints.text = "Up / Down: change favorite channel     *: show this again     Back: close"
     end if
 
-    m.channelName.text = asString(m.play.name)
+    m.channelName.text = localizeName(asString(m.play.name))
     m.channelPos.text = m.top.channelLabel
     now = nowSeconds()
     p = m.programs

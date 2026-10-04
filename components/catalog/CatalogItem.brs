@@ -12,7 +12,7 @@ sub onItemContent()
     if m.content = invalid then return
     m.content.ObserveFieldScoped("tag", "onTag")
     m.num.text = m.content.num
-    m.name.text = m.content.name
+    m.name.text = localizeName(m.content.name)
     ' Channels have no first-column value: start the name at the left.
     if m.content.num = ""
         m.name.translation = [20, 0]
