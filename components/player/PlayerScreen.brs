@@ -102,8 +102,9 @@ sub onVideoState()
 
     if state = "error"
         code = m.video.errorCode
-        print "[player] error "; code; " "; asString(m.video.errorMsg); " / "; asString(m.video.errorStr)
-        message = friendlyError(code)
+        detail = asString(m.video.errorStr)
+        print "[player] error "; code; " "; asString(m.video.errorMsg); " / "; detail
+        message = friendlyError(code, httpStatus(detail))
         m.errorMessage.text = message
         m.errorPanel.visible = true
         m.liveOverlay.visible = false
@@ -119,8 +120,32 @@ sub onErrorText()
     m.errorMessage.text = m.top.errorText
 end sub
 
-' Video node error codes -> words a person can act on.
-function friendlyError(code as Integer) as String
+' The HTTP status the provider answered with, from the Video node's detailed
+' error ("...response code said error response code:(407):407:..."), or 0.
+function httpStatus(detail as String) as Integer
+    match = CreateObject("roRegex", "response code:\((\d{3})\)", "i").Match(detail)
+    if match.Count() < 2 then return 0
+    return Val(match[1], 10)
+end function
+
+' Video node error codes -> words a person can act on. An HTTP status from
+' the provider says more than the error code, so it comes first.
+function friendlyError(code as Integer, status as Integer) as String
+    if status >= 400
+        if status = 404
+            message = "The provider doesn't have this stream right now (HTTP 404)."
+        else if status = 403 or status = 401
+            message = "The provider refused this stream (HTTP " + status.ToStr() + "). The account's connection limit may be reached."
+        else if status >= 500
+            message = "The provider's server had a problem with this stream (HTTP " + status.ToStr() + "). Try again in a minute."
+        else
+            message = "The provider refused this stream (HTTP " + status.ToStr() + ")."
+        end if
+        ' Not for 407: this provider sends it for event channels whose event
+        ' is on (e.g. an NFL game in progress), so the hint would mislead.
+        if m.play <> invalid and m.play.kind = "live" and status <> 407 then message = message + " If this is an event channel, it only works while its event is on."
+        return message
+    end if
     if code = -5 then return "This video uses a format or codec your Roku can't play."
     if code = -4 then return "The stream is empty or offline right now."
     if code = -2 then return "The server took too long to send the video."
