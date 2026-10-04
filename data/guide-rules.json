@@ -126,6 +126,12 @@
       "\\b\\d{2}\\s?fps\\b"
     ]
   },
+  "usageComment": "Usage-based ordering within home rows. Each use adds a point; points halve every halfLifeDays. A channel counts as viewed after channelViewSeconds on it. At most maxEntries are kept (lowest scores dropped).",
+  "usage": {
+    "halfLifeDays": 14,
+    "channelViewSeconds": 180,
+    "maxEntries": 60
+  },
   "timeshiftComment": "Catch-up archive. archiveLagSeconds: how far behind live the archive is reliably recorded (it's written in one-minute segments, each available only after its minute ends). Rewind and resume never ask for anything newer.",
   "timeshift": {
     "archiveLagSeconds": 300

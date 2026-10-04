@@ -257,7 +257,7 @@ A home-screen row of my favorite teams' games in the next 24 hours, for only the
 **Built (step 1: teams and event channels, Oct 4, 2026)**
 
 - **Teams** are managed in Settings → My Teams: name, sports (at least one), aliases ("Also called") and exclusions ("Not when it says"). Choosing sports is what keeps out other teams with the same name (minor-league hockey Eagles, for example).
-- **Finding games** runs in SearchTask over the live index (`MyTeams.brs`): channels in event categories (`Sports | …`, `PPV …`; not `… Teams` or `… Replays`) whose name mentions a team as whole words, has an event time from 4 hours ago to 24 hours ahead, and whose sport is one of the team's. A game whose sport can't be determined (e.g. "ESPNU: Auburn vs. Tennessee") is still shown. Team words are checked before anything else, so a full scan takes about 0.1–0.2 s.
+- **Finding games** runs in SearchTask over the live index (`MyTeams.brs`): channels in event categories (`Sports | …`, `PPV …`; not `… Teams` or `… Replays`) whose name mentions a team as whole words, has an event time from 4 hours ago to 24 hours ahead, and whose sport is one of the team's. A listing whose sport can't be determined (e.g. "ESPNU: Auburn vs. Tennessee") makes a game only if it names the team in full; if only an alias matches (e.g. "Atlanta"), it can join a game found another way but never creates one. Network programs must name their sport. (Learned on the TV: an "Atlanta" alias otherwise pulled in a WNBA game and a local news show.) Team words are checked before anything else, so a full scan takes about 0.1–0.2 s.
 - **Event times** use the `nameTimes` rules (also used to show channel names in local time), covering this provider's formats: ISO in UTC, `(10.04 01:00 PM ET)`, `@ 4 Oct 12:00 PM ET`, `@ Oct 04 01:00 PM ET`, `… London`, and no zone (read as US Eastern).
 - **Sports, categories, separators, replay words, later languages and time windows** are rules in `data/guide-rules.json` (`myTeams`).
 - **One card per game:** a team's listings starting within 90 minutes of each other are merged (one may include the pregame), keeping the earliest start. Main-language channels come first; selecting a game with several channels asks which.
@@ -282,6 +282,14 @@ Items within each row are ordered by a decaying score that combines recency and 
 - **My Teams:** time order; team score breaks ties only.
 - **When:** re-sort at app launch only. Order holds when returning from playback.
 - **Storage:** a separate per-device table keyed by favorite, series/movie and team ID. Not synced; each TV keeps its own habits.
+
+**Built (Oct 4, 2026)**
+
+- **Score:** each use adds 1 point; points halve every 14 days. Uses: 3 minutes on a live channel, a movie or series watched past 30 seconds (once per viewing session), choosing a team's game. Half-life, the 3-minute threshold and the 60-entry cap are rules in `data/guide-rules.json` (`usage`).
+- **Storage:** its own registry section (`iptv_usage`), one compact string, single copy, apart from the synced document. Lowest scores are dropped past 60 entries; a failed write is skipped, since losing it only resets the ordering.
+- **Launch snapshot:** scores are read once at launch and used all session, so rows never reshuffle. Favorites added during a session go at the end; anything started during a session goes at the front of Continue Watching.
+- **Pinning:** `*` in the Favorites grid offers Pin to front / Unpin / Remove. Pinned favorites come first in the order they were pinned; pinning applies immediately.
+- **Recently Viewed** stays newest first (not part of usage ordering).
 
 ### Off-device backup and sync
 

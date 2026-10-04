@@ -4,12 +4,16 @@
 sub initHome()
     m.favoritesScreen = invalid
     m.lastVisible = []
+    ' Usage scores as they were at launch: rows are ordered by these all
+    ' session, so nothing reshuffles (requirements: re-sort at launch only).
+    m.launchTime = nowSeconds()
+    m.usageScores = m.store.callFunc("getUsageScores")
 end sub
 
 sub refreshHome()
     home = m.sections.home
     if home = invalid then return
-    rows = buildHomeRows({ store: m.store, epg: m.epg, games: m.games })
+    rows = buildHomeRows({ store: m.store, epg: m.epg, games: m.games, usage: m.usageScores, launchTime: m.launchTime })
     home.rows = rows
     if m.favoritesScreen <> invalid
         for each row in rows
@@ -21,7 +25,7 @@ end sub
 sub openFavorites()
     m.favoritesScreen = CreateObject("roSGNode", "FavoritesScreen")
     m.favoritesScreen.ObserveField("selected", "onItemSelected")
-    m.favoritesScreen.ObserveField("options", "onToggleFavorite")
+    m.favoritesScreen.ObserveField("options", "onFavoriteOptions")
     m.favoritesScreen.ObserveField("visibleChannels", "onVisibleChannels")
     pushOverlay(m.favoritesScreen)
     refreshHome()
@@ -49,7 +53,10 @@ end sub
 
 ' * on any channel: add it to favorites, or remove it if it's already one.
 sub onToggleFavorite(event as Object)
-    channel = event.GetData()
+    toggleFavorite(event.GetData())
+end sub
+
+sub toggleFavorite(channel as Object)
     if channel.streamId = invalid or channel.streamId = 0 then return
     if m.store.callFunc("isFavorite", channel.streamId)
         saved = m.store.callFunc("removeFavorite", channel.streamId)
@@ -64,6 +71,43 @@ sub onToggleFavorite(event as Object)
     updateCatalogTags()
     search = m.sections.search
     if search <> invalid then search.favoriteIds = favoriteIdSet()
+end sub
+
+' * in the Favorites grid: pin to the front (or unpin), or remove. Pinned
+' favorites stay first in the order they were pinned; the rest follow usage.
+sub onFavoriteOptions(event as Object)
+    item = event.GetData()
+    pinned = false
+    for each f in m.store.callFunc("getFavorites")
+        if toInt(f.streamId) = toInt(item.streamId) then pinned = isTrue(f.pinned)
+    end for
+    pinLabel = "Pin to front"
+    if pinned then pinLabel = "Unpin"
+    dlg = CreateObject("roSGNode", "StandardMessageDialog")
+    dlg.title = localizeName(item.name)
+    dlg.message = ["Pinned favorites always come first, in the order you pin them. The rest are ordered by how much you watch them."]
+    dlg.buttons = [pinLabel, "Remove from Favorites", "Cancel"]
+    dlg.ObserveField("buttonSelected", "onFavoriteOptionChosen")
+    m.favoriteDialog = { dialog: dlg, item: item, pinned: pinned }
+    m.top.dialog = dlg
+end sub
+
+sub onFavoriteOptionChosen()
+    d = m.favoriteDialog
+    if d = invalid then return
+    m.favoriteDialog = invalid
+    choice = d.dialog.buttonSelected
+    d.dialog.close = true
+    if choice = 0
+        if m.store.callFunc("setPinned", d.item.streamId, not d.pinned)
+            if d.pinned then showToast("Unpinned " + d.item.name) else showToast("Pinned " + d.item.name + " to the front")
+        else
+            showToast("Couldn't save the change. Storage may be full.")
+        end if
+        refreshHome()
+    else if choice = 1
+        toggleFavorite(d.item)
+    end if
 end sub
 
 ' * on a Continue Watching card: take it off the row (watched history stays).

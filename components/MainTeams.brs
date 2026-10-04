@@ -101,6 +101,12 @@ end function
 ' first: event channels usually aren't on until shortly before the game
 ' (this provider refuses them with HTTP 407 until then).
 sub onGameSelected(item as Object)
+    ' Usage ordering: choosing a team's game is a use of that team (the ID is
+    ' in the card's key, "game:<teamId>|<start>").
+    teamId = Mid(asString(item.itemKey), 6)
+    bar = Instr(1, teamId, "|")
+    if bar > 0 then m.store.callFunc("recordUsage", "t" + Left(teamId, bar - 1))
+
     if toInt(item.start) > nowSeconds() + 900
         dlg = CreateObject("roSGNode", "StandardMessageDialog")
         dlg.title = item.name

@@ -178,4 +178,9 @@ is the final check.
   (16 national + Atlanta ABC/CBS/NBC/FOX, `myTeams.networks` by guide ID),
   fetched to cachefs:/teams/ by ApiTask and searched in SearchTask; merged
   into the same game card with the network channel first. Verified on a Roku.
-- Not yet built: usage-based ordering, off-device backup and sync.
+- Usage-based ordering built: decaying scores in their own registry section
+  (StateStore recordUsage / getUsageScores), snapshot at launch
+  (`m.usageScores`), applied in HomeRows (favorites, Continue Watching, My
+  Teams tie-break); pin / unpin in the Favorites grid. Scores only build up
+  with real viewing, so the ordering effect isn't verified yet.
+- Not yet built: off-device backup and sync.

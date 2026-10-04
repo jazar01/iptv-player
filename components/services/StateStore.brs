@@ -10,6 +10,11 @@ sub init()
     m.TOMBSTONE_DAYS = 28
     m.STALE_SERIES_DAYS = 30
 
+    ' Usage scores: a separate, per-device table (not part of the synced
+    ' document). See the Usage section below.
+    m.usageSection = CreateObject("roRegistrySection", "iptv_usage")
+    m.usage = invalid
+
     m.backend = RegistryBackend("iptv_state")
     m.doc = m.backend.read()
     if m.doc = invalid
@@ -206,6 +211,116 @@ function recordSeenGames(games as Object) as Boolean
         list.Pop()
     end while
     m.doc.seenGames = list
+    return persist()
+end function
+
+' ---------------------------------------------------------------------------
+' Usage scores (requirements: Usage-based item ordering). A per-device table,
+' kept apart from the synced document in its own registry section as one
+' compact string: "c12345:3.25:1759600000;m777:1:1759500000;..." (key, score,
+' when it was last updated). Keys: c<streamId> channels, m<id> movies,
+' s<seriesId> series, t<teamId> teams. Each use adds 1; scores halve every
+' halfLifeDays. Losing it only resets the ordering, so a failed write is
+' logged and skipped.
+
+function loadUsage() as Object
+    if m.usage <> invalid then return m.usage
+    m.usage = {}
+    raw = ""
+    if m.usageSection.Exists("table") then raw = m.usageSection.Read("table")
+    for each part in raw.Split(";")
+        fields = part.Split(":")
+        if fields.Count() = 3 then m.usage[fields[0]] = { s: Val(fields[1]), t: Val(fields[2], 10) }
+    end for
+    return m.usage
+end function
+
+function usageConfig() as Object
+    if m.usageConfig <> invalid then return m.usageConfig
+    cfg = { halfLife: 14 * 86400, maxEntries: 60, channelViewSeconds: 180 }
+    json = ParseJson(ReadAsciiFile("pkg:/data/guide-rules.json"))
+    if type(json) = "roAssociativeArray" and type(json.usage) = "roAssociativeArray"
+        if Val(asString(json.usage.halfLifeDays)) > 0 then cfg.halfLife = Int(Val(asString(json.usage.halfLifeDays)) * 86400)
+        if toInt(json.usage.maxEntries) > 0 then cfg.maxEntries = toInt(json.usage.maxEntries)
+        if toInt(json.usage.channelViewSeconds) > 0 then cfg.channelViewSeconds = toInt(json.usage.channelViewSeconds)
+    end if
+    m.usageConfig = cfg
+    return cfg
+end function
+
+' Score now, with its decay since it was last updated.
+function decayedScore(entry as Object, now as Integer) as Float
+    age = now - entry.t
+    if age <= 0 then return entry.s
+    return entry.s * (0.5 ^ (age / usageConfig().halfLife))
+end function
+
+' One use of key ("c12345", "m777", "s55", "t1a2b3c4d").
+function recordUsage(key as String) as Boolean
+    usage = loadUsage()
+    now = nowSeconds()
+    entry = usage[key]
+    score = 1.0
+    if entry <> invalid then score = decayedScore(entry, now) + 1
+    usage[key] = { s: score, t: now }
+
+    ' Keep the strongest maxEntries.
+    if usage.Count() > usageConfig().maxEntries
+        ranked = []
+        for each k in usage
+            ranked.Push({ key: k, score: decayedScore(usage[k], now) })
+        end for
+        ranked.SortBy("score", "r")
+        while ranked.Count() > usageConfig().maxEntries
+            usage.Delete(ranked.Pop().key)
+        end while
+    end if
+
+    text = ""
+    for each k in usage
+        e = usage[k]
+        if text <> "" then text += ";"
+        ' Two decimals are plenty for ordering and keep the string short.
+        text += k + ":" + Str(Int(e.s * 100 + 0.5) / 100).Trim() + ":" + e.t.ToStr()
+    end for
+    if not m.usageSection.Write("table", text) or not m.usageSection.Flush()
+        print "[state] couldn't save usage scores (registry full?); ordering unaffected this session"
+        return false
+    end if
+    return true
+end function
+
+' { key: score now } for every entry, for ordering rows at launch.
+function getUsageScores() as Object
+    usage = loadUsage()
+    now = nowSeconds()
+    scores = {}
+    for each k in usage
+        scores[k] = decayedScore(usage[k], now)
+    end for
+    return scores
+end function
+
+function getChannelViewSeconds() as Integer
+    return usageConfig().channelViewSeconds
+end function
+
+' Pinned favorites stay first, in the order they were pinned.
+function setPinned(streamId as Dynamic, pinned as Boolean) as Boolean
+    f = findFavorite(toInt(streamId))
+    if f = invalid then return true
+    if pinned
+        highest = 0
+        for each other in m.doc.favorites
+            if isTrue(other.pinned) and toInt(other.position) > highest then highest = toInt(other.position)
+        end for
+        f.pinned = true
+        f.position = highest + 1
+    else
+        f.pinned = false
+        f.position = invalid
+    end if
+    f.updatedAt = nowSeconds()
     return persist()
 end function
 

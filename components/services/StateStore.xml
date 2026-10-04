@@ -40,6 +40,11 @@
     <function name="getSeenGames" />
     <function name="recordSeenGames" />
 
+    <function name="recordUsage" />
+    <function name="getUsageScores" />
+    <function name="getChannelViewSeconds" />
+    <function name="setPinned" />
+
     <function name="remapChannels" />
     <function name="remapSeries" />
     <function name="getSavedSeries" />

@@ -8,7 +8,10 @@
 '     from lookbackHours ago to aheadHours ahead.
 '   Network broadcasts: a program in a network channel's short guide (saved
 '     to cachefs: by ApiTask) whose title, or else description, mentions a team.
-' Either way the sport must be one of the team's (or unknown). A team's
+' Either way the sport must be one of the team's. An event channel whose
+' sport can't be told makes a game only if it names the team in full; with
+' just an alias it can only join a game found another way. A network program
+' must name its sport. A team's
 ' listings starting within 90 minutes of each other are one game; network
 ' channels are listed first (always on, unlike event channels).
 
@@ -165,10 +168,11 @@ function findGames(req as Object) as Object
         for each s in asArray(t.sports)
             sports[asString(s)] = true
         end for
-        teams.Push({ id: asString(t.id), name: asString(t.name), matchers: matchers, exclusions: exclusions, sports: sports })
+        teams.Push({ id: asString(t.id), name: asString(t.name), nameMatcher: matchers[0], matchers: matchers, exclusions: exclusions, sports: sports })
     end for
 
     groups = {}
+    weak = []
     for each e in m.index.live
         categoryName = categories[e.categoryId]
         if categoryName <> invalid
@@ -178,16 +182,18 @@ function findGames(req as Object) as Object
                     found = findNameTime(e.name, false)
                     if found <> invalid and found.utc >= now - rules.lookbackSeconds and found.utc <= now + rules.aheadSeconds
                         sport = detectSport(LCase(categoryName + " " + e.name), rules)
-                        if sport = "" or t.sports.Count() = 0 or t.sports.DoesExist(sport)
-                            replay = rules.replay <> invalid and rules.replay.IsMatch(e.name)
-                            later = rules.later <> invalid and rules.later.IsMatch(e.name)
-                            mergeGame(groups, t, {
-                                start: found.utc
-                                ends: 0
-                                title: gameTitle(e.name, found.text, t, rules)
-                                sport: sport
-                                replay: replay
-                            }, { streamId: e.itemId, name: e.name, epgChannelId: e.epgChannelId, network: false, later: later }, now, rules)
+                        replay = rules.replay <> invalid and rules.replay.IsMatch(e.name)
+                        later = rules.later <> invalid and rules.later.IsMatch(e.name)
+                        info = { start: found.utc, ends: 0, title: gameTitle(e.name, found.text, t, rules), sport: sport, replay: replay }
+                        channel = { streamId: e.itemId, name: e.name, epgChannelId: e.epgChannelId, network: false, later: later }
+                        if sport <> ""
+                            if t.sports.Count() = 0 or t.sports.DoesExist(sport) then mergeGame(groups, t, info, channel, now, rules)
+                        else if t.nameMatcher.IsMatch(e.name)
+                            mergeGame(groups, t, info, channel, now, rules)
+                        else
+                            ' Unknown sport and only an alias ("Atlanta"): too weak to
+                            ' be a game on its own; it may join one found another way.
+                            weak.Push({ team: t, info: info, channel: channel })
                         end if
                     end if
                 end if
@@ -197,6 +203,11 @@ function findGames(req as Object) as Object
 
     result.networks = resolveNetworks()
     if isTrue(req.withGuide) then addNetworkGames(groups, teams, result.networks, now, rules)
+
+    ' Weak listings only add channels to games already found.
+    for each w in weak
+        if findGameGroup(groups, w.team, w.info.start) <> invalid then mergeGame(groups, w.team, w.info, w.channel, now, rules)
+    end for
 
     live = []
     later = []
@@ -230,11 +241,7 @@ end function
 ' listing's title and end time win, since guides are more exact than
 ' channel names.
 sub mergeGame(groups as Object, team as Object, info as Object, channel as Object, now as Integer, rules as Object)
-    g = invalid
-    for each key in groups
-        other = groups[key]
-        if g = invalid and other.teamId = team.id and Abs(other.start - info.start) <= 5400 then g = other
-    end for
+    g = findGameGroup(groups, team, info.start)
     if g = invalid
         g = {
             key: team.id + "|" + info.start.ToStr()
@@ -269,6 +276,15 @@ sub mergeGame(groups as Object, team as Object, info as Object, channel as Objec
     end for
     g.channels.Push(channel)
 end sub
+
+' The team's game starting within 90 minutes of start, or invalid.
+function findGameGroup(groups as Object, team as Object, start as Integer) as Dynamic
+    for each key in groups
+        g = groups[key]
+        if g.teamId = team.id and Abs(g.start - start) <= 5400 then return g
+    end for
+    return invalid
+end function
 
 ' ---------------------------------------------------------------------------
 ' Network broadcasts
@@ -321,8 +337,10 @@ sub addNetworkGames(groups as Object, teams as Object, networks as Object, now a
                         inDescription = not inTitle and titleIsGame and anyMatch(t.matchers, description)
                         text = title + " " + description
                         if (inTitle or inDescription) and not anyMatch(t.exclusions, text)
+                            ' Network programs must name their sport ("MLB Baseball",
+                            ' "WNBA Basketball"), which keeps out news and talk shows.
                             sport = detectSport(LCase(text), rules)
-                            if sport = "" or t.sports.Count() = 0 or t.sports.DoesExist(sport)
+                            if sport <> "" and (t.sports.Count() = 0 or t.sports.DoesExist(sport))
                                 replay = rules.replay <> invalid and rules.replay.IsMatch(title)
                                 ' Matchup from the title, or from the description's first sentence.
                                 source = title

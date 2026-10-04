@@ -22,7 +22,47 @@ function gameIsOnSoon(games as Dynamic) as Boolean
     return false
 end function
 
-' services: { store, epg, games }
+' Usage ordering (requirements: Usage-based item ordering). services.usage is
+' a snapshot of scores taken at launch, so rows don't reshuffle during a
+' session. Ties keep the existing order.
+function usageScore(usage as Dynamic, key as String) as Float
+    if type(usage) <> "roAssociativeArray" or usage[key] = invalid then return 0
+    return usage[key]
+end function
+
+' Sort key: higher score first, then lower index. Fixed-width digits so a
+' plain string sort works.
+function rankKey(score as Float, index as Integer) as String
+    inverse = Int((100000 - score) * 1000)
+    if inverse < 0 then inverse = 0
+    return Right("000000000000" + inverse.ToStr(), 12) + Right("000000" + index.ToStr(), 6)
+end function
+
+' Pinned favorites first, in pin order; then by usage score.
+function sortFavorites(favorites as Object, usage as Dynamic) as Object
+    pinned = []
+    rest = []
+    for i = 0 to favorites.Count() - 1
+        f = favorites[i]
+        if isTrue(f.pinned)
+            pinned.Push({ f: f, sortKey: Right("000000" + toInt(f.position).ToStr(), 6) + Right("000000" + i.ToStr(), 6) })
+        else
+            rest.Push({ f: f, sortKey: rankKey(usageScore(usage, "c" + toInt(f.streamId).ToStr()), i) })
+        end if
+    end for
+    pinned.SortBy("sortKey")
+    rest.SortBy("sortKey")
+    out = []
+    for each e in pinned
+        out.Push(e.f)
+    end for
+    for each e in rest
+        out.Push(e.f)
+    end for
+    return out
+end function
+
+' services: { store, epg, games, usage, launchTime }
 function buildHomeRows(services as Object) as Object
     rows = []
     for each module in homeRowModules(services)
@@ -45,7 +85,7 @@ function favoritesRow() as Object
 end function
 
 function favoritesRowItems(services as Object) as Object
-    return channelItems(services, services.store.callFunc("getFavorites"))
+    return channelItems(services, sortFavorites(services.store.callFunc("getFavorites"), services.usage))
 end function
 
 ' Saved channel records { streamId, name, epgChannelId } -> channel cards,
@@ -93,7 +133,17 @@ end function
 function myTeamsRowItems(services as Object) as Object
     items = []
     if type(services.games) <> "roArray" then return items
-    for each g in services.games
+    ' Live first, then start time; the team's usage score only breaks ties.
+    ordered = []
+    for i = 0 to services.games.Count() - 1
+        g = services.games[i]
+        liveFirst = "1"
+        if g.live then liveFirst = "0"
+        ordered.Push({ g: g, sortKey: liveFirst + Right("0000000000" + toInt(g.start).ToStr(), 10) + rankKey(usageScore(services.usage, "t" + asString(g.teamId)), i) })
+    end for
+    ordered.SortBy("sortKey")
+    for each o in ordered
+        g = o.g
         flags = ""
         if g.live then flags = "live"
         if g.replay
@@ -142,8 +192,8 @@ end function
 
 ' ---------------------------------------------------------------------------
 ' Continue Watching: movies with time left, and series pointing at their
-' current episode (in progress or next unwatched). Newest first. Everything
-' comes from saved state, so it draws without the network.
+' current episode (in progress or next unwatched), in usage order.
+' Everything comes from saved state, so it draws without the network.
 
 function continueWatchingRow() as Object
     return {
@@ -164,7 +214,7 @@ function continueWatchingRowItems(services as Object) as Object
             if duration > 0 and position < duration
                 name = asString(r.name)
                 if name = "" then name = "Movie " + asString(r.id)
-                entries.Push({ updatedAt: toInt(r.updatedAt), item: {
+                entries.Push({ updatedAt: toInt(r.updatedAt), usageKey: "m" + toInt(r.id).ToStr(), item: {
                     kind: "resume"
                     resumeKind: "movie"
                     itemKey: "movie:" + asString(r.id)
@@ -203,12 +253,30 @@ function continueWatchingRowItems(services as Object) as Object
             item.position = toInt(r.position)
             item.duration = toInt(r.duration)
         end if
-        entries.Push({ updatedAt: toInt(s.updatedAt), item: item })
+        entries.Push({ updatedAt: toInt(s.updatedAt), usageKey: "s" + toInt(s.seriesId).ToStr(), item: item })
     end for
 
+    ' Usage order: anything started since launch first (newest first), then by
+    ' launch-time score, newest first among equals.
     entries.SortBy("updatedAt", "r")
+    launchTime = toInt(services.launchTime)
+    fresh = []
+    ranked = []
+    for i = 0 to entries.Count() - 1
+        e = entries[i]
+        if e.updatedAt > launchTime
+            fresh.Push(e)
+        else
+            e.sortKey = rankKey(usageScore(services.usage, e.usageKey), i)
+            ranked.Push(e)
+        end if
+    end for
+    ranked.SortBy("sortKey")
     items = []
-    for each e in entries
+    for each e in fresh
+        items.Push(e.item)
+    end for
+    for each e in ranked
         items.Push(e.item)
     end for
     return items

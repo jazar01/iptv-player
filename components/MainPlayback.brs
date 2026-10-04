@@ -195,12 +195,15 @@ sub startPlayer(play as Object, position as Integer)
     play.startPosition = position
     m.playing = play
     m.watchedKey = ""
+    m.usageCounted = false      ' one usage point per viewing session
     if m.player = invalid
         m.player = CreateObject("roSGNode", "PlayerScreen")
         m.player.ObserveField("progress", "onPlayerProgress")
         m.player.ObserveField("failed", "onPlayerFailed")
         m.player.ObserveField("channelStep", "onChannelStep")
         m.player.ObserveField("liveViewed", "onLiveViewed")
+        m.player.ObserveField("liveWatched", "onLiveWatched")
+        m.player.channelViewSeconds = m.store.callFunc("getChannelViewSeconds")
         m.player.ObserveField("toggleFavorite", "onPlayerToggleFavorite")
         m.player.ObserveField("closed", "onPlayerClosed")
         pushOverlay(m.player)
@@ -249,6 +252,15 @@ sub onPlayerProgress(event as Object)
         season: play.season
         episode: play.episode
     }
+    ' Usage ordering: one point per viewing session of a movie or series,
+    ' once it's really been watched (the first progress report).
+    if not isTrue(m.usageCounted) and p.position >= 30
+        m.usageCounted = true
+        usageKey = "m" + toInt(play.id).ToStr()
+        if play.kind = "episode" then usageKey = "s" + toInt(play.seriesId).ToStr()
+        m.store.callFunc("recordUsage", usageKey)
+    end if
+
     saved = true
     if isTrue(p.finished) or (p.duration > 0 and p.position >= p.duration * 0.9)
         m.watchedKey = key
@@ -282,6 +294,11 @@ end sub
 sub onLiveViewed(event as Object)
     channel = event.GetData()
     if not m.store.callFunc("addRecent", channel) then print "[main] WARNING: could not save recently viewed "; channel.name
+end sub
+
+' A few minutes on a live channel: one use for usage ordering.
+sub onLiveWatched(event as Object)
+    m.store.callFunc("recordUsage", "c" + toInt(event.GetData().streamId).ToStr())
 end sub
 
 ' * during live playback: same as * in a channel list, then update the

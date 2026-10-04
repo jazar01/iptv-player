@@ -18,6 +18,8 @@ sub init()
     m.timeshiftTimeout.ObserveField("fire", "onTimeshiftTimeout")
     m.viewedTimer = m.top.FindNode("viewedTimer")
     m.viewedTimer.ObserveField("fire", "onViewed")
+    m.watchedTimer = m.top.FindNode("watchedTimer")
+    m.watchedTimer.ObserveField("fire", "onWatched")
 
     m.play = invalid
     m.programs = invalid
@@ -48,9 +50,12 @@ sub onContent()
     ' Never print play.url: it contains the password.
     print "[player] "; play.kind; " "; play.id; " '"; play.name; "' from "; toInt(play.startPosition); " s"
     m.viewedTimer.control = "stop"
+    m.watchedTimer.control = "stop"
     if play.kind = "live"
         m.saveTimer.control = "stop"
         m.viewedTimer.control = "start"     ' restarts on every channel change
+        m.watchedTimer.duration = m.top.channelViewSeconds
+        m.watchedTimer.control = "start"
         startLive()
     else
         m.mode = "vod"
@@ -170,10 +175,16 @@ sub onViewed()
     m.top.liveViewed = { streamId: m.play.id, name: m.play.name, epgChannelId: asString(m.play.epgChannelId) }
 end sub
 
+sub onWatched()
+    if m.play = invalid or m.play.kind <> "live" then return
+    m.top.liveWatched = { streamId: m.play.id, name: m.play.name, epgChannelId: asString(m.play.epgChannelId) }
+end sub
+
 sub close()
     m.saveTimer.control = "stop"
     m.overlayTimer.control = "stop"
     m.viewedTimer.control = "stop"
+    m.watchedTimer.control = "stop"
     reportProgress()
     m.video.control = "stop"
     m.play = invalid

@@ -16,6 +16,7 @@
        channelStep   +1 / -1 when Up / Down is pressed during live playback
        toggleFavorite { streamId, name, epgChannelId } when * is pressed during live playback
        liveViewed    { streamId, name, epgChannelId } after a minute on a live channel
+       liveWatched   same, after channelViewSeconds (usage scores; surfing doesn't count)
        closed        true when the user leaves the player
 
   Live modes: "live" -> Play/Pause pauses ("paused") -> Play continues from the
@@ -37,6 +38,8 @@
     <field id="failed" type="assocarray" alwaysNotify="true" />
     <field id="channelStep" type="integer" alwaysNotify="true" />
     <field id="liveViewed" type="assocarray" alwaysNotify="true" />
+    <field id="channelViewSeconds" type="integer" value="180" />
+    <field id="liveWatched" type="assocarray" alwaysNotify="true" />
     <field id="closed" type="boolean" alwaysNotify="true" />
   </interface>
 
@@ -76,6 +79,7 @@
     <Timer id="saveTimer" duration="30" repeat="true" />
     <!-- A live channel counts as viewed (Recently Viewed) after a minute. -->
     <Timer id="viewedTimer" duration="60" />
+    <Timer id="watchedTimer" duration="180" />
   </children>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
