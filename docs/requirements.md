@@ -68,8 +68,7 @@ The top bar holds Home, Live TV, Movies, Series, Search and Settings, plus a clo
 **Rows**
 
 - **Favorites:** each channel shows the current program, a progress bar and the next program, from `get_short_epg` for visible channels only.
-- **Continue Watching:** movies and series with time left; series point to the next unwatched episode.
-- Each row is a self-contained module that supplies its own content, so new rows slot in without reworking the screen.
+- **Continue Watching:** movies and series with time left; series point to the next unwatched episode.- Each row is a self-contained module that supplies its own content, so new rows slot in without reworking the screen.
 
 **Long rows**
 
@@ -97,7 +96,7 @@ Search finds live channels, movies and series by name. The Xtream API has no sea
 - **Results:** grouped as Channels, Movies and Series, each capped (about 50) with names starting with the search text first. Selecting a result does the same as selecting it in its browser: play a channel or movie, open a series. `*` on a channel adds or removes a favorite.
 - **Matching:** case-insensitive; every word typed must appear in the name, in any order. Provider prefixes such as `US |` are searchable like any other text.
 - **Index:** built from the full lists (`get_live_streams`, `get_vod_streams` and `get_series` without a category), cached in `cachefs:` and refreshed in the background at most once a day. Only names, IDs and the fields needed to play are kept.
-- **Speed:** the index and matching live in a Task, not the render thread, and only the matches cross to the UI. The live list (about 11,000 channels) is the largest; if it proves too heavy on older models, live search can be limited to favorite categories (see Open questions).
+- **Speed:** the index and matching live in a Task, not the render thread, and only the matches cross to the UI. The live list (about 16,000 channels) is the largest; if it proves too heavy on older models, live search can be limited to favorite categories (see Open questions).
 - Guide search (what's on, by program title) is not part of this; the full guide is too large for the Roku and waits for the off-device server (Later features).
 
 ## Playback
@@ -117,13 +116,23 @@ Playback uses Roku's `Video` node, with HLS for live channels and the file's own
 **Pause, rewind and fast-forward**
 
 - **Movies and episodes:** the `Video` node's own controls: Play/Pause, rewind, fast-forward and Left/Right to seek, with its progress bar.
-- **Live channels with an archive** (`tv_archive` = 1 in `get_live_streams`, kept for `tv_archive_duration` days): pause stops the picture; Play resumes from the moment it was paused by switching to the provider's timeshift stream, which also allows rewind and fast-forward up to the live point. A "Back to live" action returns to the live stream. How far back rewind goes is limited by the archive.
+- **Live channels with an archive** (`tv_archive` = 1 in `get_live_streams`, kept for `tv_archive_duration` days; marked REWIND in channel lists and search): Play/Pause pauses. A pause under a minute resumes from the player's own buffer; a longer one continues from the provider's timeshift archive. Rewind jumps into the archive, after which the `Video` node's own controls move through it. Back returns to live.
 - **Live channels without an archive:** pause, rewind and fast-forward are unavailable; pressing them shows a short note saying so instead of doing nothing.
-- **Timeshift URLs and times:** Xtream timeshift URLs take a start time in the server's time zone (`server_info.timezone` from the login response, Europe/London for this provider) and a duration in minutes. The app converts from UTC when building them. The exact URL form this provider accepts is confirmed before building (see Open questions).
+- **Timeshift URLs and times:** start times are in the server's time zone (`server_info.timezone`, Europe/London for this provider) and durations in minutes. The app converts from UTC using time-zone rules in `data/guide-rules.json`.
 
-| Content | Timeshift stream URL (typical Xtream form) |
+| Content | Timeshift stream URL (confirmed for this provider) |
 | --- | --- |
 | Live, from a past moment | `{server}/timeshift/{user}/{pass}/{duration_minutes}/{YYYY-MM-DD:HH-MM}/{id}.m3u8` |
+
+**Archive findings for this provider (Oct 4, 2026)**
+
+| Finding | Rule for the app |
+| --- | --- |
+| 199 of 16,009 live channels have an archive, 3 days each, mostly UK channels. | Show REWIND on those channels; others get the "no archive" note. |
+| The `.m3u8` form returns an HLS playlist of one-minute segments. The `.ts` and `timeshift.php` forms return MPEG-TS that Roku can't play (it reads them as MP4). | Use only the `.m3u8` form. |
+| Each segment exists only after its minute ends and is written a little later. Asking for the newest minute makes Roku wait forever. | Stay `archiveLagSeconds` (300) behind live, an editable rule in `data/guide-rules.json`. Request only recorded minutes, and treat no video within 30 s as a failure. |
+| The playlist is built on request; a two-hour window took over 10 s. | Rewind requests a 10-minute window. |
+| HD channels' one-minute segments are about 45 MB, more than this Roku's video buffer (about 31.6 MB); SD segments fit. | HD archives fail on this Roku: the app says so and suggests the channel's SD version. Newer Roku models may have bigger buffers. |
 
 **Resume and watched tracking**
 
@@ -174,8 +183,7 @@ Schema 2 (milestone 3) added `name` and `ext` to resume entries and the episode 
 | Timestamps | `updatedAt` from `roDateTime().AsSeconds()` on every record. |
 | Deletions | Marked `deleted` with a timestamp, not removed, so a later sync cannot resurrect them. Cleared after a few weeks while storage is local-only. |
 | Watch history | Episode ranges per season (`S1:1-10,S2:1-4`), about 60 bytes per series. Merges as a union. |
-| Resume | Newest copy wins. Capped at about 50 entries, oldest dropped. Names capped at 60 characters to save registry space. |
-| Times | Stored in UTC. |
+| Resume | Newest copy wins. Capped at about 50 entries, oldest dropped. Names capped at 60 characters to save registry space. || Times | Stored in UTC. |
 
 Later features add fields to this document: favorite teams, and a separate per-device usage-score table. The schema number increases with each change.
 
@@ -255,6 +263,7 @@ A small web service I host stores each device's saved document.
 - [x] What is the account's `max_connections`? **3** (login response, Oct 4, 2026). One was already in use at the time.
 - [ ] Are 3 simultaneous streams enough for the households sharing the account? Depends on how often several TVs watch at once; the connection-limit message matters more as a result.
 - [ ] Confirm current beta channel limits (device count, expiry) before relying on it.
-- [ ] Which live channels have a catch-up archive (`tv_archive`), and for how many days? Live pause/rewind only works on those.
-- [ ] Which timeshift URL form does this provider accept (`/timeshift/...m3u8`, `.ts`, or `timeshift.php`), and does it expect start times in `server_info.timezone`?
-- [ ] Is searching all ~11,000 live channels fast enough on the oldest Roku in use, or should live search be limited to chosen categories?
+- [x] Which live channels have a catch-up archive (`tv_archive`), and for how many days? **199 of 16,009, 3 days each, mostly UK** (Oct 4, 2026). See Archive findings under Playback.
+- [x] Which timeshift URL form does this provider accept, and does it expect start times in `server_info.timezone`? **The `/timeshift/...m3u8` form, with London (server) time.** The `.ts` and `timeshift.php` forms are served but don't play on Roku.
+- [ ] Is searching all ~16,000 live channels fast enough on the oldest Roku in use? On the basement Roku (Oct 4, 2026) indexing took under a second for channels and about 2 s for 31,920 movies, and searching feels instant. Still to check on the oldest model.
+- [ ] Do newer Roku models have a video buffer large enough for this provider's HD archive segments (about 45 MB)?

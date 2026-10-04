@@ -47,6 +47,19 @@ sub accept(req as Object)
         return
     end if
 
+    ' Fresh enough on disk: answer without the network.
+    if asString(req.cacheFile) <> "" and toInt(req.maxAgeSeconds) > 0
+        age = cacheAgeSeconds(req.cacheFile)
+        if age >= 0 and age < toInt(req.maxAgeSeconds)
+            hit = newResponse(req)
+            hit.ok = true
+            hit.fromCache = true
+            if not isTrue(req.saveOnly) then hit.data = ParseJson(readCacheText(req.cacheFile))
+            m.top.response = hit
+            return
+        end if
+    end if
+
     ' Cache-first: answer from cachefs: now, then again when the fresh copy
     ' arrives (or with unchanged=true if it's identical).
     cachedText = ""
@@ -171,7 +184,18 @@ sub finishJob(job as Object, http as Object)
     res.code = http.code
     res.error = http.error
 
-    if http.ok
+    if http.ok and isTrue(job.req.saveOnly)
+        ' Large lists (the search catalog): write to disk, don't parse here or
+        ' send the data across threads. A JSON array or object is all we check.
+        first = Left(http.body.Trim(), 1)
+        if (first = "[" or first = "{") and asString(job.req.cacheFile) <> ""
+            writeCacheText(job.req.cacheFile, http.body)
+            res.ok = true
+            res.error = ""
+        else
+            res.error = "Server returned something other than JSON"
+        end if
+    else if http.ok
         if job.cachedText <> "" and http.body = job.cachedText
             res.ok = true
             res.error = ""
@@ -241,8 +265,22 @@ sub writeCacheText(path as String, text as String)
         p = Instr(p + 1, path, "/")
     end while
     if slash > 0 then CreateDirectory(Left(path, slash - 1))
-    if not WriteAsciiFile(path, text) then print "[api] could not write cache "; path
+    if not WriteAsciiFile(path, text)
+        print "[api] could not write cache "; path
+        return
+    end if
+    ' Sidecar with the write time, for maxAgeSeconds.
+    WriteAsciiFile(path + ".time", nowSeconds().ToStr())
 end sub
+
+' Seconds since the cache file was written, or -1 if unknown.
+function cacheAgeSeconds(path as String) as Integer
+    fs = CreateObject("roFileSystem")
+    if not fs.Exists(path) or not fs.Exists(path + ".time") then return -1
+    written = Val(ReadAsciiFile(path + ".time"), 10)
+    if written <= 0 then return -1
+    return nowSeconds() - written
+end function
 
 sub clearCache()
     fs = CreateObject("roFileSystem")

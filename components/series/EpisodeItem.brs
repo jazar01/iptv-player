@@ -17,7 +17,17 @@ sub onItemContent()
 end sub
 
 sub onState()
+    if m.content = invalid then return
     m.state.text = m.content.stateText
+    if m.top.listHasFocus and m.top.focusPercent > 0.5
+        ' Dark text on the white focus bar.
+        m.num.color = "0x3A444EFF"
+        m.name.color = "0x101418FF"
+        m.state.color = "0x1E3A5FFF"
+        if m.content.state = "progress" then m.state.color = "0x7A4E00FF"
+        return
+    end if
+    m.num.color = "0x8C96A0FF"
     if m.content.state = "watched"
         m.state.color = "0x6E7882FF"
         m.name.color = "0x8C96A0FF"

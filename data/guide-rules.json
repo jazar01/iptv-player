@@ -6,5 +6,25 @@
   "titleTags": [
     { "text": "ᴸᶦᵛᵉ", "flag": "live" },
     { "text": "ᴺᵉʷ", "flag": "new" }
-  ]
+  ],
+  "timeshiftComment": "Catch-up archive. archiveLagSeconds: how far behind live the archive is reliably recorded (it's written in one-minute segments, each available only after its minute ends). Rewind and resume never ask for anything newer.",
+  "timeshift": {
+    "archiveLagSeconds": 300
+  },
+  "timezonesComment": "For timeshift URLs, which take server-local times (server_info.timezone). Offsets in minutes from UTC; dst: 'eu' (last Sunday Mar to last Sunday Oct, 01:00 UTC), 'us' (2nd Sunday Mar to 1st Sunday Nov, 02:00 local), or '' for none.",
+  "timezones": {
+    "UTC": { "standard": 0, "daylight": 0, "dst": "" },
+    "Europe/London": { "standard": 0, "daylight": 60, "dst": "eu" },
+    "Europe/Dublin": { "standard": 0, "daylight": 60, "dst": "eu" },
+    "Europe/Lisbon": { "standard": 0, "daylight": 60, "dst": "eu" },
+    "Europe/Amsterdam": { "standard": 60, "daylight": 120, "dst": "eu" },
+    "Europe/Berlin": { "standard": 60, "daylight": 120, "dst": "eu" },
+    "Europe/Paris": { "standard": 60, "daylight": 120, "dst": "eu" },
+    "Europe/Madrid": { "standard": 60, "daylight": 120, "dst": "eu" },
+    "Europe/Rome": { "standard": 60, "daylight": 120, "dst": "eu" },
+    "America/New_York": { "standard": -300, "daylight": -240, "dst": "us" },
+    "America/Chicago": { "standard": -360, "daylight": -300, "dst": "us" },
+    "America/Denver": { "standard": -420, "daylight": -360, "dst": "us" },
+    "America/Los_Angeles": { "standard": -480, "daylight": -420, "dst": "us" }
+  }
 }

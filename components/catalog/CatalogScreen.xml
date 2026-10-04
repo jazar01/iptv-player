@@ -19,7 +19,9 @@
     <field id="categories" type="array" onChange="onCategories" />
     <field id="items" type="assocarray" onChange="onItems" />
     <field id="tags" type="assocarray" onChange="onTags" />
-    <field id="status" type="string" onChange="onStatus" />
+    <!-- alwaysNotify: setting "" must hide the initial "Loading" text even
+         though the field already holds "". -->
+    <field id="status" type="string" onChange="onStatus" alwaysNotify="true" />
     <field id="wantCategory" type="string" alwaysNotify="true" />
     <field id="selected" type="assocarray" alwaysNotify="true" />
     <field id="options" type="assocarray" alwaysNotify="true" />

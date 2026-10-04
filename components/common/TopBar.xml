@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-  Top bar: Home, Live TV, Movies, Series, Settings, plus a clock.
+  Top bar: Home, Live TV, Movies, Series, Search, Settings, plus a clock.
 
   In:  section  the section currently shown (drawn highlighted)
   Out: chosen   section picked with OK while the bar has focus

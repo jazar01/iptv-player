@@ -3,6 +3,9 @@
 <component name="EpisodeItem" extends="Group">
   <interface>
     <field id="itemContent" type="node" onChange="onItemContent" />
+    <!-- Set by the MarkupList: drawn dark on the white focus bar. -->
+    <field id="focusPercent" type="float" onChange="onState" />
+    <field id="listHasFocus" type="boolean" onChange="onState" />
   </interface>
 
   <children>

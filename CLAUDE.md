@@ -24,8 +24,13 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   overlays (Setup, Favorites grid, series pages, player) and services; relays
   between screens and services and routes ApiTask responses by `id`. Split by
   area: `MainScene.brs` (core, focus, keys), `MainLogin.brs`, `MainHome.brs`,
-  `MainCatalog.brs`, `MainPlayback.brs`. All share one `m`, so `init*()`
-  in each file sets up its own state.
+  `MainCatalog.brs`, `MainPlayback.brs`, `MainSearch.brs`. All share one
+  `m`, so `init*()` in each file sets up its own state.
+- `components/services/SearchTask.*`: search index on its own thread. ApiTask
+  downloads the full lists to `cachefs:/catalog/all_*.json` (`saveOnly`,
+  `maxAgeSeconds` one day); SearchTask indexes them from disk, so big lists
+  never cross the render thread. Also publishes which channels have a
+  catch-up archive.
 - `components/services/ApiTask.*`: long-running Task, up to 4 requests at once,
   so responses arrive in any order: match by `id` (and `context`). Optional
   `cacheFile`/`cacheFirst` caches catalog responses in `cachefs:/catalog/`.
@@ -41,7 +46,9 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
 - `components/series/`: SeriesScreen (seasons, episodes with watched / in
   progress / new; * toggles watched).
 - `components/player/`: PlayerScreen (Video node, live overlay, readable
-  errors, progress reports every 30 s and on stop).
+  errors, progress reports every 30 s and on stop, live pause/rewind via the
+  provider's timeshift `.m3u8` archive, kept `archiveLagSeconds` behind live).
+- `components/search/`: SearchScreen (MiniKeyboard plus results list).
 - `components/services/StateStore.*`: interface functions called via
   `callFunc`. Every mutation saves immediately and returns true only if it
   persisted.
@@ -51,7 +58,8 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
 - `components/common/`: TopBar, and `Utils.brs` shared helpers (`asString`,
   `toInt`, `isTrue`, `nowSeconds`, `formatClock`, `normalizeServer`). Each
   component must include Utils with its own `<script>` tag.
-- `data/`: editable provider rules, packaged with the app.
+- `data/`: editable provider rules, packaged with the app: guide title tags
+  and the time-zone rules used for timeshift URLs.
 
 ## Conventions
 
@@ -63,6 +71,9 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   keys with dot access: programs use `start`/`ends`, EPG entries
   `now`/`upcoming`.
 - `(expr).Method()` isn't valid BrightScript; assign to a variable first.
+- A field's onChange doesn't fire when it's set to the value it already
+  holds. Fields that hide initial XML text by being set to "" (status
+  messages) need `alwaysNotify="true"`.
 - `roUrlTransfer` can only be created on a Task thread; on the render thread
   it's `invalid` and the next call crashes. Use `urlEncode()` from Utils for
   escaping. The BrighterScript check can't catch this.
@@ -86,6 +97,9 @@ Roku IP and developer password: `-RokuIp`/`-Password`, then
 `$env:ROKU_IP`/`$env:ROKU_DEV_PASSWORD`, then `scripts/deploy.local.ps1`
 (git-ignored; template in `deploy.local.example.ps1`). Never commit or print
 the local file's contents.
+
+Screenshot of the Roku screen (app must be running):
+`.\scripts\screenshot.ps1` saves to `out\screenshot-<time>.jpg`.
 
 Code check only: `.\scripts\deploy.ps1 -PackageOnly` (check + zip, no upload).
 The check is `npx brighterscript@0`; it validates syntax, function scope and
@@ -117,5 +131,10 @@ is the final check.
   a broken stream, movie resume and Continue Watching, episode playback and
   Continue Watching. Not yet tried: * to mark episodes watched/unwatched,
   reaching 90% (watched, next episode), the connection-limit message.
-- Not yet built: channel matching (re-matching favorites after renumbering),
+- Milestone 4 built: Search (live channels, movies, series) in the top bar,
+  REWIND tag on archived channels, live pause/rewind/back-to-live through the
+  provider's timeshift archive. Verified on a Roku: search, short pause,
+  rewind and back to live on an SD channel, readable highlighted rows.
+  Known limit: HD archives fail on this Roku (one-minute segments of ~45 MB
+  exceed its ~31.6 MB video buffer); the app says so and suggests SD.- Not yet built: channel matching (re-matching favorites after renumbering),
   the visual pass, and the Later features in the requirements.

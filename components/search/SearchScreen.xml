@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Search: a mini keyboard on the left, results on the right (channels, then
+  movies, then series). Results update after a short pause in typing.
+
+  In:  results    SearchTask results { text, items }
+       favoriteIds { "<streamId>": true }, to tag favorite channels
+       status     message shown where the results go
+  Out: query      search text (after the typing pause)
+       selected   { kind, itemId, streamId, name, epgChannelId, ext, year, archiveDays }
+       options    same, when * is pressed on a channel
+-->
+<component name="SearchScreen" extends="Group">
+  <interface>
+    <field id="results" type="assocarray" onChange="onResults" />
+    <field id="favoriteIds" type="assocarray" onChange="onFavoriteIds" />
+    <!-- alwaysNotify: setting "" must hide the initial hint even though the
+         field already holds "". -->
+    <field id="status" type="string" onChange="onStatus" alwaysNotify="true" />
+    <field id="query" type="string" alwaysNotify="true" />
+    <field id="selected" type="assocarray" alwaysNotify="true" />
+    <field id="options" type="assocarray" alwaysNotify="true" />
+  </interface>
+
+  <children>
+    <MiniKeyboard id="keyboard" translation="[96,190]" />
+    <MarkupList id="resultList" translation="[720,190]" itemComponentName="CatalogItem"
+      itemSize="[1104,64]" itemSpacing="[0,4]" numRows="12" vertFocusAnimationStyle="floatingFocus" />
+    <Label id="status" translation="[740,210]" width="1080" wrap="true"
+      font="font:MediumSystemFont" color="0xA0A8B0FF" text="Type to search channels, movies and series." />
+    <Timer id="typingDelay" duration="0.35" />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/search/SearchScreen.brs" />
+</component>

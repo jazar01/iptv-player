@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
   Content for one CatalogItem. itemId is the stream ID (live, movie) or series
-  ID. num is the channel number for live and the year for movies and series.
+  ID. num is the year for movies and series (empty for channels).
   tag is shown at the right, e.g. FAVORITE or IN PROGRESS.
 -->
 <component name="CatalogNode" extends="ContentNode">
@@ -13,5 +13,8 @@
     <field id="ext" type="string" />
     <field id="year" type="integer" />
     <field id="tag" type="string" />
+    <field id="archiveDays" type="integer" />
+    <!-- Search results mix kinds: "channel" | "movie" | "series". -->
+    <field id="itemKind" type="string" />
   </interface>
 </component>

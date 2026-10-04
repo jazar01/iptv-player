@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Search index for live channels, movies and series. Runs on its own thread:
+  the full lists (~11,000 channels) are read from cachefs: files written by
+  ApiTask (saveOnly), indexed here, and only matches cross to the render
+  thread.
+
+  As with ApiTask, wait for `ready` before setting `load` or `query`.
+
+  In:  load     { kind: "live" | "movie" | "series", file }   (re)index one kind from a cache file
+       query    { id, text }       newest wins; older pending queries are skipped
+  Out: results  { id, text, items: [ { kind: "channel" | "movie" | "series", itemId, streamId,
+                  name, num, epgChannelId, ext, year, archiveDays } ] }
+                grouped channels, then movies, then series; each capped
+       archive  { "<streamId>": archiveDays } for live channels with a catch-up archive
+       counts   { live, movie, series } items indexed per kind
+-->
+<component name="SearchTask" extends="Task">
+  <interface>
+    <field id="ready" type="boolean" value="false" />
+    <field id="load" type="assocarray" alwaysNotify="true" />
+    <field id="query" type="assocarray" alwaysNotify="true" />
+    <field id="results" type="assocarray" alwaysNotify="true" />
+    <field id="archive" type="assocarray" />
+    <field id="counts" type="assocarray" />
+  </interface>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/services/SearchTask.brs" />
+</component>

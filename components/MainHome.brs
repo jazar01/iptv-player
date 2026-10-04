@@ -60,6 +60,8 @@ sub onToggleFavorite(event as Object)
     showToast(message)
     refreshHome()
     updateCatalogTags()
+    search = m.sections.search
+    if search <> invalid then search.favoriteIds = favoriteIdSet()
 end sub
 
 ' ---------------------------------------------------------------------------

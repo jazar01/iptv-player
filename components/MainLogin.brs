@@ -4,6 +4,7 @@
 sub initLogin()
     m.setup = invalid
     m.pendingSetup = invalid    ' values submitted from Setup, awaiting login
+    m.serverTimezone = ""       ' server_info.timezone, for timeshift URLs
 end sub
 
 sub login()
@@ -34,6 +35,8 @@ sub onLogin(res as Object)
     print "[main] login ok. max_connections="; result.maxConnections; " active="; result.activeConnections; " expires="; result.expires; " server tz="; result.timezone
     print "[main] allowed_output_formats: "; joinStrings(result.formats, ", ")
     if not result.hls then print "[main] WARNING: provider does not list m3u8; live HLS playback may not work"
+    m.serverTimezone = result.timezone
+    refreshSearchIndex()
 
     if m.pendingSetup <> invalid
         saveSetup(m.pendingSetup)
@@ -141,6 +144,8 @@ sub saveSetup(values as Object)
         sendRequest({ id: "clearCache", op: "clearCache" })
         m.epg.callFunc("clear")
         resetCatalogs()
+        m.searchIndexRequested = false
+        m.archiveDays = {}
     end if
 end sub
 

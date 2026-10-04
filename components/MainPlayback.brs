@@ -7,20 +7,72 @@ sub initPlayback()
     m.playing = invalid         ' current play request
     m.watchedKey = ""           ' "kind:id" already marked watched in this play
     m.resumeDialog = invalid
+    m.tzRules = invalid
+    m.guideRules = invalid
 end sub
 
-' item: { streamId, name, epgChannelId }
+' item: { streamId, name, epgChannelId, archiveDays? }. Archive days come
+' from the catalog or search item, else from the live search index.
 sub playLive(item as Object)
     id = toInt(item.streamId)
-    startPlayer({
+    archiveDays = toInt(item.archiveDays)
+    if archiveDays = 0 then archiveDays = toInt(m.archiveDays[id.ToStr()])
+    play = {
         kind: "live"
         id: id
         name: asString(item.name)
         epgChannelId: asString(item.epgChannelId)
         url: streamUrl("live", id, "m3u8")
         streamFormat: "hls"
-    }, 0)
+        archiveDays: archiveDays
+    }
+    if archiveDays > 0 then play.timeshift = timeshiftInfo(id)
+    startPlayer(play, 0)
 end sub
+
+' Archive (catch-up) URL: an HLS playlist of one-minute segments. {start} is
+' server-local "YYYY-MM-DD:HH-MM", {duration} is minutes. The .ts and
+' timeshift.php forms are served too, but Roku can't play them (it reads
+' them as MP4). Contains the password: never print.
+function timeshiftInfo(id as Integer) as Object
+    creds = m.api.credentials
+    user = urlEncode(asString(creds.username))
+    pass = urlEncode(asString(creds.password))
+    return {
+        url: creds.server + "/timeshift/" + user + "/" + pass + "/{duration}/{start}/" + id.ToStr() + ".m3u8"
+        tz: timezoneRule(m.serverTimezone)
+        lagSeconds: archiveLagSeconds()
+    }
+end function
+
+function guideRules() as Object
+    if m.guideRules = invalid
+        m.guideRules = ParseJson(ReadAsciiFile("pkg:/data/guide-rules.json"))
+        if type(m.guideRules) <> "roAssociativeArray" then m.guideRules = {}
+    end if
+    return m.guideRules
+end function
+
+function archiveLagSeconds() as Integer
+    t = guideRules().timeshift
+    if type(t) = "roAssociativeArray" and toInt(t.archiveLagSeconds) > 0 then return toInt(t.archiveLagSeconds)
+    return 300
+end function
+
+' Time-zone rule for the server's zone, from data/guide-rules.json.
+function timezoneRule(name as String) as Dynamic
+    if m.tzRules = invalid
+        m.tzRules = {}
+        zones = guideRules().timezones
+        if type(zones) = "roAssociativeArray" then m.tzRules = zones
+    end if
+    rule = m.tzRules[name]
+    if rule = invalid
+        print "[main] WARNING: no time-zone rule for '"; name; "'; using UTC for timeshift"
+        rule = { standard: 0, daylight: 0, dst: "" }
+    end if
+    return rule
+end function
 
 ' item: { itemId, name, ext, duration? }. askResume: offer Resume / Start over.
 sub playMovie(item as Object, askResume as Boolean)

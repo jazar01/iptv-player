@@ -151,23 +151,27 @@ sub fillNode(node as Object, raw as Object)
     end if
 
     if kind = "live"
-        node.num = asString(raw.num)
+        ' No channel number shown: the provider's `num` is internal ordering
+        ' and means nothing to a viewer.
         node.epgChannelId = asString(raw.epg_channel_id)
+        if toInt(raw.tv_archive) = 1
+            node.archiveDays = toInt(raw.tv_archive_duration)
+            if node.archiveDays <= 0 then node.archiveDays = 1
+        end if
     else
         node.ext = asString(raw.container_extension)
         node.year = itemYear(raw)
         if node.year > 0 then node.num = node.year.ToStr()
     end if
-    node.tag = asString(m.tags[node.itemId.ToStr()])
+    node.tag = itemTag(node)
 end sub
 
-' Xtream puts the year in different fields depending on panel and kind.
-function itemYear(raw as Object) as Integer
-    for each field in ["year", "releaseDate", "release_date", "releasedate"]
-        y = Val(Left(asString(raw[field]), 4), 10)
-        if y > 1900 and y < 2200 then return y
-    end for
-    return 0
+' MainScene's tag (FAVORITE, IN PROGRESS, WATCHING), else REWIND for
+' channels with a catch-up archive.
+function itemTag(node as Object) as String
+    tag = asString(m.tags[node.itemId.ToStr()])
+    if tag = "" and node.archiveDays > 0 then tag = "REWIND"
+    return tag
 end function
 
 sub onItemFocused()
@@ -180,7 +184,7 @@ sub onTags()
     if content = invalid then return
     for i = 0 to content.GetChildCount() - 1
         node = content.GetChild(i)
-        node.tag = asString(m.tags[node.itemId.ToStr()])
+        node.tag = itemTag(node)
     end for
 end sub
 
@@ -207,6 +211,7 @@ function itemSummary(node as Object) as Object
         epgChannelId: node.epgChannelId
         ext: node.ext
         year: node.year
+        archiveDays: node.archiveDays
     }
 end function
 

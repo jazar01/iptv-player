@@ -15,7 +15,9 @@
     <field id="info" type="assocarray" onChange="onInfo" />
     <field id="progress" type="assocarray" onChange="onProgress" />
     <field id="focusEpisodeId" type="integer" />
-    <field id="status" type="string" onChange="onStatus" />
+    <!-- alwaysNotify: setting "" must hide the initial "Loading" text even
+         though the field already holds "". -->
+    <field id="status" type="string" onChange="onStatus" alwaysNotify="true" />
     <field id="selected" type="assocarray" alwaysNotify="true" />
     <field id="options" type="assocarray" alwaysNotify="true" />
   </interface>

@@ -5,6 +5,9 @@
   In:  content       play request from MainScene:
                      { kind: "live" | "movie" | "episode", id, name, url, streamFormat,
                        startPosition, ...metadata echoed back in `progress` }
+                     live also: archiveDays (0 = no catch-up archive) and
+                       timeshift { url with {start} {duration}, tz: time-zone rule,
+                                   lagSeconds: how far behind live the archive is recorded }
        programs      EpgService entry for the live overlay (ignored if not for this channel)
        channelLabel  e.g. "Favorite 3 of 12", shown on the live overlay
        errorText     replaces the error message (e.g. after a connection-limit check)
@@ -12,6 +15,14 @@
        failed        { play, code, message } when the Video node errors
        channelStep   +1 / -1 when Up / Down is pressed during live playback
        closed        true when the user leaves the player
+
+  Live modes: "live" -> Play/Pause pauses ("paused") -> Play continues from the
+  pause point: from the player's own buffer after a short pause, otherwise via
+  the provider's timeshift stream ("timeshift"). Rewind from live jumps into
+  the archive as close to live as it has recorded. In timeshift the Video
+  node's own controls work; Back returns to live. An archive stretch that ends
+  while more has been recorded loads the next stretch; one that never plays
+  shows a note and rejoins live.
 -->
 <component name="PlayerScreen" extends="Group">
   <interface>
@@ -21,8 +32,7 @@
     <field id="errorText" type="string" onChange="onErrorText" />
     <field id="progress" type="assocarray" alwaysNotify="true" />
     <field id="failed" type="assocarray" alwaysNotify="true" />
-    <field id="channelStep" type="integer" alwaysNotify="true" />
-    <field id="closed" type="boolean" alwaysNotify="true" />
+    <field id="channelStep" type="integer" alwaysNotify="true" />    <field id="closed" type="boolean" alwaysNotify="true" />
   </interface>
 
   <children>
@@ -30,7 +40,8 @@
     <Video id="video" width="1920" height="1080" />
 
     <Group id="liveOverlay" visible="false">
-      <Rectangle translation="[0,770]" width="1920" height="310" color="0x000000C8" />
+      <Rectangle translation="[0,730]" width="1920" height="350" color="0x000000C8" />
+      <Label id="modeLine" translation="[96,750]" width="1728" font="font:SmallBoldSystemFont" color="0xFFC94DFF" />
       <Label id="channelName" translation="[96,800]" width="1300" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" />
       <Label id="channelPos" translation="[1424,812]" width="400" horizAlign="right"
         font="font:SmallSystemFont" color="0x8C96A0FF" />
@@ -40,8 +51,7 @@
       <Rectangle id="progressTrack" translation="[96,936]" width="1728" height="6" color="0x3A444EFF" />
       <Rectangle id="progressFill" translation="[96,936]" width="0" height="6" color="0x4DA3FFFF" />
       <Label id="nextLine" translation="[96,962]" width="1728" font="font:SmallSystemFont" color="0x8C96A0FF" />
-      <Label translation="[96,1016]" width="1728" font="font:SmallestSystemFont" color="0x6E7882FF"
-        text="Up / Down: change favorite channel     *: show this again     Back: close" />
+      <Label id="hints" translation="[96,1016]" width="1728" font="font:SmallestSystemFont" color="0x6E7882FF" />
     </Group>
 
     <Group id="errorPanel" visible="false">
@@ -55,8 +65,10 @@
     </Group>
 
     <Timer id="overlayTimer" duration="5" />
-    <Timer id="saveTimer" duration="30" repeat="true" />
-  </children>
+    <!-- An archive stream that never starts playing counts as failed. Generous:
+         the provider's archive segments are a full minute each. -->
+    <Timer id="timeshiftTimeout" duration="30" />
+    <Timer id="saveTimer" duration="30" repeat="true" />  </children>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
   <script type="text/brightscript" uri="pkg:/components/player/PlayerScreen.brs" />

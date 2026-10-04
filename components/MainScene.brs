@@ -3,7 +3,8 @@
 '   MainLogin.brs     login, Setup, Settings
 '   MainHome.brs      Home rows, favorites, now/next
 '   MainCatalog.brs   Live TV / Movies / Series browsers, series pages
-'   MainPlayback.brs  player, resume, watched tracking
+'   MainPlayback.brs  player, resume, watched tracking, live pause/rewind
+'   MainSearch.brs    search index and queries
 '
 ' Launch: with saved credentials, Home draws immediately from saved favorites
 ' and cached data while the login is re-validated in the background. Without
@@ -29,6 +30,7 @@ sub init()
     initHome()
     initCatalog()
     initPlayback()
+    initSearch()
 
     m.api.ObserveField("response", "onApiResponse")
     m.api.ObserveField("ready", "onApiReady")
@@ -85,6 +87,8 @@ sub onApiResponse(event as Object)
         onCatalogItems(res)
     else if res.id = "seriesInfo"
         onSeriesInfo(res)
+    else if res.id = "catalogAll"
+        onCatalogAll(res)
     end if
 end sub
 
@@ -109,6 +113,8 @@ sub showSection(name as String)
         refreshHome()
     else if name = "settings"
         screen.info = settingsInfo()
+    else if name = "search"
+        onSearchShown(screen)
     else
         onCatalogShown(screen)
     end if
@@ -124,6 +130,8 @@ function createSection(name as String) as Object
     else if name = "settings"
         screen = CreateObject("roSGNode", "SettingsScreen")
         screen.ObserveField("chosen", "onSettingsChosen")
+    else if name = "search"
+        screen = createSearchScreen()
     else
         screen = createCatalogScreen(sectionKind(name))
     end if

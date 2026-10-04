@@ -9,7 +9,8 @@
   The task thread starts after control = "RUN"; a request set before it is
   listening is silently lost. Don't send until `ready` is true.
 
-  request:  { id, action, params?, context?, timeoutMs?, cacheFile?, cacheFirst? }
+  request:  { id, action, params?, context?, timeoutMs?, cacheFile?, cacheFirst?,
+              maxAgeSeconds?, saveOnly? }
                 Xtream player_api.php call
             { id, url, ... }      plain GET returning JSON
             { id, op: "clearCache" }
@@ -19,6 +20,10 @@
   cached copy is answered immediately (fromCache=true), then the fresh copy;
   if the fresh body is identical the second response has unchanged=true and
   no data.
+
+  maxAgeSeconds answers from cacheFile without the network if it was written
+  less than that long ago. saveOnly writes the body to cacheFile and answers
+  without data (for big lists that another Task reads from disk).
 -->
 <component name="ApiTask" extends="Task">
   <interface>

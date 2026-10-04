@@ -1,6 +1,6 @@
 sub init()
-    m.sections = ["home", "live", "movies", "series", "settings"]
-    names = ["Home", "Live TV", "Movies", "Series", "Settings"]
+    m.sections = ["home", "live", "movies", "series", "search", "settings"]
+    names = ["Home", "Live TV", "Movies", "Series", "Search", "Settings"]
     m.TAB_WIDTH = 220
 
     tabs = m.top.FindNode("tabs")
