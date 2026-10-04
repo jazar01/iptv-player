@@ -1,0 +1,7 @@
+# LF everywhere, regardless of each machine's core.autocrlf.
+# Roku and PowerShell 5.1/7 both handle LF.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.zip binary
