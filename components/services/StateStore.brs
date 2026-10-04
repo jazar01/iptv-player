@@ -119,6 +119,83 @@ function addRecent(channel as Object) as Boolean
 end function
 
 ' ---------------------------------------------------------------------------
+' Re-matching after the provider renumbers (requirements: Persistence).
+' Applies what channel matching found; anything not in the map is untouched.
+
+' map: { "<old streamId>": { streamId, name, epgChannelId } }. Favorites and
+' Recently Viewed move to the new ID; a favorite whose new ID is already a
+' favorite becomes a tombstone instead of a duplicate.
+function remapChannels(map as Object) as Boolean
+    if map.Count() = 0 then return true
+    now = nowSeconds()
+    for each f in m.doc.favorites
+        target = map[toInt(f.streamId).ToStr()]
+        if target <> invalid and not isTrue(f.deleted)
+            existing = findFavorite(toInt(target.streamId))
+            if existing <> invalid and not isTrue(existing.deleted)
+                f.deleted = true
+            else
+                f.streamId = toInt(target.streamId)
+                f.name = shortName(target.name)
+                f.epgChannelId = asString(target.epgChannelId)
+            end if
+            f.updatedAt = now
+        end if
+    end for
+
+    kept = []
+    seen = {}
+    for each r in getRecent()
+        target = map[toInt(r.streamId).ToStr()]
+        if target <> invalid
+            r.streamId = toInt(target.streamId)
+            r.name = shortName(target.name)
+            r.epgChannelId = asString(target.epgChannelId)
+        end if
+        key = toInt(r.streamId).ToStr()
+        if not seen.DoesExist(key)
+            seen[key] = true
+            kept.Push(r)
+        end if
+    end for
+    m.doc.recent = kept
+    return persist()
+end function
+
+' map: { "<old seriesId>": { seriesId, name, year } }. The series record and
+' its episodes' resume entries move to the new ID. Episode IDs inside may
+' have changed too; Continue Watching finds the episode again by season and
+' episode number.
+function remapSeries(map as Object) as Boolean
+    if map.Count() = 0 then return true
+    for each s in m.doc.series
+        target = map[toInt(s.seriesId).ToStr()]
+        if target <> invalid
+            s.seriesId = toInt(target.seriesId)
+            s.name = shortName(target.name)
+            if toInt(target.year) > 0 then s.year = toInt(target.year)
+            s.updatedAt = nowSeconds()
+        end if
+    end for
+    for each r in m.doc.resume
+        if r.kind = "episode"
+            target = map[toInt(r.seriesId).ToStr()]
+            if target <> invalid then r.seriesId = toInt(target.seriesId)
+        end if
+    end for
+    return persist()
+end function
+
+' Every saved series (for re-matching), not only those in Continue Watching.
+function getSavedSeries() as Object
+    list = []
+    for each s in m.doc.series
+        if not isTrue(s.deleted) then list.Push({ seriesId: toInt(s.seriesId), name: asString(s.name), year: toInt(s.year) })
+    end for
+    return list
+end function
+
+' ---------------------------------------------------------------------------
 ' Resume positions for movies and episodes. Newest first.
 
 function getResume() as Object

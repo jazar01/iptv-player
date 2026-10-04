@@ -14,6 +14,15 @@
                 grouped channels, then movies, then series; each capped
        archive  { "<streamId>": archiveDays } for live channels with a catch-up archive
        counts   { live, movie, series } items indexed per kind
+       indexVersion  bumped after every (re)index, so saved items can be re-matched
+
+  Channel matching (ChannelMatch.brs):
+  In:  matchRequest { id, channels: [{ streamId, name, epgChannelId }], series: [{ seriesId, name, year }] }
+  Out: matchResult  { id, liveReady, seriesReady,
+                      channels: { "<old streamId>": { streamId, name, epgChannelId, method } },
+                      series: { "<old seriesId>": { seriesId, name, year, method } }, unmatched: [text] }
+       Only items whose IDs are missing from the loaded catalog are matched.
+  selfTest: set true to run the matching self-test once both lists are loaded.
 -->
 <component name="SearchTask" extends="Task">
   <interface>
@@ -23,8 +32,13 @@
     <field id="results" type="assocarray" alwaysNotify="true" />
     <field id="archive" type="assocarray" />
     <field id="counts" type="assocarray" />
+    <field id="indexVersion" type="integer" alwaysNotify="true" />
+    <field id="matchRequest" type="assocarray" alwaysNotify="true" />
+    <field id="matchResult" type="assocarray" alwaysNotify="true" />
+    <field id="selfTest" type="boolean" value="false" />
   </interface>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/services/ChannelMatch.brs" />
   <script type="text/brightscript" uri="pkg:/components/services/SearchTask.brs" />
 </component>

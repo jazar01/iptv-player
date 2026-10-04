@@ -5,9 +5,14 @@ end sub
 sub runLoop()
     m.LIMIT = 50                ' results per kind
     m.index = { live: [], movie: [], series: [] }
+    m.byId = { live: {}, movie: {}, series: {} }    ' "<id>" -> entry
+    m.matchLookup = {}          ' kind -> { byEpg, byName }, built when first needed
+    m.matchRules = invalid
+    m.selfTested = false
     port = CreateObject("roMessagePort")
     m.top.ObserveField("load", port)
     m.top.ObserveField("query", port)
+    m.top.ObserveField("matchRequest", port)
     m.top.ready = true
 
     while true
@@ -15,6 +20,8 @@ sub runLoop()
         if type(msg) = "roSGNodeEvent"
             if msg.GetField() = "load"
                 loadKind(msg.GetData())
+            else if msg.GetField() = "matchRequest"
+                m.top.matchResult = matchSaved(msg.GetData())
             else
                 ' Typing sends a query per pause; answer only the newest.
                 latest = msg.GetData()
@@ -45,18 +52,22 @@ sub loadKind(req as Object)
     end if
 
     entries = []
+    byId = {}
     archive = {}
     for each item in raw
         if type(item) = "roAssociativeArray"
             e = indexEntry(kind, item)
             if e.name <> ""
                 entries.Push(e)
+                byId[e.itemId.ToStr()] = e
                 if e.archiveDays > 0 then archive[e.itemId.ToStr()] = e.archiveDays
             end if
         end if
     end for
     raw = invalid
     m.index[kind] = entries
+    m.byId[kind] = byId
+    m.matchLookup.Delete(kind)
 
     counts = m.top.counts
     if type(counts) <> "roAssociativeArray" then counts = {}
@@ -68,6 +79,154 @@ sub loadKind(req as Object)
     else
         print "[search] "; kind; ": "; entries.Count(); " indexed ("; timer.TotalMilliseconds(); " ms)"
     end if
+    m.top.indexVersion = m.top.indexVersion + 1
+    if m.top.selfTest and not m.selfTested and m.index.live.Count() > 0 and m.index.series.Count() > 0
+        m.selfTested = true
+        matchSelfTest()
+    end if
+end sub
+
+' ---------------------------------------------------------------------------
+' Channel matching (rules in ChannelMatch.brs). Only saved items whose IDs
+' are missing from the current catalog are looked up, and only against a
+' fully loaded list, so a failed download can't re-match anything.
+
+' req: { id, channels: [{ streamId, name, epgChannelId }], series: [{ seriesId, name, year }] }
+function matchSaved(req as Object) as Object
+    result = { id: req.id, liveReady: m.index.live.Count() > 0, seriesReady: m.index.series.Count() > 0, channels: {}, series: {}, unmatched: [] }
+    if result.liveReady and type(req.channels) = "roArray"
+        for each saved in req.channels
+            oldId = toInt(saved.streamId).ToStr()
+            if m.byId.live[oldId] = invalid and not result.channels.DoesExist(oldId)
+                found = matchChannel(saved, lookupFor("live"), currentMatchRules())
+                if found = invalid
+                    result.unmatched.Push("channel " + oldId + " '" + asString(saved.name) + "'")
+                else
+                    e = found.entry
+                    result.channels[oldId] = { streamId: e.itemId, name: e.name, epgChannelId: e.epgChannelId, method: found.method }
+                    print "[match] channel "; oldId; " '"; saved.name; "' -> "; e.itemId; " '"; e.name; "' by "; found.method
+                end if
+            end if
+        end for
+    end if
+    if result.seriesReady and type(req.series) = "roArray"
+        for each saved in req.series
+            oldId = toInt(saved.seriesId).ToStr()
+            if m.byId.series[oldId] = invalid and not result.series.DoesExist(oldId)
+                found = matchSeries(saved, lookupFor("series"), currentMatchRules())
+                if found = invalid
+                    result.unmatched.Push("series " + oldId + " '" + asString(saved.name) + "'")
+                else
+                    e = found.entry
+                    result.series[oldId] = { seriesId: e.itemId, name: e.name, year: e.year, method: found.method }
+                    print "[match] series "; oldId; " '"; saved.name; "' -> "; e.itemId; " '"; e.name; "' by "; found.method
+                end if
+            end if
+        end for
+    end if
+    for each line in result.unmatched
+        print "[match] no match for "; line; "; keeping it as is"
+    end for
+    return result
+end function
+
+function currentMatchRules() as Object
+    if m.matchRules = invalid then m.matchRules = loadMatchRules()
+    return m.matchRules
+end function
+
+' Guide-ID and name groups for a kind, built the first time a match needs
+' them (not at every load: most refreshes have nothing missing).
+function lookupFor(kind as String) as Object
+    lookup = m.matchLookup[kind]
+    if lookup = invalid
+        lookup = { byEpg: {}, byName: {} }
+        for each e in m.index[kind]
+            if kind = "live" then addToGroup(lookup.byEpg, LCase(e.epgChannelId), e)
+            addToGroup(lookup.byName, matchKey(e.name, currentMatchRules()), e)
+        end for
+        m.matchLookup[kind] = lookup
+    end if
+    return lookup
+end function
+
+' On-device check against the real catalog, run once when the manifest has
+' match_selftest=1: saved items with made-up (missing) IDs must be found again.
+sub matchSelfTest()
+    print "[match] ---- self-test ----"
+    withGuide = invalid
+    for each e in m.index.live
+        if withGuide = invalid and e.epgChannelId <> "" and lookupFor("live").byEpg[LCase(e.epgChannelId)].Count() = 1 then withGuide = e
+    end for
+    named = invalid
+    for each e in m.index.live
+        if named = invalid and e.epgChannelId = "" and lookupFor("live").byName[matchKey(e.name, currentMatchRules())].Count() = 1 then named = e
+    end for
+    ' A guide ID shared by several channels (HD/SD/backup copies of one feed).
+    shared = invalid
+    for each e in m.index.live
+        if shared = invalid and e.epgChannelId <> "" and lookupFor("live").byEpg[LCase(e.epgChannelId)].Count() > 1 then shared = e
+    end for
+    show = invalid
+    for each e in m.index.series
+        if show = invalid and e.year > 0 and lookupFor("series").byName[matchKey(e.name, currentMatchRules())].Count() = 1 then show = e
+    end for
+
+    req = { id: "selftest", channels: [], series: [] }
+    expected = {}
+    if withGuide <> invalid
+        req.channels.Push({ streamId: 900000001, name: "Renamed " + withGuide.name, epgChannelId: withGuide.epgChannelId })
+        expected["900000001"] = withGuide.itemId
+    end if
+    if named <> invalid
+        req.channels.Push({ streamId: 900000002, name: named.name + " (1080p)", epgChannelId: "" })
+        expected["900000002"] = named.itemId
+    end if
+    req.channels.Push({ streamId: 900000003, name: "No Such Channel Anywhere 12345", epgChannelId: "" })
+    expected["900000003"] = 0
+    if shared <> invalid
+        group = lookupFor("live").byEpg[LCase(shared.epgChannelId)]
+        print "[match] shared guide ID '"; shared.epgChannelId; "' is on "; group.Count(); " channels"
+        ' Same guide ID, same name: that channel, not just any in the group.
+        ' Needs a name unique within the group (providers list exact
+        ' duplicates, where either answer is right).
+        distinct = invalid
+        for each candidate in group
+            sameKey = 0
+            for each other in group
+                if matchKey(other.name, currentMatchRules()) = matchKey(candidate.name, currentMatchRules()) then sameKey = sameKey + 1
+            end for
+            if sameKey = 1 and candidate.itemId <> group[0].itemId then distinct = candidate
+        end for
+        if distinct <> invalid
+            req.channels.Push({ streamId: 900000005, name: distinct.name, epgChannelId: shared.epgChannelId })
+            expected["900000005"] = distinct.itemId
+        else
+            print "[match] (no channel with a unique name in that group; skipping the same-name case)"
+        end if
+        ' Same guide ID, unknown name: the first channel carrying that feed.
+        req.channels.Push({ streamId: 900000006, name: "Zzq Unknown Name", epgChannelId: shared.epgChannelId })
+        expected["900000006"] = group[0].itemId
+    end if
+    if show <> invalid
+        req.series.Push({ seriesId: 900000004, name: show.name, year: show.year })
+        expected["900000004"] = show.itemId
+    end if
+
+    result = matchSaved(req)
+    passed = 0
+    for each oldId in expected
+        got = 0
+        if result.channels[oldId] <> invalid then got = result.channels[oldId].streamId
+        if result.series[oldId] <> invalid then got = result.series[oldId].seriesId
+        outcome = "FAIL"
+        if got = expected[oldId]
+            outcome = "PASS"
+            passed = passed + 1
+        end if
+        print "[match] "; outcome; " "; oldId; ": expected "; expected[oldId]; ", got "; got
+    end for
+    print "[match] ---- self-test: "; passed; " of "; expected.Count(); " passed ----"
 end sub
 
 ' Only what search shows and what playing or opening an item needs.

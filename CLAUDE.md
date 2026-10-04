@@ -30,7 +30,10 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   downloads the full lists to `cachefs:/catalog/all_*.json` (`saveOnly`,
   `maxAgeSeconds` one day); SearchTask indexes them from disk, so big lists
   never cross the render thread. Also publishes which channels have a
-  catch-up archive.
+  catch-up archive, and runs channel matching after each (re)index.
+- `components/services/ChannelMatch.brs`: shared re-matching rules (guide
+  ID, then name; series by name and year). `match_selftest=1` in the
+  manifest runs its on-device self-test at launch; take it out again after.
 - `components/services/ApiTask.*`: long-running Task, up to 4 requests at once,
   so responses arrive in any order: match by `id` (and `context`). Optional
   `cacheFile`/`cacheFirst` caches catalog responses in `cachefs:/catalog/`.
@@ -144,5 +147,7 @@ is the final check.
 - Recently Viewed row (after Continue Watching): live channels watched for a
   minute, favorites left out, up to 15. Saved state is schema 3. Row drawn on
   a Roku; a channel being added after a minute not yet tried.
-- Not yet built: channel matching (re-matching favorites after renumbering),
-  the visual pass, and the Later features in the requirements.
+- Channel matching built: favorites, Recently Viewed and series are re-found
+  after a provider renumbering. Self-test passed on a Roku against the real
+  catalog; a real renumbering hasn't happened yet.
+- Not yet built: the visual pass, and the Later features in the requirements.

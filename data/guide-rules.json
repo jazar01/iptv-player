@@ -22,6 +22,14 @@
       "zone": "America/New_York"
     }
   ],
+  "channelMatchingComment": "Re-finding saved channels and series after the provider renumbers them. Names are compared lower-case, with these patterns (regexes) removed first, then punctuation; so 'ESPN (1080p)' matches 'ESPN HD'.",
+  "channelMatching": {
+    "ignorePatterns": [
+      "\\b(f?hd|uhd|4k|sd|hevc|h\\.?265|hq|lq|backup|raw)\\b",
+      "\\(?\\b\\d{3,4}[pi]\\b\\)?",
+      "\\b\\d{2}\\s?fps\\b"
+    ]
+  },
   "timeshiftComment": "Catch-up archive. archiveLagSeconds: how far behind live the archive is reliably recorded (it's written in one-minute segments, each available only after its minute ends). Rewind and resume never ask for anything newer.",
   "timeshift": {
     "archiveLagSeconds": 300

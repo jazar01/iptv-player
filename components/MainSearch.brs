@@ -13,7 +13,47 @@ sub initSearch()
     m.searchTask.ObserveField("ready", "onSearchReady")
     m.searchTask.ObserveField("results", "onSearchResults")
     m.searchTask.ObserveField("archive", "onArchiveList")
+    m.searchTask.ObserveField("indexVersion", "onIndexChanged")
+    m.searchTask.ObserveField("matchResult", "onMatchResult")
+    ' match_selftest=1 in the manifest runs the channel-matching self-test.
+    m.searchTask.selfTest = (CreateObject("roAppInfo").GetValue("match_selftest") = "1")
     m.searchTask.control = "RUN"
+end sub
+
+' ---------------------------------------------------------------------------
+' Channel matching: after every catalog (re)index, ask SearchTask to find
+' saved channels and series whose IDs have gone missing.
+
+sub onIndexChanged()
+    channels = []
+    seen = {}
+    for each list in [m.store.callFunc("getFavorites"), m.store.callFunc("getRecent")]
+        for each c in list
+            key = toInt(c.streamId).ToStr()
+            if not seen.DoesExist(key)
+                seen[key] = true
+                channels.Push({ streamId: c.streamId, name: c.name, epgChannelId: c.epgChannelId })
+            end if
+        end for
+    end for
+    searchSend("matchRequest", { id: "saved", channels: channels, series: m.store.callFunc("getSavedSeries") })
+end sub
+
+sub onMatchResult(event as Object)
+    result = event.GetData()
+    if result.id <> "saved" then return
+    changed = 0
+    if result.channels.Count() > 0
+        if m.store.callFunc("remapChannels", result.channels) then changed = changed + result.channels.Count()
+    end if
+    if result.series.Count() > 0
+        if m.store.callFunc("remapSeries", result.series) then changed = changed + result.series.Count()
+    end if
+    if changed = 0 then return
+    print "[main] re-matched "; changed; " saved item(s) after a provider renumbering"
+    showToast("The provider renumbered some channels; " + changed.ToStr() + " saved item(s) were found again.")
+    refreshHome()
+    updateCatalogTags()
 end sub
 
 function searchFile(kind as String) as String

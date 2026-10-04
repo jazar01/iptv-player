@@ -159,6 +159,15 @@ Favorites and watch progress must never be lost. All saved state goes through on
 - An off-device backend can be added behind the same interface later (see Later features).
 - Uninstalling the app deletes its registry. Only off-device backup protects against that.
 
+**Channel matching (re-finding saved items after renumbering)**
+
+- **When:** after every catalog (re)index, at launch and on each daily refresh. Only saved items whose IDs are missing from a fully loaded list are looked up, so a failed or partial download can't re-match anything.
+- **Channels** (favorites and Recently Viewed), in order: the only channel with the same guide ID; among channels sharing the guide ID (HD/SD/backup copies of one feed are common), the one with the same name; the only channel with the same name; otherwise the first channel sharing the guide ID.
+- **Series:** the only series with the same name and year (year ignored when either side doesn't know it). The series record and its episodes' resume entries move to the new ID; Continue Watching finds its episode again by season and episode number.
+- **Names** are compared lower-case with provider quality tags removed (HD, FHD, 1080p and similar; editable patterns in `data/guide-rules.json`) and punctuation dropped, so "ESPN (1080p)" matches "ESPN HD".
+- **Results:** matched items take the new ID, name and guide ID, and the app shows a short note. A favorite whose new ID is already a favorite becomes a tombstone rather than a duplicate. Anything with no match is kept as it was and logged, never deleted.
+- **Testing:** `match_selftest=1` in the manifest runs an on-device self-test against the real catalog at launch (made-up IDs must be found again); it passed on Oct 4, 2026.
+
 ## Data model
 
 All saved state is one versioned JSON document per device, shaped so it can later be uploaded unchanged. Every record carries `updatedAt` so two copies can be merged record by record.
@@ -203,7 +212,7 @@ The app is BrightScript with SceneGraph. Screens talk only to MainScene, and thr
 - **ApiTask** is a `Task` node wrapping every HTTP call, because `roUrlTransfer` must run off the render thread. Retries and error handling live in one place.
 - **EpgService** fetches now/next for visible favorites in version 1. Its interface (`getPrograms`, later `findPrograms`) lets a server answer it later.
 - **StateStore** is the only path to saved state: registry in version 1, a backup server added behind it later.
-- **Channel matching** is one shared component: it re-matches favorites after renumbering and, later, maps networks to channels for My Teams.
+- **Channel matching** is one shared component (`ChannelMatch.brs`, run by SearchTask): it re-matches saved channels and series after renumbering and, later, maps networks to channels for My Teams.
 
 ## Provider guide findings
 

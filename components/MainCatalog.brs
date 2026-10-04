@@ -263,23 +263,35 @@ end function
 function findEpisode(info as Object, episodeId as Integer) as Dynamic
     for each s in info.seasons
         for each e in s.episodes
-            if e.id = episodeId
-                return {
-                    kind: "episode"
-                    id: e.id
-                    season: e.season
-                    episode: e.episode
-                    name: e.name
-                    ext: e.ext
-                    duration: e.duration
-                    seriesId: info.seriesId
-                    seriesName: info.name
-                    year: info.year
-                }
-            end if
+            if e.id = episodeId then return episodeSummaryFor(info, e)
         end for
     end for
     return invalid
+end function
+
+function findEpisodeByNumber(info as Object, season as Integer, episode as Integer) as Dynamic
+    if season = 0 and episode = 0 then return invalid
+    for each s in info.seasons
+        for each e in s.episodes
+            if e.season = season and e.episode = episode then return episodeSummaryFor(info, e)
+        end for
+    end for
+    return invalid
+end function
+
+function episodeSummaryFor(info as Object, e as Object) as Object
+    return {
+        kind: "episode"
+        id: e.id
+        season: e.season
+        episode: e.episode
+        name: e.name
+        ext: e.ext
+        duration: e.duration
+        seriesId: info.seriesId
+        seriesName: info.name
+        year: info.year
+    }
 end function
 
 sub onEpisodeSelected(event as Object)
@@ -331,6 +343,9 @@ sub continueSeries(item as Object)
         return
     end if
     ep = findEpisode(info, toInt(item.itemId))
+    ' After a provider renumbering the saved episode ID may be gone; the
+    ' season and episode number still identify it.
+    if ep = invalid then ep = findEpisodeByNumber(info, toInt(item.season), toInt(item.episode))
     if ep = invalid
         showToast("That episode is no longer listed. Opening the series instead.")
         openSeries({ itemId: item.seriesId, name: item.seriesName, year: item.year })
