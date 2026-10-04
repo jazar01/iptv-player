@@ -164,6 +164,7 @@ function settingsInfo() as Object
         version: CreateObject("roAppInfo").GetVersion()
         market: m.store.callFunc("getMarket").label
         showMyTeams: m.store.callFunc("getSettings").showMyTeams
+        showNoGameTeams: m.store.callFunc("getSettings").showNoGameTeams
     }
 end function
 
@@ -177,5 +178,7 @@ sub onSettingsChosen(event as Object)
         openMarkets()
     else if choice = "teamsRow"
         toggleMyTeamsRow()
+    else if choice = "noGameTeams"
+        toggleNoGameTeams()
     end if
 end sub

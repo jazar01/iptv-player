@@ -28,6 +28,19 @@ function nowSeconds() as Integer
     return CreateObject("roDateTime").AsSeconds()
 end function
 
+' First letter of each word upper case; the rest left as typed, so "A&M" or
+' "UAB" stay as they are. "alabama crimson tide" -> "Alabama Crimson Tide".
+function capitalizeWords(text as String) as String
+    out = ""
+    startOfWord = true
+    for i = 1 to text.Len()
+        ch = Mid(text, i, 1)
+        if startOfWord then out += UCase(ch) else out += ch
+        startOfWord = (ch = " " or ch = "-" or ch = "/" or ch = "(" or ch = ".")
+    end for
+    return out
+end function
+
 ' Xtream puts the year in different fields depending on panel and kind.
 function itemYear(item as Object) as Integer
     for each field in ["year", "releaseDate", "release_date", "releasedate"]

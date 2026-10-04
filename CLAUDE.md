@@ -179,7 +179,8 @@ is the final check.
   national channels (`myTeams.networks` by guide ID) plus the device's local
   ABC/CBS/NBC/FOX stations (Settings → Local stations, schema 5 `market`,
   stations found from provider channel names; the row can be switched off
-  per device in Settings, schema 6 `settings.showMyTeams`),
+  per device in Settings, schema 6 `settings.showMyTeams`; "no game" cards
+  for teams without one, `settings.showNoGameTeams`),
   fetched to cachefs:/teams/ by ApiTask and searched in SearchTask; merged
   into the same game card with the network channel first. Verified on a Roku.
 - Usage-based ordering built: decaying scores in their own registry section

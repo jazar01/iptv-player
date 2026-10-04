@@ -151,6 +151,13 @@ sub drawInfo(c as Object)
     else if c.kind = "seeAll"
         m.infoTitle.text = "See all"
         m.infoText.text = c.message
+    else if c.kind = "noGame"
+        ' My Teams: a team with nothing in the next 24 hours.
+        ' Message first so it always shows; the sports go below (trimmed).
+        m.infoTitle.text = c.name
+        detail = c.message
+        if c.subtitle <> "" then detail = detail + Chr(10) + c.subtitle
+        m.infoText.text = detail
     else
         m.infoTitle.text = "Nothing here yet"
         m.infoText.text = c.message

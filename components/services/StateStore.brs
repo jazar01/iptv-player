@@ -61,9 +61,14 @@ function setMarket(market as Object) as Boolean
     return persist()
 end function
 
-' Per-device on/off options: { showMyTeams }.
+' Per-device on/off options: { showMyTeams, showNoGameTeams }. New options
+' join this object with a default (normalizeDocument), so adding one doesn't
+' change the document's shape.
 function getSettings() as Object
-    return { showMyTeams: isTrue(m.doc.settings.showMyTeams) }
+    return {
+        showMyTeams: isTrue(m.doc.settings.showMyTeams)
+        showNoGameTeams: isTrue(m.doc.settings.showNoGameTeams)
+    }
 end function
 
 function setSetting(name as String, value as Dynamic) as Boolean
@@ -171,9 +176,9 @@ function saveTeam(team as Object) as Dynamic
         t = { id: id }
         m.doc.teams.Push(t)
     end if
-    t.name = shortName(team.name)
-    t.aliases = shortList(team.aliases)
-    t.exclusions = shortList(team.exclusions)
+    t.name = capitalizeWords(shortName(team.name))
+    t.aliases = capitalizedList(shortList(team.aliases))
+    t.exclusions = capitalizedList(shortList(team.exclusions))
     t.sports = shortList(team.sports)
     t.deleted = false
     t.updatedAt = nowSeconds()
@@ -189,6 +194,14 @@ function deleteTeam(id as String) as Boolean
         end if
     end for
     return persist()
+end function
+
+function capitalizedList(items as Object) as Object
+    out = []
+    for each item in items
+        out.Push(capitalizeWords(item))
+    end for
+    return out
 end function
 
 function shortList(items as Dynamic) as Object
@@ -706,7 +719,7 @@ function newDocument() as Object
         teams: []
         seenGames: []
         market: { key: "", label: "" }
-        settings: { showMyTeams: true }
+        settings: { showMyTeams: true, showNoGameTeams: true }
     }
 end function
 
@@ -756,6 +769,15 @@ sub normalizeDocument(doc as Object)
     ' by default, as before).
     if type(doc.settings) <> "roAssociativeArray" then doc.settings = {}
     if doc.settings.showMyTeams = invalid then doc.settings.showMyTeams = true
+    if doc.settings.showNoGameTeams = invalid then doc.settings.showNoGameTeams = true
+
+    ' Team names are shown capitalized ("Alabama Crimson Tide"); tidy any saved
+    ' before that rule (display only: matching ignores case).
+    for each t in doc.teams
+        t.name = capitalizeWords(asString(t.name))
+        if type(t.aliases) = "roArray" then t.aliases = capitalizedList(t.aliases)
+        if type(t.exclusions) = "roArray" then t.exclusions = capitalizedList(t.exclusions)
+    end for
     if toInt(doc.schema) < 6
         doc.schema = 6
         print "[state] migrated saved state to schema 6"

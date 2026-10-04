@@ -48,6 +48,8 @@ sub onItemSelected(event as Object)
         continueSeries(item)
     else if item.kind = "game"
         onGameSelected(item)
+    else if item.kind = "noGame"
+        onNoGameTeamSelected(item)
     end if
 end sub
 

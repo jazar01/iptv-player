@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-  Settings. In: info { deviceName, deviceId, server, version, market, showMyTeams }.
+  Settings. In: info { deviceName, deviceId, server, version, market, showMyTeams, showNoGameTeams }.
   Out: chosen ("teams" opens My Teams, "teamsRow" toggles the My Teams row,
+  "noGameTeams" toggles cards for teams with no game,
   "market" opens Local stations, "account" opens Setup).
 -->
 <component name="SettingsScreen" extends="Group">
@@ -14,7 +15,7 @@
     <LabelList id="menu" translation="[96,190]" itemSize="[800,64]"
       font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont"
       color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png" />
-    <Label id="details" translation="[96,520]" width="1600" wrap="true"
+    <Label id="details" translation="[96,580]" width="1600" wrap="true"
       font="font:SmallSystemFont" color="0x8C96A0FF" />
   </children>
 

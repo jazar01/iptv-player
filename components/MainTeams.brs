@@ -33,6 +33,20 @@ sub toggleMyTeamsRow()
     requestGames()
 end sub
 
+' Settings -> Show teams with no game: cards at the end of the row for teams
+' with nothing in the next 24 hours.
+sub toggleNoGameTeams()
+    show = not m.store.callFunc("getSettings").showNoGameTeams
+    if m.store.callFunc("setSetting", "showNoGameTeams", show)
+        if show then showToast("Teams with no game will show in My Teams") else showToast("Only teams with a game will show in My Teams")
+    else
+        showToast("Couldn't save the change. Storage may be full.")
+    end if
+    settings = m.sections.settings
+    if settings <> invalid then settings.info = settingsInfo()
+    refreshHome()
+end sub
+
 sub requestGames()
     teams = m.store.callFunc("getTeams")
     if teams.Count() = 0 or not m.store.callFunc("getSettings").showMyTeams
@@ -231,11 +245,29 @@ end sub
 
 sub onTeamChosen(event as Object)
     choice = event.GetData()
+    team = invalid
+    if choice.action = "edit" then team = choice.team
+    openTeamEdit(team)
+end sub
+
+' team: the team to edit, or invalid to add one.
+sub openTeamEdit(team as Dynamic)
     m.teamEditScreen = CreateObject("roSGNode", "TeamEditScreen")
     m.teamEditScreen.ObserveField("save", "onTeamSave")
     m.teamEditScreen.ObserveField("remove", "onTeamRemove")
-    if choice.action = "edit" then m.teamEditScreen.team = choice.team
+    if team <> invalid then m.teamEditScreen.team = team
     pushOverlay(m.teamEditScreen)
+end sub
+
+' A "no game" card on Home: open that team's settings (e.g. to fix aliases).
+sub onNoGameTeamSelected(item as Object)
+    teamId = Mid(asString(item.itemKey), 6)     ' "team:<id>"
+    for each t in m.store.callFunc("getTeams")
+        if t.id = teamId
+            openTeamEdit(t)
+            return
+        end if
+    end for
 end sub
 
 sub onTeamSave(event as Object)

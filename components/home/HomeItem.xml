@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-  Content for one HomeCard. kind: "channel" | "resume" | "game" | "seeAll" | "empty".
+  Content for one HomeCard. kind: "channel" | "resume" | "game" | "noGame" | "seeAll" | "empty".
+  noGame cards (My Teams): name = team, subtitle = its sports, itemKey "team:<id>".
   game cards (My Teams): name = matchup, subtitle = sport, nowStart/nowEnd =
   start and expected end, nowFlags = "live" / "replay".
   resume cards: resumeKind "movie" | "episode"; episodes carry the series and

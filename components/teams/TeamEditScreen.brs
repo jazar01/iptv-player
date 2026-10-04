@@ -169,11 +169,11 @@ sub onKeyboardButton()
     if m.dialog.buttonSelected = 0
         text = m.dialog.text.Trim()
         if m.editing = "name"
-            m.values.name = text
+            m.values.name = capitalizeWords(text)
         else
             items = []
             for each part in text.Split(",")
-                if part.Trim() <> "" then items.Push(part.Trim())
+                if part.Trim() <> "" then items.Push(capitalizeWords(part.Trim()))
             end for
             m.values[m.editing] = items
         end if

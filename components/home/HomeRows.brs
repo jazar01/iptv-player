@@ -133,7 +133,7 @@ end function
 
 function myTeamsRowItems(services as Object) as Object
     items = []
-    if type(services.games) <> "roArray" then return items
+    if type(services.games) <> "roArray" then services.games = []
     ' Live first, then start time; the team's usage score only breaks ties.
     ordered = []
     for i = 0 to services.games.Count() - 1
@@ -163,7 +163,46 @@ function myTeamsRowItems(services as Object) as Object
             channels: g.channels
         })
     end for
+
+    ' Teams with nothing in the next 24 hours, at the end in team order
+    ' (Settings -> Show teams with no game).
+    if services.store.callFunc("getSettings").showNoGameTeams
+        playing = {}
+        for each g in services.games
+            playing[asString(g.teamId)] = true
+        end for
+        labels = sportLabelMap()
+        for each t in services.store.callFunc("getTeams")
+            if not playing.DoesExist(t.id)
+                sports = ""
+                for each s in t.sports
+                    if sports <> "" then sports += ", "
+                    sports += asString(labels[s])
+                end for
+                items.Push({
+                    kind: "noGame"
+                    itemKey: "team:" + t.id
+                    name: t.name
+                    teamName: t.name
+                    subtitle: sports
+                    message: "No game in 24 hours"
+                })
+            end if
+        end for
+    end if
     return items
+end function
+
+' Sport ID -> label, from data/guide-rules.json "myTeams".
+function sportLabelMap() as Object
+    labels = {}
+    cfg = guideRules().myTeams
+    if type(cfg) = "roAssociativeArray" and type(cfg.sports) = "roArray"
+        for each s in cfg.sports
+            labels[asString(s.id)] = asString(s.label)
+        end for
+    end if
+    return labels
 end function
 
 ' ---------------------------------------------------------------------------
