@@ -4,8 +4,9 @@
   services touch the network (ApiTask, EpgService via ApiTask) or saved state
   (StateStore).
 
-  Layers, bottom to top: section screens (Home, Live TV, ...), top bar,
-  overlays (Setup, Favorites grid), toast.
+  Layers, bottom to top: section screens (Home, Live TV, Movies, Series,
+  Settings), top bar, overlays (Setup, Favorites grid, series pages, player),
+  toast. Dialogs (resume prompt, keyboards) use the Scene's `dialog` field.
 -->
 <component name="MainScene" extends="Scene">
   <children>
@@ -33,4 +34,8 @@
   <script type="text/brightscript" uri="pkg:/components/home/CardContent.brs" />
   <script type="text/brightscript" uri="pkg:/components/home/HomeRows.brs" />
   <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
+  <script type="text/brightscript" uri="pkg:/components/MainLogin.brs" />
+  <script type="text/brightscript" uri="pkg:/components/MainHome.brs" />
+  <script type="text/brightscript" uri="pkg:/components/MainCatalog.brs" />
+  <script type="text/brightscript" uri="pkg:/components/MainPlayback.brs" />
 </component>

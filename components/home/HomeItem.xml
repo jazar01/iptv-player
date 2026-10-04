@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
   Content for one HomeCard. kind: "channel" | "resume" | "seeAll" | "empty".
+  resume cards: resumeKind "movie" | "episode"; episodes carry the series and
+  the episode to continue (itemId = episode ID).
   Program fields are UTC seconds; epgVersion is bumped whenever they change so
   the card redraws in place.
 -->
@@ -21,6 +23,15 @@
     <field id="position" type="integer" />
     <field id="duration" type="integer" />
     <field id="message" type="string" />
+    <field id="resumeKind" type="string" />
+    <field id="itemId" type="integer" />
+    <field id="ext" type="string" />
+    <field id="subtitle" type="string" />
+    <field id="seriesId" type="integer" />
+    <field id="seriesName" type="string" />
+    <field id="year" type="integer" />
+    <field id="season" type="integer" />
+    <field id="episode" type="integer" />
     <field id="epgVersion" type="integer" />
   </interface>
 </component>

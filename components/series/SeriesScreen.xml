@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  One series: seasons on the left, episodes on the right, each marked
+  watched, in progress or new. * marks an episode watched or unwatched.
+
+  In:  info      { seriesId, name, year, seasons: [{ season, episodes: [{ id, season, episode, name, ext, duration }] }] }
+       progress  StateStore getSeriesProgress() result
+       focusEpisodeId  episode to focus when info arrives (the series' current one)
+       status    message while loading or on error
+  Out: selected  episode summary (see episodeSummary)
+       options   same, when * is pressed
+-->
+<component name="SeriesScreen" extends="Group">
+  <interface>
+    <field id="info" type="assocarray" onChange="onInfo" />
+    <field id="progress" type="assocarray" onChange="onProgress" />
+    <field id="focusEpisodeId" type="integer" />
+    <field id="status" type="string" onChange="onStatus" />
+    <field id="selected" type="assocarray" alwaysNotify="true" />
+    <field id="options" type="assocarray" alwaysNotify="true" />
+  </interface>
+
+  <children>
+    <Rectangle width="1920" height="1080" color="0x101418FF" />
+    <Label id="title" translation="[96,56]" width="1600" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" />
+    <Label translation="[96,120]" width="1600" font="font:SmallSystemFont" color="0x8C96A0FF"
+      text="Press * to mark an episode watched or unwatched." />
+    <LabelList id="seasonList" translation="[96,190]" itemSize="[300,64]" numRows="12"
+      font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont"
+      color="0xD0D6DCFF" focusedColor="0x101418FF" vertFocusAnimationStyle="floatingFocus" />
+    <MarkupList id="episodeList" translation="[440,190]" itemComponentName="EpisodeItem"
+      itemSize="[1384,72]" itemSpacing="[0,4]" numRows="11" vertFocusAnimationStyle="floatingFocus" />
+    <Label id="status" translation="[460,210]" width="1360" wrap="true"
+      font="font:MediumSystemFont" color="0xA0A8B0FF" text="Loading episodes ..." />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/series/SeriesScreen.brs" />
+</component>

@@ -2,7 +2,7 @@
 ' docs/requirements.md). Records carry updatedAt; deletions are tombstones.
 
 sub init()
-    m.SCHEMA = 1
+    m.SCHEMA = 2
     m.RESUME_CAP = 50
     m.TOMBSTONE_DAYS = 28
     m.STALE_SERIES_DAYS = 30
@@ -110,7 +110,10 @@ function getPosition(kind as String, id as Dynamic) as Integer
     return toInt(r.position)
 end function
 
-' entry: { kind: "movie" | "episode", id, position, duration }  (seconds)
+' entry: { kind: "movie" | "episode", id, name, ext, position, duration }
+'   episodes also: seriesId, seriesName, year, season, episode
+' Positions are seconds. Saving an episode also makes it its series' current
+' episode, so Continue Watching shows the series.
 function savePosition(entry as Object) as Boolean
     kind = asString(entry.kind)
     id = toInt(entry.id)
@@ -119,21 +122,33 @@ function savePosition(entry as Object) as Boolean
         r = { kind: kind, id: id }
         m.doc.resume.Push(r)
     end if
+    r.name = shortName(entry.name)
+    r.ext = asString(entry.ext)
     r.position = toInt(entry.position)
     r.duration = toInt(entry.duration)
     r.updatedAt = nowSeconds()
+    if kind = "episode"
+        r.seriesId = toInt(entry.seriesId)
+        r.season = toInt(entry.season)
+        r.episode = toInt(entry.episode)
+        touchSeries(entry, episodePointer(entry))
+    end if
     return persist()
 end function
 
 function clearPosition(kind as String, id as Dynamic) as Boolean
-    id = toInt(id)
+    if not removeResume(kind, toInt(id)) then return true
+    return persist()
+end function
+
+function removeResume(kind as String, id as Integer) as Boolean
     kept = []
     for each r in m.doc.resume
         if not (r.kind = kind and toInt(r.id) = id) then kept.Push(r)
     end for
-    if kept.Count() = m.doc.resume.Count() then return true
+    if kept.Count() = m.doc.resume.Count() then return false
     m.doc.resume = kept
-    return persist()
+    return true
 end function
 
 function findResume(kind as String, id as Integer) as Dynamic
@@ -141,6 +156,187 @@ function findResume(kind as String, id as Integer) as Dynamic
         if r.kind = kind and toInt(r.id) = id then return r
     end for
     return invalid
+end function
+
+' ---------------------------------------------------------------------------
+' Watched tracking. Movies: watched clears the resume entry. Episodes: the
+' series record keeps per-season ranges ("S1:1-10,S2:1-4") and `current`, the
+' episode Continue Watching points to.
+'
+' current: { episodeId, season, episode, name, ext } or invalid when finished.
+
+' entry: as savePosition, plus for episodes:
+'   nextEpisode  pointer for the following episode (invalid if none)
+'   fromPlayback true when playback reached the end; a manual mark only moves
+'                current if the marked episode is the current one
+function markWatched(entry as Object) as Boolean
+    kind = asString(entry.kind)
+    id = toInt(entry.id)
+    removeResume(kind, id)
+    if kind = "episode"
+        s = findSeries(toInt(entry.seriesId))
+        advance = isTrue(entry.fromPlayback) or s = invalid or s.current = invalid or toInt(s.current.episodeId) = id
+        current = invalid
+        if s <> invalid then current = s.current
+        if advance
+            current = invalid
+            if type(entry.nextEpisode) = "roAssociativeArray" then current = episodePointer(entry.nextEpisode)
+        end if
+        s = touchSeries(entry, current)
+        seasons = parseWatched(asString(s.watched))
+        key = toInt(entry.season).ToStr()
+        if seasons[key] = invalid then seasons[key] = {}
+        seasons[key][toInt(entry.episode).ToStr()] = true
+        s.watched = formatWatched(seasons)
+    end if
+    return persist()
+end function
+
+' Episodes only (manual). Leaves `current` alone.
+function markUnwatched(entry as Object) as Boolean
+    s = findSeries(toInt(entry.seriesId))
+    if s = invalid then return true
+    seasons = parseWatched(asString(s.watched))
+    episodes = seasons[toInt(entry.season).ToStr()]
+    if episodes = invalid then return true
+    episodes.Delete(toInt(entry.episode).ToStr())
+    s.watched = formatWatched(seasons)
+    s.updatedAt = nowSeconds()
+    return persist()
+end function
+
+' For the episode list: { watched: { "<season>:<episode>": true },
+'   currentEpisodeId, resume: { "<episodeId>": { position, duration } } }
+function getSeriesProgress(seriesId as Dynamic) as Object
+    id = toInt(seriesId)
+    out = { watched: {}, currentEpisodeId: 0, resume: {} }
+    s = findSeries(id)
+    if s <> invalid and not isTrue(s.deleted)
+        seasons = parseWatched(asString(s.watched))
+        for each season in seasons
+            for each episode in seasons[season]
+                out.watched[season + ":" + episode] = true
+            end for
+        end for
+        if s.current <> invalid then out.currentEpisodeId = toInt(s.current.episodeId)
+    end if
+    for each r in m.doc.resume
+        if r.kind = "episode" and toInt(r.seriesId) = id then out.resume[toInt(r.id).ToStr()] = { position: toInt(r.position), duration: toInt(r.duration) }
+    end for
+    return out
+end function
+
+' Series with an episode to continue, newest first.
+function getSeriesList() as Object
+    list = []
+    for each s in m.doc.series
+        if not isTrue(s.deleted) and type(s.current) = "roAssociativeArray" then list.Push(s)
+    end for
+    list.SortBy("updatedAt", "r")
+    return list
+end function
+
+function findSeries(seriesId as Integer) as Dynamic
+    for each s in m.doc.series
+        if toInt(s.seriesId) = seriesId then return s
+    end for
+    return invalid
+end function
+
+' Create or update a series record from an episode entry and set `current`.
+function touchSeries(entry as Object, current as Dynamic) as Object
+    id = toInt(entry.seriesId)
+    s = findSeries(id)
+    if s = invalid
+        s = { seriesId: id, watched: "" }
+        m.doc.series.Push(s)
+    end if
+    if asString(entry.seriesName) <> "" then s.name = shortName(entry.seriesName)
+    if toInt(entry.year) > 0 then s.year = toInt(entry.year)
+    if s.name = invalid then s.name = ""
+    if s.year = invalid then s.year = 0
+    s.current = current
+    s.deleted = false
+    s.updatedAt = nowSeconds()
+    return s
+end function
+
+function episodePointer(e as Object) as Object
+    return {
+        episodeId: toInt(e.id)
+        season: toInt(e.season)
+        episode: toInt(e.episode)
+        name: shortName(e.name)
+        ext: asString(e.ext)
+    }
+end function
+
+' "S1:1-3,S1:5,S2:1-4" -> { "1": { "1": true, "2": true, ... }, "2": {...} }
+function parseWatched(text as String) as Object
+    seasons = {}
+    if text = "" then return seasons
+    for each part in text.Split(",")
+        colon = Instr(1, part, ":")
+        if Left(part, 1) = "S" and colon > 2
+            season = Val(Mid(part, 2, colon - 2), 10).ToStr()
+            if seasons[season] = invalid then seasons[season] = {}
+            span = Mid(part, colon + 1)
+            dash = Instr(1, span, "-")
+            first = Val(span, 10)
+            last = first
+            if dash > 0
+                first = Val(Left(span, dash - 1), 10)
+                last = Val(Mid(span, dash + 1), 10)
+            end if
+            if first > 0 and last >= first and last - first < 1000
+                for n = first to last
+                    seasons[season][n.ToStr()] = true
+                end for
+            end if
+        end if
+    end for
+    return seasons
+end function
+
+' Inverse of parseWatched, with consecutive episodes collapsed to ranges.
+function formatWatched(seasons as Object) as String
+    seasonNumbers = []
+    for each season in seasons
+        seasonNumbers.Push(Val(season, 10))
+    end for
+    seasonNumbers.Sort()
+
+    parts = []
+    for each season in seasonNumbers
+        numbers = []
+        for each episode in seasons[season.ToStr()]
+            numbers.Push(Val(episode, 10))
+        end for
+        numbers.Sort()
+        i = 0
+        while i < numbers.Count()
+            first = numbers[i]
+            while i + 1 < numbers.Count() and numbers[i + 1] = numbers[i] + 1
+                i = i + 1
+            end while
+            span = first.ToStr()
+            if numbers[i] > first then span = span + "-" + numbers[i].ToStr()
+            parts.Push("S" + season.ToStr() + ":" + span)
+            i = i + 1
+        end while
+    end for
+
+    out = ""
+    for each part in parts
+        if out <> "" then out += ","
+        out += part
+    end for
+    return out
+end function
+
+' Names are for display only; cap them to save registry space.
+function shortName(name as Dynamic) as String
+    return Left(asString(name), 60)
 end function
 
 ' ---------------------------------------------------------------------------
@@ -167,6 +363,17 @@ sub normalizeDocument(doc as Object)
     for each key in ["favorites", "series", "resume"]
         if type(doc[key]) <> "roArray" then doc[key] = []
     end for
+
+    ' Schema 2: resume entries carry name and ext so Continue Watching can
+    ' draw and play without the network.
+    if toInt(doc.schema) < 2
+        for each r in doc.resume
+            if r.name = invalid then r.name = ""
+            if r.ext = invalid then r.ext = ""
+        end for
+        doc.schema = 2
+        print "[state] migrated saved state to schema 2"
+    end if
 end sub
 
 ' Save after every change. On a full registry, trim what can be re-created

@@ -24,6 +24,11 @@
     <function name="getPosition" />
     <function name="savePosition" />
     <function name="clearPosition" />
+
+    <function name="markWatched" />
+    <function name="markUnwatched" />
+    <function name="getSeriesProgress" />
+    <function name="getSeriesList" />
   </interface>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />

@@ -1,12 +1,12 @@
 ' Entry point. Everything else lives in SceneGraph: MainScene owns the screens
-' and the services (ApiTask, StateStore; EpgService arrives with the home screen).
+' and the services (ApiTask, StateStore, EpgService).
 
-sub Main(args as Dynamic)
+sub Main()
     screen = CreateObject("roSGScreen")
     port = CreateObject("roMessagePort")
     screen.SetMessagePort(port)
 
-    scene = screen.CreateScene("MainScene")
+    screen.CreateScene("MainScene")
     screen.Show()
 
     while true

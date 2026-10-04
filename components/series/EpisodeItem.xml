@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- One row in the episode list. Content: EpisodeNode. -->
+<component name="EpisodeItem" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="onItemContent" />
+  </interface>
+
+  <children>
+    <Label id="num" translation="[20,0]" width="90" height="72" vertAlign="center"
+      font="font:SmallBoldSystemFont" color="0x8C96A0FF" />
+    <Label id="name" translation="[120,0]" width="960" height="72" vertAlign="center"
+      font="font:SmallSystemFont" color="0xE6EAEEFF" />
+    <Label id="state" translation="[1100,0]" width="264" height="72" vertAlign="center" horizAlign="right"
+      font="font:SmallestBoldSystemFont" />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/series/EpisodeItem.brs" />
+</component>

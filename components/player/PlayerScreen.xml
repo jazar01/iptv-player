@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Full-screen player (an overlay above everything else).
+
+  In:  content       play request from MainScene:
+                     { kind: "live" | "movie" | "episode", id, name, url, streamFormat,
+                       startPosition, ...metadata echoed back in `progress` }
+       programs      EpgService entry for the live overlay (ignored if not for this channel)
+       channelLabel  e.g. "Favorite 3 of 12", shown on the live overlay
+       errorText     replaces the error message (e.g. after a connection-limit check)
+  Out: progress      { play, position, duration, finished } every 30 s and on stop (not live)
+       failed        { play, code, message } when the Video node errors
+       channelStep   +1 / -1 when Up / Down is pressed during live playback
+       closed        true when the user leaves the player
+-->
+<component name="PlayerScreen" extends="Group">
+  <interface>
+    <field id="content" type="assocarray" onChange="onContent" />
+    <field id="programs" type="assocarray" onChange="onPrograms" alwaysNotify="true" />
+    <field id="channelLabel" type="string" />
+    <field id="errorText" type="string" onChange="onErrorText" />
+    <field id="progress" type="assocarray" alwaysNotify="true" />
+    <field id="failed" type="assocarray" alwaysNotify="true" />
+    <field id="channelStep" type="integer" alwaysNotify="true" />
+    <field id="closed" type="boolean" alwaysNotify="true" />
+  </interface>
+
+  <children>
+    <Rectangle width="1920" height="1080" color="0x000000FF" />
+    <Video id="video" width="1920" height="1080" />
+
+    <Group id="liveOverlay" visible="false">
+      <Rectangle translation="[0,770]" width="1920" height="310" color="0x000000C8" />
+      <Label id="channelName" translation="[96,800]" width="1300" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" />
+      <Label id="channelPos" translation="[1424,812]" width="400" horizAlign="right"
+        font="font:SmallSystemFont" color="0x8C96A0FF" />
+      <Label id="nowTitle" translation="[96,874]" width="1300" font="font:MediumSystemFont" color="0xE6EAEEFF" />
+      <Label id="nowTime" translation="[1424,880]" width="400" horizAlign="right"
+        font="font:SmallSystemFont" color="0x8C96A0FF" />
+      <Rectangle id="progressTrack" translation="[96,936]" width="1728" height="6" color="0x3A444EFF" />
+      <Rectangle id="progressFill" translation="[96,936]" width="0" height="6" color="0x4DA3FFFF" />
+      <Label id="nextLine" translation="[96,962]" width="1728" font="font:SmallSystemFont" color="0x8C96A0FF" />
+      <Label translation="[96,1016]" width="1728" font="font:SmallestSystemFont" color="0x6E7882FF"
+        text="Up / Down: change favorite channel     *: show this again     Back: close" />
+    </Group>
+
+    <Group id="errorPanel" visible="false">
+      <Rectangle translation="[360,330]" width="1200" height="420" color="0x1E252DF0" />
+      <Label translation="[420,380]" width="1080" font="font:LargeBoldSystemFont" color="0xFFFFFFFF"
+        text="Can't play this" />
+      <Label id="errorMessage" translation="[420,460]" width="1080" height="200" wrap="true"
+        font="font:MediumSystemFont" color="0xD0D6DCFF" />
+      <Label translation="[420,680]" width="1080" font="font:SmallSystemFont" color="0x8C96A0FF"
+        text="Press Back to return." />
+    </Group>
+
+    <Timer id="overlayTimer" duration="5" />
+    <Timer id="saveTimer" duration="30" repeat="true" />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/player/PlayerScreen.brs" />
+</component>

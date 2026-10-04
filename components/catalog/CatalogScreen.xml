@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Catalog browser for Live TV, Movies or Series: categories on the left, the
+  focused category's items on the right. Items are added to the list in pages
+  so big categories never block the UI.
+
+  In:  kind        "live" | "movie" | "series" (set once, before use)
+       categories  raw get_*_categories array
+       items       { categoryId, items: raw get_live_streams / get_vod_streams / get_series array }
+       tags        { "<itemId>": "FAVORITE" | "IN PROGRESS" | ... }
+       status      message shown where the item list goes
+  Out: wantCategory category ID whose items should be loaded
+       selected    { kind: "channel" | "movie" | "series", itemId, streamId, name, epgChannelId, ext, year }
+       options     same, when * is pressed (live only: toggles a favorite)
+-->
+<component name="CatalogScreen" extends="Group">
+  <interface>
+    <field id="kind" type="string" value="live" />
+    <field id="categories" type="array" onChange="onCategories" />
+    <field id="items" type="assocarray" onChange="onItems" />
+    <field id="tags" type="assocarray" onChange="onTags" />
+    <field id="status" type="string" onChange="onStatus" />
+    <field id="wantCategory" type="string" alwaysNotify="true" />
+    <field id="selected" type="assocarray" alwaysNotify="true" />
+    <field id="options" type="assocarray" alwaysNotify="true" />
+  </interface>
+
+  <children>
+    <LabelList id="categoryList" translation="[96,170]" itemSize="[560,60]" numRows="14"
+      font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont"
+      color="0xD0D6DCFF" focusedColor="0x101418FF" vertFocusAnimationStyle="floatingFocus" />
+    <MarkupList id="itemList" translation="[720,170]" itemComponentName="CatalogItem"
+      itemSize="[1104,64]" itemSpacing="[0,4]" numRows="12" vertFocusAnimationStyle="floatingFocus" />
+    <Label id="status" translation="[740,190]" width="1080" wrap="true"
+      font="font:MediumSystemFont" color="0xA0A8B0FF" text="Loading categories ..." />
+    <!-- Load a category after focus rests on it briefly, not on every step. -->
+    <Timer id="categoryDelay" duration="0.4" />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/catalog/CatalogScreen.brs" />
+</component>

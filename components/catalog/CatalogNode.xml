@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Content for one CatalogItem. itemId is the stream ID (live, movie) or series
+  ID. num is the channel number for live and the year for movies and series.
+  tag is shown at the right, e.g. FAVORITE or IN PROGRESS.
+-->
+<component name="CatalogNode" extends="ContentNode">
+  <interface>
+    <field id="itemId" type="integer" />
+    <field id="num" type="string" />
+    <field id="name" type="string" />
+    <field id="epgChannelId" type="string" />
+    <field id="ext" type="string" />
+    <field id="year" type="integer" />
+    <field id="tag" type="string" />
+  </interface>
+</component>

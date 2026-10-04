@@ -28,6 +28,25 @@ function nowSeconds() as Integer
     return CreateObject("roDateTime").AsSeconds()
 end function
 
+' Percent-encode for a URL path segment or query value (UTF-8, RFC 3986
+' unreserved characters kept). Safe on the render thread, unlike
+' roUrlTransfer.Escape().
+function urlEncode(text as String) as String
+    bytes = CreateObject("roByteArray")
+    bytes.FromAsciiString(text)
+    out = ""
+    for each b in bytes
+        if (b >= 48 and b <= 57) or (b >= 65 and b <= 90) or (b >= 97 and b <= 122) or b = 45 or b = 46 or b = 95 or b = 126
+            out += Chr(b)
+        else
+            hexDigits = UCase(StrI(b, 16))
+            if b < 16 then hexDigits = "0" + hexDigits
+            out += "%" + hexDigits
+        end if
+    end for
+    return out
+end function
+
 ' UTC seconds -> local wall-clock time, e.g. "8:05 PM".
 function formatClock(seconds as Integer) as String
     dt = CreateObject("roDateTime")

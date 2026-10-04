@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Content for one EpisodeItem. state: "watched" | "progress" | "new". -->
+<component name="EpisodeNode" extends="ContentNode">
+  <interface>
+    <field id="episodeId" type="integer" />
+    <field id="season" type="integer" />
+    <field id="episode" type="integer" />
+    <field id="name" type="string" />
+    <field id="ext" type="string" />
+    <field id="duration" type="integer" />
+    <field id="state" type="string" />
+    <field id="stateText" type="string" />
+  </interface>
+</component>

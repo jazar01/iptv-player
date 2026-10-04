@@ -130,22 +130,27 @@ All saved state is one versioned JSON document per device, shaped so it can late
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
   "deviceId": "<uuid>",
   "deviceName": "Living room",
   "credentials": { "server": "…", "username": "…", "password": "…" },
   "favorites": [ { "streamId": 1234, "name": "ESPN", "epgChannelId": "ESPN.us", "pinned": false, "position": null, "updatedAt": 0, "deleted": false } ],
-  "series": [ { "seriesId": 55, "name": "…", "year": 2024, "watched": "S1:1-10,S2:1-4", "current": { "episodeId": 901, "position": 1234 }, "updatedAt": 0, "deleted": false } ],
-  "resume": [ { "kind": "movie", "id": 777, "position": 2210, "duration": 7680, "updatedAt": 0 } ]
+  "series": [ { "seriesId": 55, "name": "…", "year": 2024, "watched": "S1:1-10,S2:1-4", "current": { "episodeId": 901, "season": 2, "episode": 5, "name": "…", "ext": "mkv" }, "updatedAt": 0, "deleted": false } ],
+  "resume": [
+    { "kind": "movie", "id": 777, "name": "…", "ext": "mp4", "position": 2210, "duration": 7680, "updatedAt": 0 },
+    { "kind": "episode", "id": 901, "name": "…", "ext": "mkv", "seriesId": 55, "season": 2, "episode": 5, "position": 1234, "duration": 2640, "updatedAt": 0 }
+  ]
 }
 ```
+
+Schema 2 (milestone 3) added `name` and `ext` to resume entries and the episode details to `series.current`, so Continue Watching draws and plays without the network. `series.current` is the episode to continue (in progress or next unwatched); its position lives in the matching `resume` entry. A series whose last episode is watched has `current: null` and leaves Continue Watching.
 
 | Rule | Detail |
 | --- | --- |
 | Timestamps | `updatedAt` from `roDateTime().AsSeconds()` on every record. |
 | Deletions | Marked `deleted` with a timestamp, not removed, so a later sync cannot resurrect them. Cleared after a few weeks while storage is local-only. |
 | Watch history | Episode ranges per season (`S1:1-10,S2:1-4`), about 60 bytes per series. Merges as a union. |
-| Resume | Newest copy wins. Capped at about 50 entries, oldest dropped. |
+| Resume | Newest copy wins. Capped at about 50 entries, oldest dropped. Names capped at 60 characters to save registry space. |
 | Times | Stored in UTC. |
 
 Later features add fields to this document: favorite teams, and a separate per-device usage-score table. The schema number increases with each change.

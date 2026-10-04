@@ -77,10 +77,16 @@ sub drawInfo(c as Object)
 
     if c.kind = "resume"
         m.infoTitle.text = c.name
-        m.infoText.text = ""
-        if c.duration > 0
+        detail = c.subtitle
+        if c.duration > 0 and c.position > 0
             minutesLeft = Int((c.duration - c.position) / 60)
-            m.infoText.text = minutesLeft.ToStr() + " min left"
+            if detail <> "" then detail = detail + "  -  "
+            detail = detail + minutesLeft.ToStr() + " min left"
+        else if c.resumeKind = "episode"
+            detail = detail + "  -  next up"
+        end if
+        m.infoText.text = detail
+        if c.duration > 0 and c.position > 0
             fraction = c.position / c.duration
             if fraction > 1 then fraction = 1
             m.infoFill.width = 360 * fraction

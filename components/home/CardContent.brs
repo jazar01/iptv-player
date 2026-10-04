@@ -49,5 +49,15 @@ function itemSummary(node as Object) as Object
         streamId: node.streamId
         name: node.name
         epgChannelId: node.epgChannelId
+        resumeKind: node.resumeKind
+        itemId: node.itemId
+        ext: node.ext
+        position: node.position
+        duration: node.duration
+        seriesId: node.seriesId
+        seriesName: node.seriesName
+        year: node.year
+        season: node.season
+        episode: node.episode
     }
 end function

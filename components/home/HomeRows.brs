@@ -59,8 +59,9 @@ function favoritesRowItems(services as Object) as Object
 end function
 
 ' ---------------------------------------------------------------------------
-' Continue Watching: movies and episodes with time left. Filled once playback
-' exists (next milestone).
+' Continue Watching: movies with time left, and series pointing at their
+' current episode (in progress or next unwatched). Newest first. Everything
+' comes from saved state, so it draws without the network.
 
 function continueWatchingRow() as Object
     return {
@@ -72,21 +73,61 @@ function continueWatchingRow() as Object
 end function
 
 function continueWatchingRowItems(services as Object) as Object
-    items = []
+    entries = []
+    resumeByEpisode = {}
     for each r in services.store.callFunc("getResume")
-        duration = toInt(r.duration)
-        position = toInt(r.position)
-        if duration > 0 and position < duration
-            name = asString(r.name)
-            if name = "" then name = asString(r.kind) + " " + asString(r.id)
-            items.Push({
-                kind: "resume"
-                itemKey: asString(r.kind) + ":" + asString(r.id)
-                name: name
-                position: position
-                duration: duration
-            })
+        if r.kind = "movie"
+            duration = toInt(r.duration)
+            position = toInt(r.position)
+            if duration > 0 and position < duration
+                name = asString(r.name)
+                if name = "" then name = "Movie " + asString(r.id)
+                entries.Push({ updatedAt: toInt(r.updatedAt), item: {
+                    kind: "resume"
+                    resumeKind: "movie"
+                    itemKey: "movie:" + asString(r.id)
+                    itemId: toInt(r.id)
+                    name: name
+                    ext: asString(r.ext)
+                    position: position
+                    duration: duration
+                } })
+            end if
+        else if r.kind = "episode"
+            resumeByEpisode[toInt(r.id).ToStr()] = r
         end if
+    end for
+
+    for each s in services.store.callFunc("getSeriesList")
+        c = s.current
+        item = {
+            kind: "resume"
+            resumeKind: "episode"
+            itemKey: "series:" + asString(s.seriesId)
+            itemId: toInt(c.episodeId)
+            name: asString(s.name)
+            seriesId: toInt(s.seriesId)
+            seriesName: asString(s.name)
+            year: toInt(s.year)
+            season: toInt(c.season)
+            episode: toInt(c.episode)
+            ext: asString(c.ext)
+            subtitle: "S" + toInt(c.season).ToStr() + " E" + toInt(c.episode).ToStr()
+            position: 0
+            duration: 0
+        }
+        r = resumeByEpisode[toInt(c.episodeId).ToStr()]
+        if r <> invalid
+            item.position = toInt(r.position)
+            item.duration = toInt(r.duration)
+        end if
+        entries.Push({ updatedAt: toInt(s.updatedAt), item: item })
+    end for
+
+    entries.SortBy("updatedAt", "r")
+    items = []
+    for each e in entries
+        items.Push(e.item)
     end for
     return items
 end function
