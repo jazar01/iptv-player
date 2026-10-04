@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Placeholder section that shows one message (Movies and Series until they exist). -->
+<component name="MessageScreen" extends="Group">
+  <interface>
+    <field id="text" type="string" alias="message.text" />
+  </interface>
+
+  <children>
+    <Label id="message" translation="[96,400]" width="1728" horizAlign="center" wrap="true"
+      font="font:MediumSystemFont" color="0xA0A8B0FF" />
+  </children>
+</component>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Top bar: Home, Live TV, Movies, Series, Settings, plus a clock.
+
+  In:  section  the section currently shown (drawn highlighted)
+  Out: chosen   section picked with OK while the bar has focus
+  Down/Back are left to MainScene, which returns focus to the content.
+-->
+<component name="TopBar" extends="Group">
+  <interface>
+    <field id="section" type="string" onChange="highlight" />
+    <field id="chosen" type="string" alwaysNotify="true" />
+  </interface>
+
+  <children>
+    <Group id="tabs" translation="[96,52]" />
+    <Rectangle id="underline" translation="[96,104]" width="180" height="4" color="0x4DA3FFFF" visible="false" />
+    <Label id="clock" translation="[1424,52]" width="400" horizAlign="right"
+      font="font:MediumSystemFont" color="0xD0D6DCFF" />
+    <Timer id="clockTimer" duration="10" repeat="true" />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/common/TopBar.brs" />
+</component>

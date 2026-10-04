@@ -14,6 +14,8 @@
   </interface>
 
   <children>
+    <!-- Shown as an overlay, so it covers the top bar and current section. -->
+    <Rectangle width="1920" height="1080" color="0x101418FF" />
     <Label id="title" translation="[160,120]" width="1600"
       font="font:LargeBoldSystemFont" color="0xFFFFFFFF"
       text="Set up IPTV Player" />

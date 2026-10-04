@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Content for one ChannelItem in the Live TV channel list. -->
+<component name="ChannelNode" extends="ContentNode">
+  <interface>
+    <field id="streamId" type="integer" />
+    <field id="num" type="string" />
+    <field id="name" type="string" />
+    <field id="epgChannelId" type="string" />
+    <field id="isFavorite" type="boolean" />
+  </interface>
+</component>

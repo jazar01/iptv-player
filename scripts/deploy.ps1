@@ -3,7 +3,7 @@
     Zips the app and sideloads it to a Roku in Developer Mode.
 
 .DESCRIPTION
-    Builds out\iptv-player.zip from manifest, source\, components\ and images\
+    Builds out\iptv-player.zip from manifest, source\, components\, data\ and images\
     (zip entries use forward slashes, which Roku requires), then uploads it to
     the Roku's developer installer at http://<ip>/plugin_install with digest
     auth via curl.exe.
@@ -45,7 +45,7 @@ Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 $root = Split-Path -Parent $PSScriptRoot
 $outDir = Join-Path $root 'out'
 $zipPath = Join-Path $outDir 'iptv-player.zip'
-$include = @('manifest', 'source', 'components', 'images')
+$include = @('manifest', 'source', 'components', 'data', 'images')
 
 if (-not (Test-Path (Join-Path $root 'manifest'))) { throw "No manifest found in $root" }
 

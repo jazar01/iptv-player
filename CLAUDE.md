@@ -18,27 +18,41 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
 ## Layout
 
 - `manifest`, `source/main.brs`: entry point; only creates MainScene.
-- `components/MainScene.*`: owns screens (in `screenHost`) and services; routes
-  ApiTask responses by `id`.
-- `components/services/ApiTask.*`: long-running Task. Set `credentials`, then
-  `request` `{ id, action, params? }` or `{ id, url }`; get one `response`
-  `{ id, action, ok, code, error, data, ms }` per request, in order.
+- `components/MainScene.*`: owns section screens (`screenHost`), the top bar,
+  overlays (Setup, Favorites grid) and services; relays between screens and
+  services and routes ApiTask responses by `id`.
+- `components/services/ApiTask.*`: long-running Task, up to 4 requests at once,
+  so responses arrive in any order: match by `id` (and `context`). Optional
+  `cacheFile`/`cacheFirst` caches catalog responses in `cachefs:/catalog/`.
+  Full request/response shape is in `ApiTask.xml`.
+- `components/services/EpgService.*`: now/next via `get_short_epg`, only for
+  channels on screen; cached until the current program ends. Title cleanup
+  rules come from `data/guide-rules.json`.
+- `components/home/`: HomeScreen, FavoritesScreen, HomeCard and its HomeItem
+  content. Row modules live in `HomeRows.brs` (included by MainScene); a new
+  home row is a new module there.
+- `components/live/`: Live TV browser (categories, paged channel list).
 - `components/services/StateStore.*`: interface functions called via
   `callFunc`. Every mutation saves immediately and returns true only if it
   persisted.
 - `components/services/RegistryBackend.brs`: `read()` / `write(doc)` returning
   `"ok" | "nospace" | "error"`. A future remote backend implements the same two.
-- `components/screens/`: one component per screen.
-- `components/common/Utils.brs`: shared helpers (`asString`, `toInt`, `isTrue`,
-  `nowSeconds`, `normalizeServer`). Each component must include it with its own
-  `<script>` tag.
+- `components/screens/`: Setup, Settings, and MessageScreen (placeholder).
+- `components/common/`: TopBar, and `Utils.brs` shared helpers (`asString`,
+  `toInt`, `isTrue`, `nowSeconds`, `formatClock`, `normalizeServer`). Each
+  component must include Utils with its own `<script>` tag.
+- `data/`: editable provider rules, packaged with the app.
 
 ## Conventions
 
 - Script tags use full `pkg:/components/...` URIs.
 - Xtream returns numbers as strings or numbers inconsistently: wrap with
   `toInt()` / `asString()` before comparing.
-- Debug output uses a `[area]` prefix: `[main]`, `[api]`, `[state]`.
+- Debug output uses a `[area]` prefix: `[main]`, `[api]`, `[state]`, `[epg]`.
+- `end`, `next` and `stop` are reserved in BrightScript, even as AA keys with
+  dot access: programs use `start`/`ends`, EPG entries `now`/`upcoming`.
+- List item components are recycled: observe content fields with
+  `ObserveFieldScoped` and unobserve the old content when `itemContent` changes.
 - Saved document shape and record rules (updatedAt, tombstones, UTC) are in the
   requirements' Data model section. Bump `m.SCHEMA` and migrate in
   `normalizeDocument()` when the shape changes.
@@ -74,5 +88,8 @@ is the final check.
 
 - Milestone 1 done: setup, login, live categories printed to the console.
   Verified on a real Roku.
-- Not yet built: home screen, browsing, playback, EpgService, series watched
-  tracking (`markWatched`, `S1:1-10` ranges), channel matching.
+- Milestone 2 functional, verified on a real Roku: top bar, Home (Favorites
+  with now/next, Continue Watching), Favorites grid, Live TV browser with
+  * favorites, Settings. Visual pass waits for the mockup in `docs/`.
+- Not yet built: playback, Movies, Series, series watched tracking
+  (`markWatched`, `S1:1-10` ranges), channel matching.

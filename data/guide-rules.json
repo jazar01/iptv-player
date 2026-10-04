@@ -1,0 +1,10 @@
+{
+  "comment": "Provider guide conventions. Edit here, not in code. See 'Provider guide findings' in docs/requirements.md.",
+  "epg": {
+    "base64Titles": true
+  },
+  "titleTags": [
+    { "text": "ᴸᶦᵛᵉ", "flag": "live" },
+    { "text": "ᴺᵉʷ", "flag": "new" }
+  ]
+}

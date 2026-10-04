@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Full-screen grid of all favorites ("See all" on the Favorites row). Also
+  where favorites are managed: * removes one.
+
+  In:  items     [HomeItem fields] (all favorites, untruncated)
+       programs  EpgService update, applied in place
+  Out: selected, options, visibleChannels (same as HomeScreen)
+-->
+<component name="FavoritesScreen" extends="Group">
+  <interface>
+    <field id="items" type="array" onChange="onItems" />
+    <field id="programs" type="assocarray" onChange="onPrograms" alwaysNotify="true" />
+    <field id="selected" type="assocarray" alwaysNotify="true" />
+    <field id="options" type="assocarray" alwaysNotify="true" />
+    <field id="visibleChannels" type="array" />
+  </interface>
+
+  <children>
+    <Rectangle width="1920" height="1080" color="0x101418FF" />
+    <Label translation="[96,56]" width="1200" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" text="Favorites" />
+    <Label translation="[96,120]" width="1200" font="font:SmallSystemFont" color="0x8C96A0FF"
+      text="Press * to remove a favorite." />
+    <MarkupGrid id="grid" translation="[96,190]" itemComponentName="HomeCard"
+      numColumns="4" numRows="4" itemSize="[400,240]" itemSpacing="[30,36]"
+      vertFocusAnimationStyle="floatingFocus" />
+    <Label id="empty" translation="[96,240]" width="1600" font="font:MediumSystemFont" color="0xA0A8B0FF"
+      visible="false" text="No favorites yet. Press * on a channel in Live TV to add one." />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/home/CardContent.brs" />
+  <script type="text/brightscript" uri="pkg:/components/home/FavoritesScreen.brs" />
+</component>

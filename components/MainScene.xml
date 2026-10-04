@@ -1,19 +1,36 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
   Owns the screens and the services. Screens talk only to MainScene; only the
-  services touch the network (ApiTask) or saved state (StateStore).
+  services touch the network (ApiTask, EpgService via ApiTask) or saved state
+  (StateStore).
+
+  Layers, bottom to top: section screens (Home, Live TV, ...), top bar,
+  overlays (Setup, Favorites grid), toast.
 -->
 <component name="MainScene" extends="Scene">
   <children>
     <Rectangle id="background" width="1920" height="1080" color="0x101418FF" />
     <Group id="screenHost" />
-    <Label id="message" translation="[160,480]" width="1600" wrap="true"
-      horizAlign="center" font="font:MediumSystemFont" color="0xD0D6DCFF" />
+    <TopBar id="topBar" visible="false" />
+    <Group id="overlayHost" />
+
+    <Group id="toast" visible="false">
+      <Rectangle translation="[460,950]" width="1000" height="72" color="0x2A333DF0" />
+      <Label id="toastText" translation="[480,950]" width="960" height="72"
+        horizAlign="center" vertAlign="center" font="font:SmallSystemFont" color="0xFFFFFFFF" />
+    </Group>
+    <Timer id="toastTimer" duration="3" />
+    <!-- Re-asks EpgService for on-screen channels; it only refetches entries
+         whose current program has ended. -->
+    <Timer id="epgTimer" duration="60" repeat="true" />
 
     <StateStore id="stateStore" />
+    <EpgService id="epg" />
     <ApiTask id="api" />
   </children>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/home/CardContent.brs" />
+  <script type="text/brightscript" uri="pkg:/components/home/HomeRows.brs" />
   <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
 </component>

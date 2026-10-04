@@ -2,45 +2,181 @@ sub init()
     m.top.functionName = "runLoop"
 end sub
 
-' Runs for the life of the app. Requests set while one is in flight queue up
-' on the port and are handled in order.
+' Runs for the life of the app. Up to m.maxActive transfers run at once; the
+' rest wait in m.queue. Retries are re-queued with a delay rather than
+' sleeping, so other requests keep moving.
 sub runLoop()
-    port = CreateObject("roMessagePort")
-    m.top.ObserveField("request", port)
+    m.port = CreateObject("roMessagePort")
+    m.clock = CreateObject("roTimespan")
+    m.queue = []
+    m.active = {}       ' transfer identity -> job
+    m.maxActive = 4
+    m.top.ObserveField("request", m.port)
+    ' Requests set before this point are lost, so callers wait for `ready`.
+    m.top.ready = true
+
     while true
-        msg = wait(0, port)
-        if type(msg) = "roSGNodeEvent"
+        startQueued()
+        msg = wait(waitMs(), m.port)
+        t = type(msg)
+        if t = "roSGNodeEvent"
             req = msg.GetData()
-            if type(req) = "roAssociativeArray" then m.top.response = handleRequest(req)
+            if type(req) = "roAssociativeArray" then accept(req)
+        else if t = "roUrlEvent"
+            onUrlEvent(msg)
         end if
+        expireTimeouts()
     end while
 end sub
 
-function handleRequest(req as Object) as Object
-    res = { id: asString(req.id), action: asString(req.action), ok: false, code: 0, error: "", data: invalid, ms: 0 }
+sub accept(req as Object)
+    if asString(req.op) = "clearCache"
+        clearCache()
+        res = newResponse(req)
+        res.ok = true
+        m.top.response = res
+        return
+    end if
 
     url = asString(req.url)
-    if url = "" then url = xtreamUrl(m.top.credentials, res.action, req.params)
+    if url = "" then url = xtreamUrl(m.top.credentials, asString(req.action), req.params)
     if url = ""
+        res = newResponse(req)
         res.error = "No server configured"
-        return res
+        m.top.response = res
+        return
+    end if
+
+    ' Cache-first: answer from cachefs: now, then again when the fresh copy
+    ' arrives (or with unchanged=true if it's identical).
+    cachedText = ""
+    if asString(req.cacheFile) <> "" and isTrue(req.cacheFirst)
+        cachedText = readCacheText(req.cacheFile)
+        data = invalid
+        if cachedText <> "" then data = ParseJson(cachedText)
+        if data <> invalid
+            hit = newResponse(req)
+            hit.ok = true
+            hit.data = data
+            hit.fromCache = true
+            m.top.response = hit
+        else
+            cachedText = ""
+        end if
     end if
 
     timeoutMs = toInt(req.timeoutMs)
     if timeoutMs <= 0 then timeoutMs = 15000
-    backoffMs = [0, 500, 1500]
-    timer = CreateObject("roTimespan")
+    m.queue.Push({
+        req: req
+        url: url
+        attempt: 1
+        notBefore: 0
+        timeoutMs: timeoutMs
+        deadline: 0
+        started: m.clock.TotalMilliseconds()
+        cachedText: cachedText
+        xfer: invalid
+    })
+end sub
 
-    for attempt = 1 to backoffMs.Count()
-        if backoffMs[attempt - 1] > 0
-            print "[api] "; res.id; " retry "; attempt; " after "; res.error
-            sleep(backoffMs[attempt - 1])
+function newResponse(req as Object) as Object
+    return {
+        id: asString(req.id)
+        action: asString(req.action)
+        context: req.context
+        ok: false
+        code: 0
+        error: ""
+        data: invalid
+        fromCache: false
+        unchanged: false
+        ms: 0
+    }
+end function
+
+sub startQueued()
+    now = m.clock.TotalMilliseconds()
+    i = 0
+    while i < m.queue.Count() and m.active.Count() < m.maxActive
+        job = m.queue[i]
+        if job.notBefore <= now
+            m.queue.Delete(i)
+            startJob(job)
+        else
+            i = i + 1
         end if
+    end while
+end sub
 
-        http = httpGet(url, timeoutMs)
-        res.code = http.code
-        res.error = http.error
-        if http.ok
+sub startJob(job as Object)
+    xfer = CreateObject("roUrlTransfer")
+    xfer.SetMessagePort(m.port)
+    xfer.SetUrl(job.url)
+    xfer.EnableEncodings(true)
+    xfer.RetainBodyOnError(true)
+    if LCase(Left(job.url, 6)) = "https:"
+        xfer.SetCertificatesFile("common:/certs/ca-bundle.crt")
+        xfer.InitClientCertificates()
+    end if
+
+    if not xfer.AsyncGetToString()
+        finishJob(job, { ok: false, code: 0, body: "", error: "Could not start request", retryable: true })
+        return
+    end if
+    job.xfer = xfer
+    job.deadline = m.clock.TotalMilliseconds() + job.timeoutMs
+    m.active[xfer.GetIdentity().ToStr()] = job
+end sub
+
+sub onUrlEvent(msg as Object)
+    if msg.GetInt() <> 1 then return     ' 1 = transfer complete
+    key = msg.GetSourceIdentity().ToStr()
+    job = m.active[key]
+    if job = invalid then return
+    m.active.Delete(key)
+
+    code = msg.GetResponseCode()
+    if code = 200
+        finishJob(job, { ok: true, code: code, body: msg.GetString(), error: "", retryable: false })
+        return
+    end if
+    ' Negative codes are network/curl failures; the failure reason says which.
+    err = msg.GetFailureReason()
+    if code > 0 then err = "HTTP " + code.ToStr()
+    finishJob(job, { ok: false, code: code, body: "", error: err, retryable: (code <= 0 or code >= 500) })
+end sub
+
+sub expireTimeouts()
+    now = m.clock.TotalMilliseconds()
+    for each key in m.active.Keys()
+        job = m.active[key]
+        if now >= job.deadline
+            job.xfer.AsyncCancel()
+            m.active.Delete(key)
+            finishJob(job, { ok: false, code: 0, body: "", error: "Timed out", retryable: true })
+        end if
+    end for
+end sub
+
+' Block until the next request when idle; poll while transfers or delayed
+' retries are pending so timeouts and retries are noticed.
+function waitMs() as Integer
+    if m.queue.Count() = 0 and m.active.Count() = 0 then return 0
+    return 100
+end function
+
+sub finishJob(job as Object, http as Object)
+    res = newResponse(job.req)
+    res.code = http.code
+    res.error = http.error
+
+    if http.ok
+        if job.cachedText <> "" and http.body = job.cachedText
+            res.ok = true
+            res.error = ""
+            res.unchanged = true
+        else
             data = invalid
             if http.body.Trim() <> "" then data = ParseJson(http.body)
             if data = invalid
@@ -49,20 +185,29 @@ function handleRequest(req as Object) as Object
                 res.ok = true
                 res.error = ""
                 res.data = data
+                if asString(job.req.cacheFile) <> "" then writeCacheText(job.req.cacheFile, http.body)
             end if
-            exit for
         end if
-        if not http.retryable then exit for
-    end for
+    else if http.retryable and job.attempt < 3
+        backoffMs = [500, 1500]
+        print "[api] "; res.id; " retry "; job.attempt + 1; " after "; http.error
+        job.notBefore = m.clock.TotalMilliseconds() + backoffMs[job.attempt - 1]
+        job.attempt = job.attempt + 1
+        job.xfer = invalid
+        m.queue.Push(job)
+        return
+    end if
 
-    res.ms = timer.TotalMilliseconds()
+    res.ms = m.clock.TotalMilliseconds() - job.started
     if res.ok
-        print "[api] "; res.id; " ok ("; res.ms; " ms)"
+        note = ""
+        if res.unchanged then note = ", unchanged"
+        print "[api] "; res.id; " ok ("; res.ms; " ms"; note; ")"
     else
         print "[api] "; res.id; " FAILED code="; res.code; " "; res.error; " ("; res.ms; " ms)"
     end if
-    return res
-end function
+    m.top.response = res
+end sub
 
 ' {server}/player_api.php?username=..&password=..[&action=..][&k=v...]
 ' Never print the result: it contains the password.
@@ -79,33 +224,32 @@ function xtreamUrl(creds as Dynamic, action as String, params as Dynamic) as Str
     return url
 end function
 
-function httpGet(url as String, timeoutMs as Integer) as Object
-    port = CreateObject("roMessagePort")
-    xfer = CreateObject("roUrlTransfer")
-    xfer.SetMessagePort(port)
-    xfer.SetUrl(url)
-    xfer.EnableEncodings(true)
-    xfer.RetainBodyOnError(true)
-    if LCase(Left(url, 6)) = "https:"
-        xfer.SetCertificatesFile("common:/certs/ca-bundle.crt")
-        xfer.InitClientCertificates()
-    end if
+' ---------------------------------------------------------------------------
+' cachefs: holds only re-downloadable data (the catalog). The OS may clear it
+' at any time; callers always fetch fresh after a cache hit.
 
-    if not xfer.AsyncGetToString()
-        return { ok: false, code: 0, body: "", error: "Could not start request", retryable: true }
-    end if
-
-    msg = wait(timeoutMs, port)
-    if type(msg) <> "roUrlEvent"
-        xfer.AsyncCancel()
-        return { ok: false, code: 0, body: "", error: "Timed out", retryable: true }
-    end if
-
-    code = msg.GetResponseCode()
-    if code = 200 then return { ok: true, code: code, body: msg.GetString(), error: "", retryable: false }
-
-    ' Negative codes are network/curl failures; the failure reason says which.
-    err = msg.GetFailureReason()
-    if code > 0 then err = "HTTP " + code.ToStr()
-    return { ok: false, code: code, body: "", error: err, retryable: (code <= 0 or code >= 500) }
+function readCacheText(path as String) as String
+    if not CreateObject("roFileSystem").Exists(path) then return ""
+    return ReadAsciiFile(path)
 end function
+
+sub writeCacheText(path as String, text as String)
+    slash = 0
+    p = Instr(1, path, "/")
+    while p > 0
+        slash = p
+        p = Instr(p + 1, path, "/")
+    end while
+    if slash > 0 then CreateDirectory(Left(path, slash - 1))
+    if not WriteAsciiFile(path, text) then print "[api] could not write cache "; path
+end sub
+
+sub clearCache()
+    fs = CreateObject("roFileSystem")
+    dir = "cachefs:/catalog"
+    if not fs.Exists(dir) then return
+    for each name in fs.GetDirectoryListing(dir)
+        fs.Delete(dir + "/" + name)
+    end for
+    print "[api] catalog cache cleared"
+end sub

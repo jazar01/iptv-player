@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Live TV browser: categories on the left, the focused category's channels on
+  the right. Channels are added to the list in pages so big categories never
+  block the UI.
+
+  In:  categories   raw get_live_categories array
+       channels     { categoryId, items: raw get_live_streams array }
+       favoriteIds  { "<streamId>": true }
+       status       message shown where the channel list goes
+  Out: wantCategory category ID whose channels should be loaded
+       selected     { kind: "channel", streamId, name, epgChannelId }
+       options      same, when * is pressed on a channel
+-->
+<component name="LiveScreen" extends="Group">
+  <interface>
+    <field id="categories" type="array" onChange="onCategories" />
+    <field id="channels" type="assocarray" onChange="onChannels" />
+    <field id="favoriteIds" type="assocarray" onChange="onFavoriteIds" />
+    <field id="status" type="string" onChange="onStatus" />
+    <field id="wantCategory" type="string" alwaysNotify="true" />
+    <field id="selected" type="assocarray" alwaysNotify="true" />
+    <field id="options" type="assocarray" alwaysNotify="true" />
+  </interface>
+
+  <children>
+    <LabelList id="categoryList" translation="[96,170]" itemSize="[560,60]" numRows="14"
+      font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont"
+      color="0xD0D6DCFF" focusedColor="0x101418FF" vertFocusAnimationStyle="floatingFocus" />
+    <MarkupList id="channelList" translation="[720,170]" itemComponentName="ChannelItem"
+      itemSize="[1104,64]" itemSpacing="[0,4]" numRows="12" vertFocusAnimationStyle="floatingFocus" />
+    <Label id="status" translation="[740,190]" width="1080" wrap="true"
+      font="font:MediumSystemFont" color="0xA0A8B0FF" text="Loading categories ..." />
+    <!-- Load a category after focus rests on it briefly, not on every step. -->
+    <Timer id="categoryDelay" duration="0.4" />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/live/LiveScreen.brs" />
+</component>

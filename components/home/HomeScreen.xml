@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Home: fixed rows built by MainScene's row modules (components/home/HomeRows.brs).
+
+  In:  rows      [{ id, title, emptyText, items: [HomeItem fields] }]
+       programs  EpgService update { streamId, now, upcoming }, applied in place
+  Out: selected  itemSummary of the chosen card
+       options   itemSummary when * is pressed on a channel
+       visibleChannels  stream IDs of Favorites cards on screen (for EpgService)
+-->
+<component name="HomeScreen" extends="Group">
+  <interface>
+    <field id="rows" type="array" onChange="onRows" />
+    <field id="programs" type="assocarray" onChange="onPrograms" alwaysNotify="true" />
+    <field id="selected" type="assocarray" alwaysNotify="true" />
+    <field id="options" type="assocarray" alwaysNotify="true" />
+    <field id="visibleChannels" type="array" />
+  </interface>
+
+  <children>
+    <!-- 96px left gutter; a 400px card plus 30px gap means the fifth card is
+         cut off at the right edge, showing there is more. -->
+    <RowList id="list" translation="[0,170]" itemComponentName="HomeCard"
+      numRows="3" itemSize="[1920,330]"
+      rowItemSize="[[400,240]]" rowItemSpacing="[[30,0]]"
+      focusXOffset="[96]" rowLabelOffset="[[96,14]]"
+      showRowLabel="[true]" showRowCounter="[true]"
+      rowLabelFont="font:MediumBoldSystemFont" rowLabelColor="0xD0D6DCFF"
+      rowFocusAnimationStyle="floatingFocus" vertFocusAnimationStyle="floatingFocus" />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/home/CardContent.brs" />
+  <script type="text/brightscript" uri="pkg:/components/home/HomeScreen.brs" />
+</component>

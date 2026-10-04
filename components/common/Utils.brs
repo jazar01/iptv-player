@@ -28,6 +28,22 @@ function nowSeconds() as Integer
     return CreateObject("roDateTime").AsSeconds()
 end function
 
+' UTC seconds -> local wall-clock time, e.g. "8:05 PM".
+function formatClock(seconds as Integer) as String
+    dt = CreateObject("roDateTime")
+    dt.FromSeconds(seconds)
+    dt.ToLocalTime()
+    hours = dt.GetHours()
+    minutes = dt.GetMinutes()
+    suffix = "AM"
+    if hours >= 12 then suffix = "PM"
+    hours = hours mod 12
+    if hours = 0 then hours = 12
+    mm = minutes.ToStr()
+    if minutes < 10 then mm = "0" + mm
+    return hours.ToStr() + ":" + mm + " " + suffix
+end function
+
 ' "example.com:8080/" -> "http://example.com:8080". Also drops a pasted
 ' "/player_api.php..." suffix.
 function normalizeServer(server as String) as String

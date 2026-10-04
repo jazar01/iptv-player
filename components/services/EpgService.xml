@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Now/next guide data for the channels on screen. Fetches get_short_epg through
+  ApiTask, cleans titles using data/guide-rules.json, and caches each channel
+  until its current program ends.
+
+  want(streamIds)        fetch anything missing or stale; results arrive on `programs`
+  getPrograms(streamIds) cached entries only, keyed by stream ID string
+  clear()                drop the cache (e.g. after an account change)
+
+  programs: { streamId, now, upcoming }   now/upcoming: { title, flags[], start, ends } or invalid
+  Times are UTC seconds from the provider's start/stop timestamps.
+-->
+<component name="EpgService" extends="Node">
+  <interface>
+    <field id="api" type="node" onChange="onApi" />
+    <field id="programs" type="assocarray" alwaysNotify="true" />
+    <function name="want" />
+    <function name="getPrograms" />
+    <function name="clear" />
+  </interface>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/services/EpgService.brs" />
+</component>
