@@ -14,6 +14,7 @@ sub runLoop()
     m.top.ObserveField("query", port)
     m.top.ObserveField("matchRequest", port)
     m.top.ObserveField("gamesRequest", port)
+    m.top.ObserveField("marketsRequest", port)
     m.top.ready = true
 
     while true
@@ -25,6 +26,8 @@ sub runLoop()
                 m.top.matchResult = matchSaved(msg.GetData())
             else if msg.GetField() = "gamesRequest"
                 m.top.gamesResult = findGames(msg.GetData())
+            else if msg.GetField() = "marketsRequest"
+                m.top.marketsResult = { id: msg.GetData().id, ready: m.index.live.Count() > 0, markets: listMarkets() }
             else
                 ' Typing sends a query per pause; answer only the newest.
                 latest = msg.GetData()
@@ -83,9 +86,10 @@ sub loadKind(req as Object)
         print "[search] "; kind; ": "; entries.Count(); " indexed ("; timer.TotalMilliseconds(); " ms)"
     end if
     if kind = "live"
-        ' My Teams re-reads category names and guide-ID groups.
+        ' My Teams re-reads category names, guide-ID groups and local stations.
         m.eventCategories = invalid
         m.epgGroups = invalid
+        m.localStations = invalid
     end if
     m.top.indexVersion = m.top.indexVersion + 1
     if m.top.selfTest and not m.selfTested and m.index.live.Count() > 0 and m.index.series.Count() > 0

@@ -2,7 +2,7 @@
 ' docs/requirements.md). Records carry updatedAt; deletions are tombstones.
 
 sub init()
-    m.SCHEMA = 4
+    m.SCHEMA = 5
     m.RECENT_CAP = 15
     m.SEEN_CAP = 20
     m.SEEN_DAYS = 4
@@ -48,6 +48,17 @@ end function
 
 function getDevice() as Object
     return { deviceId: m.doc.deviceId, deviceName: m.doc.deviceName }
+end function
+
+' The device's local TV market (My Teams local stations):
+' { key: "GA|Atlanta", label: "Atlanta, GA" }, key "" when not chosen.
+function getMarket() as Object
+    return { key: asString(m.doc.market.key), label: asString(m.doc.market.label) }
+end function
+
+function setMarket(market as Object) as Boolean
+    m.doc.market = { key: asString(market.key), label: asString(market.label) }
+    return persist()
 end function
 
 function setDeviceName(name as String) as Boolean
@@ -684,6 +695,7 @@ function newDocument() as Object
         recent: []
         teams: []
         seenGames: []
+        market: { key: "", label: "" }
     }
 end function
 
@@ -719,6 +731,14 @@ sub normalizeDocument(doc as Object)
     if toInt(doc.schema) < 4
         doc.schema = 4
         print "[state] migrated saved state to schema 4"
+    end if
+
+    ' Schema 5: `market`, the device's local TV market. Left empty: each
+    ' device picks its own in Settings (a default would be wrong elsewhere).
+    if type(doc.market) <> "roAssociativeArray" then doc.market = { key: "", label: "" }
+    if toInt(doc.schema) < 5
+        doc.schema = 5
+        print "[state] migrated saved state to schema 5"
     end if
 end sub
 

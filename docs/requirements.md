@@ -174,7 +174,7 @@ All saved state is one versioned JSON document per device, shaped so it can late
 
 ```json
 {
-  "schema": 4,
+  "schema": 5,
   "deviceId": "<uuid>",
   "deviceName": "Living room",
   "credentials": { "server": "…", "username": "…", "password": "…" },
@@ -186,11 +186,12 @@ All saved state is one versioned JSON document per device, shaped so it can late
   ],
   "recent": [ { "streamId": 20271, "name": "ESPN 2", "epgChannelId": "ESPN2.us", "updatedAt": 0 } ],
   "teams": [ { "id": "a1b2c3d4", "name": "Alabama", "aliases": ["Crimson Tide"], "exclusions": ["North Alabama"], "sports": ["football"], "updatedAt": 0, "deleted": false } ],
-  "seenGames": [ { "key": "a1b2c3d4|alabama vs texas", "start": 0 } ]
+  "seenGames": [ { "key": "a1b2c3d4|alabama vs texas", "start": 0 } ],
+  "market": { "key": "GA|Atlanta", "label": "Atlanta, GA" }
 }
 ```
 
-Schema 3 added `recent`, the Recently Viewed channels (newest `updatedAt` first, at most 15). Schema 4 added `teams` (My Teams) and `seenGames`, matchups already seen in the last 4 days (at most 20, per device), used to label replays.
+Schema 3 added `recent`, the Recently Viewed channels (newest `updatedAt` first, at most 15). Schema 4 added `teams` (My Teams) and `seenGames`, matchups already seen in the last 4 days (at most 20, per device), used to label replays. Schema 5 added `market`, the device's local TV market for My Teams.
 
 Schema 2 (milestone 3) added `name` and `ext` to resume entries and the episode details to `series.current`, so Continue Watching draws and plays without the network. `series.current` is the episode to continue (in progress or next unwatched); its position lives in the matching `resume` entry. A series whose last episode is watched has `current: null` and leaves Continue Watching.
 
@@ -267,7 +268,8 @@ A home-screen row of my favorite teams' games in the next 24 hours, for only the
 
 **Built (step 2: network broadcasts, Oct 4, 2026)**
 
-- **Channels:** 16 national sports channels (ESPN, ESPN2, ESPNU, SEC, ACC, Big Ten, FS1, FS2, CBS Sports Network, NFL, MLB, NBA TV, NHL Network, TNT, TBS, truTV) and the Atlanta stations ABC WSB, CBS WANF and WUPA, NBC WXIA, FOX WAGA. Listed by guide ID in `data/guide-rules.json` (`myTeams.networks`); among copies of a feed, backup, low-bandwidth, West and overflow copies are skipped.
+- **Channels:** 16 national sports channels (ESPN, ESPN2, ESPNU, SEC, ACC, Big Ten, FS1, FS2, CBS Sports Network, NFL, MLB, NBA TV, NHL Network, TNT, TBS, truTV), listed by guide ID in `data/guide-rules.json` (`myTeams.networks`), plus the ABC, CBS, NBC and FOX stations of the device's market. Among copies of a feed, backup, low-bandwidth, West and overflow copies are skipped.
+- **Local market:** Settings → Local stations picks the device's market from a list built from the provider's local-station channels (`GA | Atlanta | ABC 2 WSB` in `US | Local ABC`; patterns `localCategories` and `localName` in the rules). Saved per device (schema 5, `market`); empty until chosen, since a default would be wrong in other homes. Atlanta resolves to ABC WSB, CBS WANF and WUPA, FOX WAGA, NBC WXIA.
 - **Guides:** each channel's next ~30 programs (`get_short_epg`) are saved to `cachefs:` through ApiTask, at most every 25 minutes, and searched in SearchTask: the title first; the description only when the title names a sport or a matchup (so talk shows that mention a team don't count), with the matchup taken from its first sentence.
 - **Merging:** a network broadcast joins the event-channel card for the same game (same team, within 90 minutes). The network channel is listed first, since it's always on, and its guide title and end time are used.
 - **"No channel" cards** aren't built: every source the app has comes with a channel, so they would need an outside schedule, which this feature avoids.

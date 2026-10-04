@@ -9,6 +9,7 @@ sub initTeams()
     m.guidePending = 0
     m.teamsScreen = invalid
     m.teamEditScreen = invalid
+    m.marketScreen = invalid
     m.gameDialog = invalid
     ' Refresh every 30 minutes while Home is showing (requirements).
     m.gamesTimer = CreateObject("roSGNode", "Timer")
@@ -25,7 +26,42 @@ sub requestGames()
         refreshHome()
         return
     end if
-    searchSend("gamesRequest", { id: "home", teams: teams, withGuide: m.guideReady })
+    searchSend("gamesRequest", { id: "home", teams: teams, withGuide: m.guideReady, market: m.store.callFunc("getMarket").key })
+end sub
+
+' ---------------------------------------------------------------------------
+' Settings -> Local stations
+
+sub openMarkets()
+    m.marketScreen = CreateObject("roSGNode", "MarketScreen")
+    m.marketScreen.current = m.store.callFunc("getMarket").key
+    m.marketScreen.ObserveField("chosen", "onMarketChosen")
+    pushOverlay(m.marketScreen)
+    searchSend("marketsRequest", { id: "settings" })
+end sub
+
+sub onMarketsResult(event as Object)
+    if m.marketScreen <> invalid then m.marketScreen.markets = event.GetData().markets
+end sub
+
+sub onMarketChosen(event as Object)
+    market = event.GetData()
+    if m.store.callFunc("setMarket", market)
+        if market.key = "" then showToast("Local stations off") else showToast("Local stations: " + market.label)
+    else
+        showToast("Couldn't save the change. Storage may be full.")
+    end if
+    if m.marketScreen <> invalid
+        screen = m.marketScreen
+        m.marketScreen = invalid
+        removeOverlay(screen)
+    end if
+    settings = m.sections.settings
+    if settings <> invalid then settings.info = settingsInfo()
+    ' Different stations: fetch their guides afresh.
+    m.guideFetchedAt = 0
+    m.guideReady = false
+    requestGames()
 end sub
 
 ' Network broadcasts: each network channel's short guide goes to cachefs:

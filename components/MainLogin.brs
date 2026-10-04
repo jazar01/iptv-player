@@ -162,6 +162,7 @@ function settingsInfo() as Object
         deviceId: device.deviceId
         server: server
         version: CreateObject("roAppInfo").GetVersion()
+        market: m.store.callFunc("getMarket").label
     }
 end function
 
@@ -171,5 +172,7 @@ sub onSettingsChosen(event as Object)
         showSetup("")
     else if choice = "teams"
         openTeams()
+    else if choice = "market"
+        openMarkets()
     end if
 end sub

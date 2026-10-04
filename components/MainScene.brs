@@ -172,6 +172,7 @@ sub removeOverlay(node as Object)
     if m.seriesScreen <> invalid and m.seriesScreen.IsSameNode(node) then m.seriesScreen = invalid
     if m.teamsScreen <> invalid and m.teamsScreen.IsSameNode(node) then m.teamsScreen = invalid
     if m.teamEditScreen <> invalid and m.teamEditScreen.IsSameNode(node) then m.teamEditScreen = invalid
+    if m.marketScreen <> invalid and m.marketScreen.IsSameNode(node) then m.marketScreen = invalid
     focusContent()
 end sub
 

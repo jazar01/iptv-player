@@ -52,7 +52,8 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   errors, progress reports every 30 s and on stop, live pause/rewind via the
   provider's timeshift `.m3u8` archive, kept `archiveLagSeconds` behind live).
 - `components/search/`: SearchScreen (MiniKeyboard plus results list).
-- `components/teams/`: TeamsScreen and TeamEditScreen (Settings → My Teams).
+- `components/teams/`: TeamsScreen and TeamEditScreen (Settings → My Teams),
+  MarketScreen (Settings → Local stations).
 - `components/services/MyTeams.brs`: finds saved teams' games in event-channel
   names; runs in SearchTask (`gamesRequest` / `gamesResult`). MainTeams.brs
   asks for games, labels replays and wires the screens.
@@ -174,8 +175,10 @@ is the final check.
   SearchTask, rules `myTeams` and `nameTimes` in data/guide-rules.json),
   home row, replays, channel chooser, starts-later prompt. Saved state is
   schema 4. Checked on a Roku: teams saved, a game found and listed.
-- My Teams step 2 built: network broadcasts from 21 channels' short guides
-  (16 national + Atlanta ABC/CBS/NBC/FOX, `myTeams.networks` by guide ID),
+- My Teams step 2 built: network broadcasts from the short guides of 16
+  national channels (`myTeams.networks` by guide ID) plus the device's local
+  ABC/CBS/NBC/FOX stations (Settings → Local stations, schema 5 `market`,
+  stations found from provider channel names),
   fetched to cachefs:/teams/ by ApiTask and searched in SearchTask; merged
   into the same game card with the network channel first. Verified on a Roku.
 - Usage-based ordering built: decaying scores in their own registry section

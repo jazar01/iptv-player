@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Settings -> Local stations: pick the device's TV market. The list comes
+  from the provider's local-station channels (SearchTask listMarkets).
+  In:  markets  [{ key, label, stations }]
+       current  key of the current market ("" if none)
+  Out: chosen   { key, label } ({ key: "" } for none)
+-->
+<component name="MarketScreen" extends="Group">
+  <interface>
+    <field id="markets" type="array" onChange="onMarkets" />
+    <field id="current" type="string" />
+    <field id="chosen" type="assocarray" alwaysNotify="true" />
+  </interface>
+
+  <children>
+    <Poster width="1920" height="1080" uri="pkg:/images/ui/background.jpg" />
+    <Label translation="[96,56]" width="1600" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" text="Local stations" />
+    <Label translation="[96,120]" width="1600" wrap="true" font="font:SmallSystemFont" color="0x8C96A0FF"
+      text="Choose this TV's market. My Teams then checks its ABC, CBS, NBC and FOX stations for your teams' games." />
+    <LabelList id="list" translation="[96,220]" itemSize="[1400,64]" numRows="12"
+      font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont"
+      color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png"
+      vertFocusAnimationStyle="floatingFocus" />
+    <Label id="status" translation="[96,240]" width="1600" font="font:MediumSystemFont" color="0xA0A8B0FF"
+      text="Loading markets ..." />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/teams/MarketScreen.brs" />
+</component>

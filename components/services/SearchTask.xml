@@ -25,12 +25,15 @@
   selfTest: set true to run the matching self-test once both lists are loaded.
 
   My Teams (MyTeams.brs):
-  In:  gamesRequest { id, teams: [{ id, name, aliases[], exclusions[], sports[] }], withGuide }
+  In:  gamesRequest { id, teams: [{ id, name, aliases[], exclusions[], sports[] }], withGuide, market }
+       market: "GA|Atlanta" adds that market's local stations to the networks.
   Out: gamesResult  { id, ready, games: [{ key, teamId, teamName, title, sport, sportLabel,
                       start, ends, live, replay, channels: [{ streamId, name, epgChannelId, network }] }],
                       networks: [{ label, streamId, name, epgChannelId, guideFile }] }
        withGuide also searches the network channels' short guides, read from
        their guideFile (saved to cachefs: by ApiTask for MainScene).
+  In:  marketsRequest { id }
+  Out: marketsResult  { id, ready, markets: [{ key: "GA|Atlanta", label: "Atlanta, GA", stations: "ABC, CBS, NBC, FOX" }] }
 -->
 <component name="SearchTask" extends="Task">
   <interface>
@@ -46,6 +49,8 @@
     <field id="selfTest" type="boolean" value="false" />
     <field id="gamesRequest" type="assocarray" alwaysNotify="true" />
     <field id="gamesResult" type="assocarray" alwaysNotify="true" />
+    <field id="marketsRequest" type="assocarray" alwaysNotify="true" />
+    <field id="marketsResult" type="assocarray" alwaysNotify="true" />
   </interface>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />

@@ -41,7 +41,11 @@ function teamRules() as Object
         guideMaxAgeSeconds: toInt(cfg.guideMaxAgeMinutes) * 60
         base64Titles: true
         titleTags: []
+        localCategories: invalid
+        localName: invalid
     }
+    if asString(cfg.localCategories) <> "" then rules.localCategories = CreateObject("roRegex", cfg.localCategories, "i")
+    if asString(cfg.localName) <> "" then rules.localName = CreateObject("roRegex", cfg.localName, "")
     if rules.guideListings <= 0 then rules.guideListings = 30
     if rules.guideMaxAgeSeconds <= 0 then rules.guideMaxAgeSeconds = 1500
     if type(cfg.networks) = "roArray"
@@ -201,7 +205,7 @@ function findGames(req as Object) as Object
         end if
     end for
 
-    result.networks = resolveNetworks()
+    result.networks = resolveNetworks(req.market)
     if isTrue(req.withGuide) then addNetworkGames(groups, teams, result.networks, now, rules)
 
     ' Weak listings only add channels to games already found.
@@ -222,7 +226,15 @@ function findGames(req as Object) as Object
     later.SortBy("start")
     result.games.Append(live)
     result.games.Append(later)
-    print "[teams] "; result.games.Count(); " game(s) for "; teams.Count(); " team(s), guide "; isTrue(req.withGuide); " ("; timer.TotalMilliseconds(); " ms)"
+    print "[teams] "; result.games.Count(); " game(s) for "; teams.Count(); " team(s), guide "; isTrue(req.withGuide); ", "; result.networks.Count(); " networks, market '"; asString(req.market); "' ("; timer.TotalMilliseconds(); " ms)"
+    locals = ""
+    for each n in result.networks
+        if Instr(1, n.label, "(") > 0
+            if locals <> "" then locals += ", "
+            locals += n.label
+        end if
+    end for
+    if locals <> "" then print "[teams]   local stations: "; locals
     for each g in result.games
         names = ""
         for each c in g.channels
@@ -292,7 +304,7 @@ end function
 ' The configured network channels that exist in the catalog:
 ' [{ label, streamId, name, epgChannelId, guideFile }]. Among channels with
 ' the guide ID, the first whose name doesn't match networkAvoid.
-function resolveNetworks() as Object
+function resolveNetworks(market as Dynamic) as Object
     rules = teamRules()
     if m.epgGroups = invalid
         m.epgGroups = {}
@@ -301,17 +313,109 @@ function resolveNetworks() as Object
         end for
     end if
     list = []
+    seen = {}
     for each n in rules.networks
         group = m.epgGroups[LCase(n.epg)]
         if group <> invalid
-            chosen = group[0]
-            for i = group.Count() - 1 to 0 step -1
-                if rules.networkAvoid = invalid or not rules.networkAvoid.IsMatch(group[i].name) then chosen = group[i]
-            end for
+            chosen = preferredCopy(group, rules)
+            seen[LCase(chosen.epgChannelId)] = true
             list.Push({ label: n.label, streamId: chosen.itemId, name: chosen.name, epgChannelId: chosen.epgChannelId, guideFile: networkGuideFile(chosen.itemId) })
         end if
     end for
+    ' The device's market: its ABC, CBS, NBC and FOX stations.
+    stations = localStations()[asString(market)]
+    if stations <> invalid
+        for each s in stations
+            epg = LCase(s.entry.epgChannelId)
+            if epg = "" or not seen.DoesExist(epg)
+                if epg <> "" then seen[epg] = true
+                list.Push({ label: s.label, streamId: s.entry.itemId, name: s.entry.name, epgChannelId: s.entry.epgChannelId, guideFile: networkGuideFile(s.entry.itemId) })
+            end if
+        end for
+    end if
     return list
+end function
+
+' Among copies of one feed, the first whose name doesn't match networkAvoid.
+function preferredCopy(group as Object, rules as Object) as Object
+    chosen = group[0]
+    for i = group.Count() - 1 to 0 step -1
+        if rules.networkAvoid = invalid or not rules.networkAvoid.IsMatch(group[i].name) then chosen = group[i]
+    end for
+    return chosen
+end function
+
+' ---------------------------------------------------------------------------
+' Local markets, from the provider's local-station channels
+' ("GA | Atlanta | ABC 2 WSB" in "US | Local ABC").
+
+' { "GA|Atlanta": [{ network, label: "ABC (WSB)", entry }] }, built once per index.
+function localStations() as Object
+    if m.localStations <> invalid then return m.localStations
+    rules = teamRules()
+    m.localStations = {}
+    if rules.localCategories = invalid or rules.localName = invalid then return m.localStations
+
+    networkOf = {}      ' category ID -> "ABC"
+    cats = ParseJson(ReadAsciiFile("cachefs:/catalog/live_categories.json"))
+    if type(cats) = "roArray"
+        for each c in cats
+            found = rules.localCategories.Match(asString(c.category_name))
+            if found.Count() > 1 then networkOf[asString(c.category_id)] = UCase(found[1])
+        end for
+    end if
+
+    byEpg = {}          ' one channel per station feed, per market
+    for each e in m.index.live
+        network = networkOf[e.categoryId]
+        if network <> invalid
+            parts = rules.localName.Match(e.name)
+            if parts.Count() > 3
+                key = parts[1] + "|" + parts[2].Trim()
+                words = parts[3].Trim().Split(" ")
+                callSign = words[words.Count() - 1]
+                feed = key + "|" + LCase(e.epgChannelId)
+                if e.epgChannelId = "" then feed = key + "|" + e.itemId.ToStr()
+                previous = byEpg[feed]
+                if previous = invalid or (rules.networkAvoid <> invalid and rules.networkAvoid.IsMatch(previous.entry.name) and not rules.networkAvoid.IsMatch(e.name))
+                    station = { network: network, label: network + " (" + callSign + ")", entry: e }
+                    if previous = invalid
+                        if m.localStations[key] = invalid then m.localStations[key] = []
+                        m.localStations[key].Push(station)
+                        byEpg[feed] = station
+                    else
+                        previous.label = station.label
+                        previous.entry = e
+                    end if
+                end if
+            end if
+        end if
+    end for
+    return m.localStations
+end function
+
+' [{ key: "GA|Atlanta", label: "Atlanta, GA", stations: "ABC, CBS, FOX, NBC" }],
+' sorted by label.
+function listMarkets() as Object
+    markets = []
+    all = localStations()
+    for each key in all
+        networks = {}
+        for each s in all[key]
+            networks[s.network] = true
+        end for
+        names = ""
+        for each n in ["ABC", "CBS", "NBC", "FOX"]
+            if networks.DoesExist(n)
+                if names <> "" then names += ", "
+                names += n
+            end if
+        end for
+        bar = Instr(1, key, "|")
+        markets.Push({ key: key, label: Mid(key, bar + 1) + ", " + Left(key, bar - 1), stations: names })
+    end for
+    markets.SortBy("label")
+    return markets
 end function
 
 function networkGuideFile(streamId as Integer) as String

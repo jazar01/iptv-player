@@ -14,6 +14,8 @@
     <function name="setCredentials" />
     <function name="getDevice" />
     <function name="setDeviceName" />
+    <function name="getMarket" />
+    <function name="setMarket" />
 
     <function name="getFavorites" />
     <function name="isFavorite" />
