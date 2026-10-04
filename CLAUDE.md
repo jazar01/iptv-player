@@ -98,6 +98,10 @@ Roku IP and developer password: `-RokuIp`/`-Password`, then
 (git-ignored; template in `deploy.local.example.ps1`). Never commit or print
 the local file's contents.
 
+Home-screen logo and splash: `.\scripts\make-icons.ps1` draws them into
+`images/` (colors and text at the top of the script); the manifest points at
+them.
+
 Screenshot of the Roku screen (app must be running):
 `.\scripts\screenshot.ps1` saves to `out\screenshot-<time>.jpg`.
 
