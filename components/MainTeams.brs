@@ -19,9 +19,23 @@ sub initTeams()
     m.gamesTimer.control = "start"
 end sub
 
+' Settings -> Show My Teams on Home. Off hides the row and skips the game
+' searches and guide downloads behind it; teams stay saved.
+sub toggleMyTeamsRow()
+    show = not m.store.callFunc("getSettings").showMyTeams
+    if m.store.callFunc("setSetting", "showMyTeams", show)
+        if show then showToast("My Teams is on the Home screen") else showToast("My Teams is hidden from the Home screen")
+    else
+        showToast("Couldn't save the change. Storage may be full.")
+    end if
+    settings = m.sections.settings
+    if settings <> invalid then settings.info = settingsInfo()
+    requestGames()
+end sub
+
 sub requestGames()
     teams = m.store.callFunc("getTeams")
-    if teams.Count() = 0
+    if teams.Count() = 0 or not m.store.callFunc("getSettings").showMyTeams
         m.games = []
         refreshHome()
         return

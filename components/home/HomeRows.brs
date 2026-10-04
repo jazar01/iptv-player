@@ -5,10 +5,11 @@
 ' module: { id, title, emptyText, items(services) -> array of HomeItem field AAs }
 ' services: { store: StateStore, epg: EpgService }
 
-' My Teams appears once a team is saved: below Favorites, or at the top while
+' My Teams appears once a team is saved (unless switched off in Settings):
+' below Favorites, or at the top while
 ' one of the games is live or starts within 30 minutes (requirements).
 function homeRowModules(services as Object) as Object
-    if services.store.callFunc("getTeams").Count() = 0 then return [favoritesRow(), continueWatchingRow(), recentRow()]
+    if not services.store.callFunc("getSettings").showMyTeams or services.store.callFunc("getTeams").Count() = 0 then return [favoritesRow(), continueWatchingRow(), recentRow()]
     if gameIsOnSoon(services.games) then return [myTeamsRow(), favoritesRow(), continueWatchingRow(), recentRow()]
     return [favoritesRow(), myTeamsRow(), continueWatchingRow(), recentRow()]
 end function

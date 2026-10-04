@@ -2,7 +2,7 @@
 ' docs/requirements.md). Records carry updatedAt; deletions are tombstones.
 
 sub init()
-    m.SCHEMA = 5
+    m.SCHEMA = 6
     m.RECENT_CAP = 15
     m.SEEN_CAP = 20
     m.SEEN_DAYS = 4
@@ -58,6 +58,16 @@ end function
 
 function setMarket(market as Object) as Boolean
     m.doc.market = { key: asString(market.key), label: asString(market.label) }
+    return persist()
+end function
+
+' Per-device on/off options: { showMyTeams }.
+function getSettings() as Object
+    return { showMyTeams: isTrue(m.doc.settings.showMyTeams) }
+end function
+
+function setSetting(name as String, value as Dynamic) as Boolean
+    m.doc.settings[name] = value
     return persist()
 end function
 
@@ -696,6 +706,7 @@ function newDocument() as Object
         teams: []
         seenGames: []
         market: { key: "", label: "" }
+        settings: { showMyTeams: true }
     }
 end function
 
@@ -739,6 +750,15 @@ sub normalizeDocument(doc as Object)
     if toInt(doc.schema) < 5
         doc.schema = 5
         print "[state] migrated saved state to schema 5"
+    end if
+
+    ' Schema 6: `settings`, per-device on/off options (My Teams on Home is on
+    ' by default, as before).
+    if type(doc.settings) <> "roAssociativeArray" then doc.settings = {}
+    if doc.settings.showMyTeams = invalid then doc.settings.showMyTeams = true
+    if toInt(doc.schema) < 6
+        doc.schema = 6
+        print "[state] migrated saved state to schema 6"
     end if
 end sub
 

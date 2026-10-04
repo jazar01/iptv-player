@@ -1,16 +1,18 @@
 sub init()
     m.menu = m.top.FindNode("menu")
     m.details = m.top.FindNode("details")
-    m.actions = ["teams", "market", "account"]
-    buildMenu("")
+    m.actions = ["teams", "teamsRow", "market", "account"]
+    buildMenu("", true)
 
     m.menu.ObserveField("itemSelected", "onSelected")
     m.top.ObserveField("focusedChild", "onFocusedChild")
 end sub
 
-sub buildMenu(marketLabel as String)
+sub buildMenu(marketLabel as String, showMyTeams as Boolean)
     if marketLabel = "" then marketLabel = "not set"
-    titles = ["My Teams", "Local stations:   " + marketLabel, "Account and device name"]
+    rowState = "Off"
+    if showMyTeams then rowState = "On"
+    titles = ["My Teams", "Show My Teams on Home:   " + rowState, "Local stations:   " + marketLabel, "Account and device name"]
     focus = m.menu.itemFocused
     content = CreateObject("roSGNode", "ContentNode")
     for each title in titles
@@ -31,7 +33,7 @@ end sub
 
 sub onInfo()
     info = m.top.info
-    buildMenu(asString(info.market))
+    buildMenu(asString(info.market), isTrue(info.showMyTeams))
     nl = Chr(10)
     m.details.text = "Device name:  " + asString(info.deviceName) + nl + "Server:  " + asString(info.server) + nl + "Device ID:  " + asString(info.deviceId) + nl + "App version:  " + asString(info.version)
 end sub

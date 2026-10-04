@@ -163,6 +163,7 @@ function settingsInfo() as Object
         server: server
         version: CreateObject("roAppInfo").GetVersion()
         market: m.store.callFunc("getMarket").label
+        showMyTeams: m.store.callFunc("getSettings").showMyTeams
     }
 end function
 
@@ -174,5 +175,7 @@ sub onSettingsChosen(event as Object)
         openTeams()
     else if choice = "market"
         openMarkets()
+    else if choice = "teamsRow"
+        toggleMyTeamsRow()
     end if
 end sub

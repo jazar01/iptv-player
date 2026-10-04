@@ -16,6 +16,8 @@
     <function name="setDeviceName" />
     <function name="getMarket" />
     <function name="setMarket" />
+    <function name="getSettings" />
+    <function name="setSetting" />
 
     <function name="getFavorites" />
     <function name="isFavorite" />
