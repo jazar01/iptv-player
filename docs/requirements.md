@@ -28,10 +28,12 @@ Version 1 plays live TV, movies and series from a single Xtream account, with re
 - Per-device favorites and progress; no per-person profiles.
 - Storage built behind an interface so off-device backup can be added later without rework.
 - Clean display of guide titles (superscript Live/New tags stripped) and correct time-zone handling.
+- Search across live channels, movies and series.
+- Pause, rewind and fast-forward for movies and episodes, and for live channels through the provider's catch-up archive where the channel has one.
 
 **Not in version 1**
 
-- Catch-up / archive playback.
+- Browsing and playing past programs from a guide (catch-up beyond pausing and rewinding the channel being watched).
 - Multiple providers or accounts.
 - Per-person profiles.
 - Grid program guide (EPG grid).
@@ -61,7 +63,7 @@ All devices share one account, so the connection limit can be exceeded. When the
 
 The home screen opens on fixed rows in a fixed order: Favorites, then Continue Watching. My Teams is added later, below Favorites, moving to the top only while a game is live or about to start.
 
-The top bar holds Home, Live TV, Movies, Series and Settings, plus a clock. A reference mockup exists for the TV layout at 1920×1080.
+The top bar holds Home, Live TV, Movies, Series, Search and Settings, plus a clock. A reference mockup exists for the TV layout at 1920×1080.
 
 **Rows**
 
@@ -87,6 +89,17 @@ The top bar holds Home, Live TV, Movies, Series and Settings, plus a clock. A re
 - Favorites carry their own names and IDs, so the home screen draws without waiting on the network.
 - Browse grids load in pages, so large catalogs never block the UI.
 
+## Search
+
+Search finds live channels, movies and series by name. The Xtream API has no search, so the app searches its own copy of the full catalog.
+
+- **Entry:** Search in the top bar opens the on-screen keyboard. Results update as letters are typed, after a short pause.
+- **Results:** grouped as Channels, Movies and Series, each capped (about 50) with names starting with the search text first. Selecting a result does the same as selecting it in its browser: play a channel or movie, open a series. `*` on a channel adds or removes a favorite.
+- **Matching:** case-insensitive; every word typed must appear in the name, in any order. Provider prefixes such as `US |` are searchable like any other text.
+- **Index:** built from the full lists (`get_live_streams`, `get_vod_streams` and `get_series` without a category), cached in `cachefs:` and refreshed in the background at most once a day. Only names, IDs and the fields needed to play are kept.
+- **Speed:** the index and matching live in a Task, not the render thread, and only the matches cross to the UI. The live list (about 11,000 channels) is the largest; if it proves too heavy on older models, live search can be limited to favorite categories (see Open questions).
+- Guide search (what's on, by program title) is not part of this; the full guide is too large for the Roku and waits for the off-device server (Later features).
+
 ## Playback
 
 Playback uses Roku's `Video` node, with HLS for live channels and the file's own container for movies and episodes.
@@ -100,6 +113,17 @@ Playback uses Roku's `Video` node, with HLS for live channels and the file's own
 - Live channels request HLS (`.m3u8`), not raw `.ts`.
 - Some VOD files will not play on Roku because of codec or container. The player catches the `Video` node's error state and shows a readable message, never a black screen.
 - A small overlay on live playback shows the channel and current program, and handles channel up/down through favorites.
+
+**Pause, rewind and fast-forward**
+
+- **Movies and episodes:** the `Video` node's own controls: Play/Pause, rewind, fast-forward and Left/Right to seek, with its progress bar.
+- **Live channels with an archive** (`tv_archive` = 1 in `get_live_streams`, kept for `tv_archive_duration` days): pause stops the picture; Play resumes from the moment it was paused by switching to the provider's timeshift stream, which also allows rewind and fast-forward up to the live point. A "Back to live" action returns to the live stream. How far back rewind goes is limited by the archive.
+- **Live channels without an archive:** pause, rewind and fast-forward are unavailable; pressing them shows a short note saying so instead of doing nothing.
+- **Timeshift URLs and times:** Xtream timeshift URLs take a start time in the server's time zone (`server_info.timezone` from the login response, Europe/London for this provider) and a duration in minutes. The app converts from UTC when building them. The exact URL form this provider accepts is confirmed before building (see Open questions).
+
+| Content | Timeshift stream URL (typical Xtream form) |
+| --- | --- |
+| Live, from a past moment | `{server}/timeshift/{user}/{pass}/{duration_minutes}/{YYYY-MM-DD:HH-MM}/{id}.m3u8` |
 
 **Resume and watched tracking**
 
@@ -231,3 +255,6 @@ A small web service I host stores each device's saved document.
 - [x] What is the account's `max_connections`? **3** (login response, Oct 4, 2026). One was already in use at the time.
 - [ ] Are 3 simultaneous streams enough for the households sharing the account? Depends on how often several TVs watch at once; the connection-limit message matters more as a result.
 - [ ] Confirm current beta channel limits (device count, expiry) before relying on it.
+- [ ] Which live channels have a catch-up archive (`tv_archive`), and for how many days? Live pause/rewind only works on those.
+- [ ] Which timeshift URL form does this provider accept (`/timeshift/...m3u8`, `.ts`, or `timeshift.php`), and does it expect start times in `server_info.timezone`?
+- [ ] Is searching all ~11,000 live channels fast enough on the oldest Roku in use, or should live search be limited to chosen categories?
