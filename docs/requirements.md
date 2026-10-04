@@ -264,7 +264,14 @@ A home-screen row of my favorite teams' games in the next 24 hours, for only the
 - **Replays:** all channels named as replays, or a matchup already seen at least 6 hours earlier in the last 4 days.
 - **Live** from the start time for 3½ hours. The row appears once a team is saved, below Favorites, or at the top while a game is live or starts within 30 minutes. It refreshes after each catalog refresh, after team changes and every 30 minutes on Home.
 - **Before the start:** selecting a game more than 15 minutes early says event channels usually aren't on yet, with Play anyway. This provider answers HTTP 407 for an event channel that isn't carrying anything, before the game or, once seen, during one.
-- **Not yet built (step 2):** network broadcasts from the short guide (needs the preferred ABC affiliate) and "no channel" cards.
+
+**Built (step 2: network broadcasts, Oct 4, 2026)**
+
+- **Channels:** 16 national sports channels (ESPN, ESPN2, ESPNU, SEC, ACC, Big Ten, FS1, FS2, CBS Sports Network, NFL, MLB, NBA TV, NHL Network, TNT, TBS, truTV) and the Atlanta stations ABC WSB, CBS WANF and WUPA, NBC WXIA, FOX WAGA. Listed by guide ID in `data/guide-rules.json` (`myTeams.networks`); among copies of a feed, backup, low-bandwidth, West and overflow copies are skipped.
+- **Guides:** each channel's next ~30 programs (`get_short_epg`) are saved to `cachefs:` through ApiTask, at most every 25 minutes, and searched in SearchTask: the title first; the description only when the title names a sport or a matchup (so talk shows that mention a team don't count), with the matchup taken from its first sentence.
+- **Merging:** a network broadcast joins the event-channel card for the same game (same team, within 90 minutes). The network channel is listed first, since it's always on, and its guide title and end time are used.
+- **"No channel" cards** aren't built: every source the app has comes with a channel, so they would need an outside schedule, which this feature avoids.
+- Verified on a Roku: the Braves–Dodgers game was found on FS1 and merged with its event channel.
 
 ### Usage-based item ordering
 

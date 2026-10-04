@@ -4,6 +4,9 @@
 
 sub initTeams()
     m.games = []                ' last SearchTask result (see MyTeams.brs)
+    m.guideReady = false        ' network guides saved to cachefs: at least once
+    m.guideFetchedAt = 0
+    m.guidePending = 0
     m.teamsScreen = invalid
     m.teamEditScreen = invalid
     m.gameDialog = invalid
@@ -22,7 +25,42 @@ sub requestGames()
         refreshHome()
         return
     end if
-    searchSend("gamesRequest", { id: "home", teams: teams })
+    searchSend("gamesRequest", { id: "home", teams: teams, withGuide: m.guideReady })
+end sub
+
+' Network broadcasts: each network channel's short guide goes to cachefs:
+' through ApiTask (saveOnly) for SearchTask to read. Refetched when older than
+' guideMaxAgeMinutes; when all are in, games are found again with them.
+sub fetchNetworkGuides(networks as Object)
+    if networks.Count() = 0 or m.guidePending > 0 then return
+    cfg = guideRules().myTeams
+    if type(cfg) <> "roAssociativeArray" then cfg = {}
+    maxAge = toInt(cfg.guideMaxAgeMinutes) * 60
+    if maxAge <= 0 then maxAge = 1500
+    if nowSeconds() - m.guideFetchedAt < maxAge then return
+    listings = toInt(cfg.guideListings)
+    if listings <= 0 then listings = 30
+    m.guideFetchedAt = nowSeconds()
+    m.guidePending = networks.Count()
+    for each n in networks
+        sendRequest({
+            id: "teamGuide"
+            action: "get_short_epg"
+            params: { stream_id: n.streamId, limit: listings }
+            cacheFile: n.guideFile
+            saveOnly: true
+            maxAgeSeconds: maxAge
+            timeoutMs: 20000
+        })
+    end for
+end sub
+
+sub onTeamGuide(res as Object)
+    if not res.ok then print "[main] couldn't get a network guide for My Teams: "; res.error
+    m.guidePending = m.guidePending - 1
+    if m.guidePending > 0 then return
+    m.guideReady = true
+    requestGames()
 end sub
 
 sub onGamesTimer()
@@ -50,6 +88,7 @@ sub onGamesResult(event as Object)
     if started.Count() > 0 then m.store.callFunc("recordSeenGames", started)
     m.games = result.games
     refreshHome()
+    if type(result.networks) = "roArray" then fetchNetworkGuides(result.networks)
 end sub
 
 ' Same team, same opponents in the same order of words: "Alabama vs. Texas".

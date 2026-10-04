@@ -91,6 +91,8 @@ sub onApiResponse(event as Object)
         onSeriesInfo(res)
     else if res.id = "catalogAll"
         onCatalogAll(res)
+    else if res.id = "teamGuide"
+        onTeamGuide(res)
     end if
 end sub
 

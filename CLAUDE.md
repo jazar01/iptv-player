@@ -174,5 +174,8 @@ is the final check.
   SearchTask, rules `myTeams` and `nameTimes` in data/guide-rules.json),
   home row, replays, channel chooser, starts-later prompt. Saved state is
   schema 4. Checked on a Roku: teams saved, a game found and listed.
-- Not yet built: My Teams step 2 (network broadcasts; needs the user's ABC
-  affiliate), usage-based ordering, off-device backup and sync.
+- My Teams step 2 built: network broadcasts from 21 channels' short guides
+  (16 national + Atlanta ABC/CBS/NBC/FOX, `myTeams.networks` by guide ID),
+  fetched to cachefs:/teams/ by ApiTask and searched in SearchTask; merged
+  into the same game card with the network channel first. Verified on a Roku.
+- Not yet built: usage-based ordering, off-device backup and sync.

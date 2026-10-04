@@ -1,11 +1,16 @@
-' My Teams: finds saved teams' games in event-channel names (requirements:
-' Later features, My Teams). Runs in SearchTask over the live index.
-' Rules: data/guide-rules.json "myTeams"; event times: "nameTimes" (Utils).
+' My Teams: finds saved teams' games (requirements: Later features, My Teams).
+' Runs in SearchTask over the live index. Rules: data/guide-rules.json
+' "myTeams"; event times: "nameTimes" (Utils).
 '
-' A game is a channel in an event category whose name mentions a team (name
-' or alias, whole words, no exclusion), has an event time from lookbackHours
-' ago to aheadHours ahead, and whose sport is one of the team's (or unknown).
-' Channels for the same team within 15 minutes of each other are one game.
+' Two sources, merged into one card per game:
+'   Event channels: a channel in an event category whose name mentions a
+'     team (name or alias, whole words, no exclusion) and has an event time
+'     from lookbackHours ago to aheadHours ahead.
+'   Network broadcasts: a program in a network channel's short guide (saved
+'     to cachefs: by ApiTask) whose title, or else description, mentions a team.
+' Either way the sport must be one of the team's (or unknown). A team's
+' listings starting within 90 minutes of each other are one game; network
+' channels are listed first (always on, unlike event channels).
 
 function teamRules() as Object
     if m.teamRules <> invalid then return m.teamRules
@@ -27,7 +32,29 @@ function teamRules() as Object
         parens: CreateObject("roRegex", "\([^)]*\)|\[[^\]]*\]", "")
         ranks: CreateObject("roRegex", "#\d+\s*|(^|\s)\d{1,2}\s+(?=[A-Za-z])|^\s*(19|20)\d{2}\s+", "")
         spaces: CreateObject("roRegex", "\s+", "")
+        networks: []
+        networkAvoid: optionalRegex(cfg.networkAvoid)
+        guideListings: toInt(cfg.guideListings)
+        guideMaxAgeSeconds: toInt(cfg.guideMaxAgeMinutes) * 60
+        base64Titles: true
+        titleTags: []
     }
+    if rules.guideListings <= 0 then rules.guideListings = 30
+    if rules.guideMaxAgeSeconds <= 0 then rules.guideMaxAgeSeconds = 1500
+    if type(cfg.networks) = "roArray"
+        for each n in cfg.networks
+            if asString(n.epg) <> "" then rules.networks.Push({ epg: asString(n.epg), label: asString(n.label) })
+        end for
+    end if
+    ' Guide titles: base64 and superscript tags, as for now/next (EpgService).
+    if type(json) = "roAssociativeArray"
+        if type(json.epg) = "roAssociativeArray" and json.epg.base64Titles <> invalid then rules.base64Titles = isTrue(json.epg.base64Titles)
+        if type(json.titleTags) = "roArray"
+            for each tag in json.titleTags
+                if asString(tag.text) <> "" then rules.titleTags.Push({ text: asString(tag.text), flag: asString(tag.flag) })
+            end for
+        end if
+    end if
     if type(cfg.sportRules) = "roArray"
         for each r in cfg.sportRules
             rules.sportRules.Push({ regex: CreateObject("roRegex", asString(r.pattern), "i"), sport: asString(r.sport) })
@@ -152,13 +179,24 @@ function findGames(req as Object) as Object
                     if found <> invalid and found.utc >= now - rules.lookbackSeconds and found.utc <= now + rules.aheadSeconds
                         sport = detectSport(LCase(categoryName + " " + e.name), rules)
                         if sport = "" or t.sports.Count() = 0 or t.sports.DoesExist(sport)
-                            addGameChannel(groups, t, e, found, sport, now, rules)
+                            replay = rules.replay <> invalid and rules.replay.IsMatch(e.name)
+                            later = rules.later <> invalid and rules.later.IsMatch(e.name)
+                            mergeGame(groups, t, {
+                                start: found.utc
+                                ends: 0
+                                title: gameTitle(e.name, found.text, t, rules)
+                                sport: sport
+                                replay: replay
+                            }, { streamId: e.itemId, name: e.name, epgChannelId: e.epgChannelId, network: false, later: later }, now, rules)
                         end if
                     end if
                 end if
             end for
         end if
     end for
+
+    result.networks = resolveNetworks()
+    if isTrue(req.withGuide) then addNetworkGames(groups, teams, result.networks, now, rules)
 
     live = []
     later = []
@@ -173,48 +211,156 @@ function findGames(req as Object) as Object
     later.SortBy("start")
     result.games.Append(live)
     result.games.Append(later)
-    print "[teams] "; result.games.Count(); " game(s) for "; teams.Count(); " team(s) ("; timer.TotalMilliseconds(); " ms)"
+    print "[teams] "; result.games.Count(); " game(s) for "; teams.Count(); " team(s), guide "; isTrue(req.withGuide); " ("; timer.TotalMilliseconds(); " ms)"
+    for each g in result.games
+        names = ""
+        for each c in g.channels
+            if names <> "" then names += ", "
+            names += c.name
+        end for
+        print "[teams]   "; g.title; " | "; g.sportLabel; " | "; formatDayTime(g.start); " | live "; g.live; " | "; Left(names, 160)
+    end for
     return result
 end function
 
+' info: { start, ends (0 if unknown), title, sport, replay }
+' channel: { streamId, name, epgChannelId, network, later }
 ' A team's listings starting within 90 minutes of each other are one game
-' (one listing may include the pregame); the game keeps the earliest start.
-sub addGameChannel(groups as Object, team as Object, e as Object, found as Object, sport as String, now as Integer, rules as Object)
+' (one may include the pregame); it keeps the earliest start. A network
+' listing's title and end time win, since guides are more exact than
+' channel names.
+sub mergeGame(groups as Object, team as Object, info as Object, channel as Object, now as Integer, rules as Object)
     g = invalid
     for each key in groups
         other = groups[key]
-        if g = invalid and other.teamId = team.id and Abs(other.start - found.utc) <= 5400 then g = other
+        if g = invalid and other.teamId = team.id and Abs(other.start - info.start) <= 5400 then g = other
     end for
-    if g <> invalid
-        if found.utc < g.start
-            g.start = found.utc
-            g.live = (now >= found.utc and now < found.utc + rules.liveSeconds)
-        end if
-        if g.sport = "" and sport <> ""
-            g.sport = sport
-            g.sportLabel = asString(rules.sportLabels[sport])
-        end if
-    end if
     if g = invalid
-        key = team.id + "|" + found.utc.ToStr()
         g = {
-            key: key
+            key: team.id + "|" + info.start.ToStr()
             teamId: team.id
             teamName: team.name
-            title: gameTitle(e.name, found.text, team, rules)
-            sport: sport
-            sportLabel: asString(rules.sportLabels[sport])
-            start: found.utc
-            live: (now >= found.utc and now < found.utc + rules.liveSeconds)
+            title: info.title
+            sport: info.sport
+            sportLabel: asString(rules.sportLabels[info.sport])
+            start: info.start
+            ends: info.ends
             replayChannels: 0
             channels: []
         }
-        groups[key] = g
+        groups[g.key] = g
+    else
+        if info.start < g.start then g.start = info.start
+        if channel.network
+            g.title = info.title
+            if info.ends > 0 then g.ends = info.ends
+        end if
+        if g.sport = "" and info.sport <> ""
+            g.sport = info.sport
+            g.sportLabel = asString(rules.sportLabels[info.sport])
+        end if
     end if
-    if rules.replay <> invalid and rules.replay.IsMatch(e.name) then g.replayChannels = g.replayChannels + 1
-    later = rules.later <> invalid and rules.later.IsMatch(e.name)
-    g.channels.Push({ streamId: e.itemId, name: e.name, epgChannelId: e.epgChannelId, later: later })
+    ends = g.ends
+    if ends <= 0 then ends = g.start + rules.liveSeconds
+    g.live = (now >= g.start and now < ends)
+    if info.replay then g.replayChannels = g.replayChannels + 1
+    for each c in g.channels
+        if c.streamId = channel.streamId then return
+    end for
+    g.channels.Push(channel)
 end sub
+
+' ---------------------------------------------------------------------------
+' Network broadcasts
+
+' The configured network channels that exist in the catalog:
+' [{ label, streamId, name, epgChannelId, guideFile }]. Among channels with
+' the guide ID, the first whose name doesn't match networkAvoid.
+function resolveNetworks() as Object
+    rules = teamRules()
+    if m.epgGroups = invalid
+        m.epgGroups = {}
+        for each e in m.index.live
+            if e.epgChannelId <> "" then addToGroup(m.epgGroups, LCase(e.epgChannelId), e)
+        end for
+    end if
+    list = []
+    for each n in rules.networks
+        group = m.epgGroups[LCase(n.epg)]
+        if group <> invalid
+            chosen = group[0]
+            for i = group.Count() - 1 to 0 step -1
+                if rules.networkAvoid = invalid or not rules.networkAvoid.IsMatch(group[i].name) then chosen = group[i]
+            end for
+            list.Push({ label: n.label, streamId: chosen.itemId, name: chosen.name, epgChannelId: chosen.epgChannelId, guideFile: networkGuideFile(chosen.itemId) })
+        end if
+    end for
+    return list
+end function
+
+function networkGuideFile(streamId as Integer) as String
+    return "cachefs:/teams/guide_" + streamId.ToStr() + ".json"
+end function
+
+sub addNetworkGames(groups as Object, teams as Object, networks as Object, now as Integer, rules as Object)
+    for each n in networks
+        json = ParseJson(ReadAsciiFile(n.guideFile))
+        if type(json) = "roAssociativeArray" and type(json.epg_listings) = "roArray"
+            for each listing in json.epg_listings
+                start = toInt(listing.start_timestamp)
+                ends = toInt(listing.stop_timestamp)
+                if start > 0 and ends > now and start <= now + rules.aheadSeconds
+                    title = guideText(listing.title, rules)
+                    description = guideText(listing.description, rules)
+                    ' A description only counts when the title is a game
+                    ' ("College Football", "Braves at Dodgers"), not a talk
+                    ' show that mentions teams in passing.
+                    titleIsGame = detectSport(LCase(title), rules) <> "" or (rules.separators <> invalid and rules.separators.IsMatch(title))
+                    for each t in teams
+                        inTitle = anyMatch(t.matchers, title)
+                        inDescription = not inTitle and titleIsGame and anyMatch(t.matchers, description)
+                        text = title + " " + description
+                        if (inTitle or inDescription) and not anyMatch(t.exclusions, text)
+                            sport = detectSport(LCase(text), rules)
+                            if sport = "" or t.sports.Count() = 0 or t.sports.DoesExist(sport)
+                                replay = rules.replay <> invalid and rules.replay.IsMatch(title)
+                                ' Matchup from the title, or from the description's first sentence.
+                                source = title
+                                if inDescription
+                                    source = description
+                                    periodAt = Instr(1, source, ". ")
+                                    if periodAt > 0 then source = Left(source, periodAt - 1)
+                                end if
+                                mergeGame(groups, t, {
+                                    start: start
+                                    ends: ends
+                                    title: gameTitle(source, "", t, rules)
+                                    sport: sport
+                                    replay: replay
+                                }, { streamId: n.streamId, name: n.label, epgChannelId: n.epgChannelId, network: true, later: false }, now, rules)
+                            end if
+                        end if
+                    end for
+                end if
+            end for
+        end if
+    end for
+end sub
+
+' Guide text: base64-decoded (if the rules say so), superscript tags removed.
+function guideText(value as Dynamic, rules as Object) as String
+    text = asString(value)
+    if rules.base64Titles and text <> ""
+        bytes = CreateObject("roByteArray")
+        bytes.FromBase64String(text)
+        decoded = bytes.ToAsciiString()
+        if decoded <> "" then text = decoded
+    end if
+    for each tag in rules.titleTags
+        text = text.Replace(tag.text, " ")
+    end for
+    return text.Trim()
+end function
 
 function detectSport(text as String, rules as Object) as String
     for each r in rules.sportRules
@@ -227,7 +373,8 @@ end function
 '   -> "Alabama vs. Mississippi State": the ':' or '|' segment that mentions
 ' the team, without the time, labels in brackets or rankings.
 function gameTitle(name as String, timeText as String, team as Object, rules as Object) as String
-    text = name.Replace(timeText, " ")
+    text = name
+    if timeText <> "" then text = name.Replace(timeText, " ")
     chosen = ""
     for each segment in rules.segments.Split(text)
         if chosen = "" and anyMatch(team.matchers, segment) then chosen = segment
@@ -240,17 +387,26 @@ function gameTitle(name as String, timeText as String, team as Object, rules as 
     return chosen
 end function
 
-' Main-language channels first, then the rest, keeping provider order.
+' Network channels first (always on), then main-language event channels,
+' then the rest, keeping provider order within each.
 function sortChannels(channels as Object) as Object
+    networks = []
     first = []
     rest = []
     for each c in channels
         later = c.later
         c.Delete("later")
-        if later then rest.Push(c) else first.Push(c)
+        if c.network
+            networks.Push(c)
+        else if later
+            rest.Push(c)
+        else
+            first.Push(c)
+        end if
     end for
-    first.Append(rest)
-    return first
+    networks.Append(first)
+    networks.Append(rest)
+    return networks
 end function
 
 function asArray(value as Dynamic) as Object

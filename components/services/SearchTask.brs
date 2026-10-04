@@ -82,7 +82,11 @@ sub loadKind(req as Object)
     else
         print "[search] "; kind; ": "; entries.Count(); " indexed ("; timer.TotalMilliseconds(); " ms)"
     end if
-    if kind = "live" then m.eventCategories = invalid     ' My Teams re-reads category names
+    if kind = "live"
+        ' My Teams re-reads category names and guide-ID groups.
+        m.eventCategories = invalid
+        m.epgGroups = invalid
+    end if
     m.top.indexVersion = m.top.indexVersion + 1
     if m.top.selfTest and not m.selfTested and m.index.live.Count() > 0 and m.index.series.Count() > 0
         m.selfTested = true

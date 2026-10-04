@@ -25,9 +25,12 @@
   selfTest: set true to run the matching self-test once both lists are loaded.
 
   My Teams (MyTeams.brs):
-  In:  gamesRequest { id, teams: [{ id, name, aliases[], exclusions[], sports[] }] }
+  In:  gamesRequest { id, teams: [{ id, name, aliases[], exclusions[], sports[] }], withGuide }
   Out: gamesResult  { id, ready, games: [{ key, teamId, teamName, title, sport, sportLabel,
-                      start, live, replay, channels: [{ streamId, name, epgChannelId }] }] }
+                      start, ends, live, replay, channels: [{ streamId, name, epgChannelId, network }] }],
+                      networks: [{ label, streamId, name, epgChannelId, guideFile }] }
+       withGuide also searches the network channels' short guides, read from
+       their guideFile (saved to cachefs: by ApiTask for MainScene).
 -->
 <component name="SearchTask" extends="Task">
   <interface>
