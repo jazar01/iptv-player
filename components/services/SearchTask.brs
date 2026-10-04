@@ -13,6 +13,7 @@ sub runLoop()
     m.top.ObserveField("load", port)
     m.top.ObserveField("query", port)
     m.top.ObserveField("matchRequest", port)
+    m.top.ObserveField("gamesRequest", port)
     m.top.ready = true
 
     while true
@@ -22,6 +23,8 @@ sub runLoop()
                 loadKind(msg.GetData())
             else if msg.GetField() = "matchRequest"
                 m.top.matchResult = matchSaved(msg.GetData())
+            else if msg.GetField() = "gamesRequest"
+                m.top.gamesResult = findGames(msg.GetData())
             else
                 ' Typing sends a query per pause; answer only the newest.
                 latest = msg.GetData()
@@ -79,6 +82,7 @@ sub loadKind(req as Object)
     else
         print "[search] "; kind; ": "; entries.Count(); " indexed ("; timer.TotalMilliseconds(); " ms)"
     end if
+    if kind = "live" then m.eventCategories = invalid     ' My Teams re-reads category names
     m.top.indexVersion = m.top.indexVersion + 1
     if m.top.selfTest and not m.selfTested and m.index.live.Count() > 0 and m.index.series.Count() > 0
         m.selfTested = true
@@ -237,6 +241,7 @@ function indexEntry(kind as String, item as Object) as Object
         e.kind = "channel"
         e.itemId = toInt(item.stream_id)
         e.epgChannelId = asString(item.epg_channel_id)
+        e.categoryId = asString(item.category_id)
         if toInt(item.tv_archive) = 1 then e.archiveDays = toInt(item.tv_archive_duration)
         if toInt(item.tv_archive) = 1 and e.archiveDays <= 0 then e.archiveDays = 1
     else

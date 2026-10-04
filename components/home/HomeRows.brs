@@ -5,13 +5,27 @@
 ' module: { id, title, emptyText, items(services) -> array of HomeItem field AAs }
 ' services: { store: StateStore, epg: EpgService }
 
-function homeRowModules() as Object
-    return [favoritesRow(), continueWatchingRow(), recentRow()]
+' My Teams appears once a team is saved: below Favorites, or at the top while
+' one of the games is live or starts within 30 minutes (requirements).
+function homeRowModules(services as Object) as Object
+    if services.store.callFunc("getTeams").Count() = 0 then return [favoritesRow(), continueWatchingRow(), recentRow()]
+    if gameIsOnSoon(services.games) then return [myTeamsRow(), favoritesRow(), continueWatchingRow(), recentRow()]
+    return [favoritesRow(), myTeamsRow(), continueWatchingRow(), recentRow()]
 end function
 
+function gameIsOnSoon(games as Dynamic) as Boolean
+    if type(games) <> "roArray" then return false
+    now = nowSeconds()
+    for each g in games
+        if g.live or (g.start >= now and g.start - now <= 1800) then return true
+    end for
+    return false
+end function
+
+' services: { store, epg, games }
 function buildHomeRows(services as Object) as Object
     rows = []
-    for each module in homeRowModules()
+    for each module in homeRowModules(services)
         rows.Push({ id: module.id, title: module.title, emptyText: module.emptyText, items: module.items(services) })
     end for
     return rows
@@ -59,6 +73,44 @@ function channelItems(services as Object, channels as Object) as Object
             item.epgVersion = 1
         end if
         items.Push(item)
+    end for
+    return items
+end function
+
+' ---------------------------------------------------------------------------
+' My Teams: saved teams' games in the next 24 hours, live first (found by
+' SearchTask, replays labelled by MainScene).
+
+function myTeamsRow() as Object
+    return {
+        id: "teams"
+        title: "My Teams"
+        emptyText: "No games for your teams in the next 24 hours."
+        items: myTeamsRowItems
+    }
+end function
+
+function myTeamsRowItems(services as Object) as Object
+    items = []
+    if type(services.games) <> "roArray" then return items
+    for each g in services.games
+        flags = ""
+        if g.live then flags = "live"
+        if g.replay
+            if flags <> "" then flags += ","
+            flags += "replay"
+        end if
+        items.Push({
+            kind: "game"
+            itemKey: "game:" + g.key
+            name: g.title
+            teamName: g.teamName
+            subtitle: g.sportLabel
+            nowStart: g.start
+            nowEnd: g.start + 12600
+            nowFlags: flags
+            channels: g.channels
+        })
     end for
     return items
 end function

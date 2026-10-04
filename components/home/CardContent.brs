@@ -59,5 +59,8 @@ function itemSummary(node as Object) as Object
         year: node.year
         season: node.season
         episode: node.episode
+        channels: node.channels
+        teamName: node.teamName
+        start: node.nowStart
     }
 end function

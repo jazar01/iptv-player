@@ -4,7 +4,8 @@
 '   MainHome.brs      Home rows, favorites, now/next
 '   MainCatalog.brs   Live TV / Movies / Series browsers, series pages
 '   MainPlayback.brs  player, resume, watched tracking, live pause/rewind
-'   MainSearch.brs    search index and queries
+'   MainSearch.brs    search index and queries, channel matching
+'   MainTeams.brs     My Teams games, replays, Settings -> My Teams
 '
 ' Launch: with saved credentials, Home draws immediately from saved favorites
 ' and cached data while the login is re-validated in the background. Without
@@ -30,6 +31,7 @@ sub init()
     initHome()
     initCatalog()
     initPlayback()
+    initTeams()
     initSearch()
 
     m.api.ObserveField("response", "onApiResponse")
@@ -166,6 +168,8 @@ sub removeOverlay(node as Object)
     m.overlayHost.RemoveChild(node)
     if m.favoritesScreen <> invalid and m.favoritesScreen.IsSameNode(node) then m.favoritesScreen = invalid
     if m.seriesScreen <> invalid and m.seriesScreen.IsSameNode(node) then m.seriesScreen = invalid
+    if m.teamsScreen <> invalid and m.teamsScreen.IsSameNode(node) then m.teamsScreen = invalid
+    if m.teamEditScreen <> invalid and m.teamEditScreen.IsSameNode(node) then m.teamEditScreen = invalid
     focusContent()
 end sub
 

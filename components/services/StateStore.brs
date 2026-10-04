@@ -2,8 +2,10 @@
 ' docs/requirements.md). Records carry updatedAt; deletions are tombstones.
 
 sub init()
-    m.SCHEMA = 3
+    m.SCHEMA = 4
     m.RECENT_CAP = 15
+    m.SEEN_CAP = 20
+    m.SEEN_DAYS = 4
     m.RESUME_CAP = 50
     m.TOMBSTONE_DAYS = 28
     m.STALE_SERIES_DAYS = 30
@@ -115,6 +117,95 @@ function addRecent(channel as Object) as Boolean
         if toInt(r.streamId) <> id and kept.Count() < m.RECENT_CAP then kept.Push(r)
     end for
     m.doc.recent = kept
+    return persist()
+end function
+
+' ---------------------------------------------------------------------------
+' My Teams. team: { id, name, aliases[], exclusions[], sports[], updatedAt,
+' deleted }. Deleting leaves a tombstone, like favorites.
+
+function getTeams() as Object
+    list = []
+    for each t in m.doc.teams
+        if not isTrue(t.deleted) then list.Push(t)
+    end for
+    return list
+end function
+
+' Adds a team (no id yet) or updates one; returns the saved team, or
+' invalid if it couldn't be saved.
+function saveTeam(team as Object) as Dynamic
+    id = asString(team.id)
+    t = invalid
+    for each existing in m.doc.teams
+        if existing.id = id then t = existing
+    end for
+    if t = invalid
+        if id = "" then id = Left(CreateObject("roDeviceInfo").GetRandomUUID(), 8)
+        t = { id: id }
+        m.doc.teams.Push(t)
+    end if
+    t.name = shortName(team.name)
+    t.aliases = shortList(team.aliases)
+    t.exclusions = shortList(team.exclusions)
+    t.sports = shortList(team.sports)
+    t.deleted = false
+    t.updatedAt = nowSeconds()
+    if not persist() then return invalid
+    return t
+end function
+
+function deleteTeam(id as String) as Boolean
+    for each t in m.doc.teams
+        if t.id = id
+            t.deleted = true
+            t.updatedAt = nowSeconds()
+        end if
+    end for
+    return persist()
+end function
+
+function shortList(items as Dynamic) as Object
+    out = []
+    if type(items) <> "roArray" then return out
+    for each item in items
+        text = shortName(item).Trim()
+        if text <> "" then out.Push(text)
+    end for
+    return out
+end function
+
+' Matchups already seen, for labelling replays: [{ key, start }]. Per device;
+' only the last few days are kept.
+function getSeenGames() as Object
+    return m.doc.seenGames
+end function
+
+' games: [{ key, start }]. Keeps the earliest start per key.
+function recordSeenGames(games as Object) as Boolean
+    cutoff = nowSeconds() - m.SEEN_DAYS * 86400
+    byKey = {}
+    for each s in m.doc.seenGames
+        if toInt(s.start) >= cutoff then byKey[s.key] = s
+    end for
+    changed = false
+    for each g in games
+        existing = byKey[g.key]
+        if existing = invalid or toInt(g.start) < toInt(existing.start)
+            byKey[g.key] = { key: g.key, start: toInt(g.start) }
+            changed = true
+        end if
+    end for
+    if not changed then return true
+    list = []
+    for each key in byKey
+        list.Push(byKey[key])
+    end for
+    list.SortBy("start", "r")
+    while list.Count() > m.SEEN_CAP
+        list.Pop()
+    end while
+    m.doc.seenGames = list
     return persist()
 end function
 
@@ -476,6 +567,8 @@ function newDocument() as Object
         series: []
         resume: []
         recent: []
+        teams: []
+        seenGames: []
     }
 end function
 
@@ -485,7 +578,7 @@ sub normalizeDocument(doc as Object)
     if toInt(doc.schema) > m.SCHEMA then print "[state] WARNING: saved schema "; doc.schema; " is newer than this build ("; m.SCHEMA; ")"
     if asString(doc.deviceId) = "" then doc.deviceId = CreateObject("roDeviceInfo").GetRandomUUID()
     doc.deviceName = asString(doc.deviceName)
-    for each key in ["favorites", "series", "resume", "recent"]
+    for each key in ["favorites", "series", "resume", "recent", "teams", "seenGames"]
         if type(doc[key]) <> "roArray" then doc[key] = []
     end for
 
@@ -504,6 +597,13 @@ sub normalizeDocument(doc as Object)
     if toInt(doc.schema) < 3
         doc.schema = 3
         print "[state] migrated saved state to schema 3"
+    end if
+
+    ' Schema 4: `teams` (My Teams) and `seenGames` (replay detection),
+    ' created empty above.
+    if toInt(doc.schema) < 4
+        doc.schema = 4
+        print "[state] migrated saved state to schema 4"
     end if
 end sub
 
@@ -536,7 +636,12 @@ function writeWithTrimming() as String
     purgeTombstones(&h7FFFFFFF)
     result = m.backend.write(m.doc)
 
-    ' Recently viewed first: least important, rebuilt by normal viewing.
+    ' Replay memory first, then recently viewed: least important, rebuilt by
+    ' normal use.
+    if result = "nospace" and m.doc.seenGames.Count() > 0
+        m.doc.seenGames = []
+        result = m.backend.write(m.doc)
+    end if
     recent = m.doc.recent
     recent.SortBy("updatedAt")
     while result = "nospace" and recent.Count() > 0
@@ -564,7 +669,7 @@ end function
 
 ' Drop deleted records whose deletion is older than cutoff (UTC seconds).
 sub purgeTombstones(cutoff as Integer)
-    for each key in ["favorites", "series"]
+    for each key in ["favorites", "series", "teams"]
         kept = []
         for each r in m.doc[key]
             if not (isTrue(r.deleted) and toInt(r.updatedAt) < cutoff) then kept.Push(r)

@@ -34,6 +34,12 @@
     <function name="getSeriesProgress" />
     <function name="getSeriesList" />
 
+    <function name="getTeams" />
+    <function name="saveTeam" />
+    <function name="deleteTeam" />
+    <function name="getSeenGames" />
+    <function name="recordSeenGames" />
+
     <function name="remapChannels" />
     <function name="remapSeries" />
     <function name="getSavedSeries" />

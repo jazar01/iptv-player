@@ -174,7 +174,7 @@ All saved state is one versioned JSON document per device, shaped so it can late
 
 ```json
 {
-  "schema": 3,
+  "schema": 4,
   "deviceId": "<uuid>",
   "deviceName": "Living room",
   "credentials": { "server": "…", "username": "…", "password": "…" },
@@ -184,11 +184,13 @@ All saved state is one versioned JSON document per device, shaped so it can late
     { "kind": "movie", "id": 777, "name": "…", "ext": "mp4", "position": 2210, "duration": 7680, "updatedAt": 0 },
     { "kind": "episode", "id": 901, "name": "…", "ext": "mkv", "seriesId": 55, "season": 2, "episode": 5, "position": 1234, "duration": 2640, "updatedAt": 0 }
   ],
-  "recent": [ { "streamId": 20271, "name": "ESPN 2", "epgChannelId": "ESPN2.us", "updatedAt": 0 } ]
+  "recent": [ { "streamId": 20271, "name": "ESPN 2", "epgChannelId": "ESPN2.us", "updatedAt": 0 } ],
+  "teams": [ { "id": "a1b2c3d4", "name": "Alabama", "aliases": ["Crimson Tide"], "exclusions": ["North Alabama"], "sports": ["football"], "updatedAt": 0, "deleted": false } ],
+  "seenGames": [ { "key": "a1b2c3d4|alabama vs texas", "start": 0 } ]
 }
 ```
 
-Schema 3 added `recent`, the Recently Viewed channels (newest `updatedAt` first, at most 15).
+Schema 3 added `recent`, the Recently Viewed channels (newest `updatedAt` first, at most 15). Schema 4 added `teams` (My Teams) and `seenGames`, matchups already seen in the last 4 days (at most 20, per device), used to label replays.
 
 Schema 2 (milestone 3) added `name` and `ext` to resume entries and the episode details to `series.current`, so Continue Watching draws and plays without the network. `series.current` is the episode to continue (in progress or next unwatched); its position lives in the matching `resume` entry. A series whose last episode is watched has `current: null` and leaves Continue Watching.
 
@@ -251,6 +253,18 @@ A home-screen row of my favorite teams' games in the next 24 hours, for only the
 - **Refresh:** on launch and about every 30 minutes while the home screen is showing.
 - **Order:** live first, then by start time; team usage score breaks ties.
 - No outside schedule service is needed for the 24-hour window.
+
+**Built (step 1: teams and event channels, Oct 4, 2026)**
+
+- **Teams** are managed in Settings → My Teams: name, sports (at least one), aliases ("Also called") and exclusions ("Not when it says"). Choosing sports is what keeps out other teams with the same name (minor-league hockey Eagles, for example).
+- **Finding games** runs in SearchTask over the live index (`MyTeams.brs`): channels in event categories (`Sports | …`, `PPV …`; not `… Teams` or `… Replays`) whose name mentions a team as whole words, has an event time from 4 hours ago to 24 hours ahead, and whose sport is one of the team's. A game whose sport can't be determined (e.g. "ESPNU: Auburn vs. Tennessee") is still shown. Team words are checked before anything else, so a full scan takes about 0.1–0.2 s.
+- **Event times** use the `nameTimes` rules (also used to show channel names in local time), covering this provider's formats: ISO in UTC, `(10.04 01:00 PM ET)`, `@ 4 Oct 12:00 PM ET`, `@ Oct 04 01:00 PM ET`, `… London`, and no zone (read as US Eastern).
+- **Sports, categories, separators, replay words, later languages and time windows** are rules in `data/guide-rules.json` (`myTeams`).
+- **One card per game:** a team's listings starting within 90 minutes of each other are merged (one may include the pregame), keeping the earliest start. Main-language channels come first; selecting a game with several channels asks which.
+- **Replays:** all channels named as replays, or a matchup already seen at least 6 hours earlier in the last 4 days.
+- **Live** from the start time for 3½ hours. The row appears once a team is saved, below Favorites, or at the top while a game is live or starts within 30 minutes. It refreshes after each catalog refresh, after team changes and every 30 minutes on Home.
+- **Before the start:** selecting a game more than 15 minutes early says event channels usually aren't on yet, with Play anyway. This provider answers HTTP 407 for an event channel that isn't carrying anything, before the game or, once seen, during one.
+- **Not yet built (step 2):** network broadcasts from the short guide (needs the preferred ABC affiliate) and "no channel" cards.
 
 ### Usage-based item ordering
 

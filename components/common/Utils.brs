@@ -129,15 +129,25 @@ end function
 ' Patterns and their time zones are "nameTimes" in data/guide-rules.json.
 ' For display only; saved names keep the provider's text.
 function localizeName(name as String) as String
+    found = findNameTime(name, true)
+    if found = invalid then return name
+    return name.Replace(found.text, "(" + formatDayTime(found.utc) + ")")
+end function
+
+' The first event time in a name: { utc, text (the matched part) } or
+' invalid. displayOnly skips rules marked display: false.
+function findNameTime(name as String, displayOnly as Boolean) as Dynamic
     if m.nameTimeRules = invalid then m.nameTimeRules = loadNameTimeRules()
     for each rule in m.nameTimeRules
-        match = rule.regex.Match(name)
-        if match.Count() > 1
-            utc = nameTimeUtc(match, rule)
-            if utc > 0 then return name.Replace(match[0], "(" + formatDayTime(utc) + ")")
+        if rule.display or not displayOnly
+            match = rule.regex.Match(name)
+            if match.Count() > 1
+                utc = nameTimeUtc(match, rule)
+                if utc > 0 then return { utc: utc, text: match[0] }
+            end if
         end if
     end for
-    return name
+    return invalid
 end function
 
 function loadNameTimeRules() as Object
@@ -150,7 +160,9 @@ function loadNameTimeRules() as Object
         if type(r) = "roAssociativeArray" and asString(r.pattern) <> "" and type(r.order) = "roArray"
             zone = zones[asString(r.zone)]
             if zone = invalid then zone = { standard: 0, daylight: 0, dst: "" }
-            rules.Push({ regex: CreateObject("roRegex", r.pattern, "i"), order: r.order, zone: zone })
+            display = true
+            if r.display <> invalid then display = isTrue(r.display)
+            rules.Push({ regex: CreateObject("roRegex", r.pattern, "i"), order: r.order, zone: zone, display: display })
         end if
     end for
     return rules
@@ -170,6 +182,7 @@ function nameTimeUtc(match as Object, rule as Object) as Integer
             part = rule.order[i]
             if part = "year" then year = Val(value, 10)
             if part = "month" then month = Val(value, 10)
+            if part = "monthName" then month = monthNumber(value)
             if part = "day" then day = Val(value, 10)
             if part = "hour" then hour = Val(value, 10)
             if part = "minute" then minute = Val(value, 10)
@@ -186,6 +199,16 @@ function nameTimeUtc(match as Object, rule as Object) as Integer
     ' The offset in effect then (approximate only within a DST changeover hour).
     offset = utcOffsetMinutes(localAsUtc - toInt(rule.zone.standard) * 60, rule.zone)
     return localAsUtc - offset * 60
+end function
+
+' "Oct" / "OCT" / "October" -> 10, or 0.
+function monthNumber(name as String) as Integer
+    months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+    key = LCase(Left(name, 3))
+    for i = 0 to 11
+        if months[i] = key then return i + 1
+    end for
+    return 0
 end function
 
 ' UTC seconds -> local "Sun 1:00 PM".

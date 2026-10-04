@@ -40,4 +40,5 @@
   <script type="text/brightscript" uri="pkg:/components/MainCatalog.brs" />
   <script type="text/brightscript" uri="pkg:/components/MainPlayback.brs" />
   <script type="text/brightscript" uri="pkg:/components/MainSearch.brs" />
+  <script type="text/brightscript" uri="pkg:/components/MainTeams.brs" />
 </component>

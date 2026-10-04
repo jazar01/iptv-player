@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-  Content for one HomeCard. kind: "channel" | "resume" | "seeAll" | "empty".
+  Content for one HomeCard. kind: "channel" | "resume" | "game" | "seeAll" | "empty".
+  game cards (My Teams): name = matchup, subtitle = sport, nowStart/nowEnd =
+  start and expected end, nowFlags = "live" / "replay".
   resume cards: resumeKind "movie" | "episode"; episodes carry the series and
   the episode to continue (itemId = episode ID).
   Program fields are UTC seconds; epgVersion is bumped whenever they change so
@@ -32,6 +34,9 @@
     <field id="year" type="integer" />
     <field id="season" type="integer" />
     <field id="episode" type="integer" />
+    <!-- My Teams game cards: the channels carrying the game, best first. -->
+    <field id="channels" type="array" />
+    <field id="teamName" type="string" />
     <field id="epgVersion" type="integer" />
   </interface>
 </component>

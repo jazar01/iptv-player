@@ -9,7 +9,7 @@ end sub
 sub refreshHome()
     home = m.sections.home
     if home = invalid then return
-    rows = buildHomeRows({ store: m.store, epg: m.epg })
+    rows = buildHomeRows({ store: m.store, epg: m.epg, games: m.games })
     home.rows = rows
     if m.favoritesScreen <> invalid
         for each row in rows
@@ -42,6 +42,8 @@ sub onItemSelected(event as Object)
         playMovie(item, false)
     else if item.kind = "resume" and item.resumeKind = "episode"
         continueSeries(item)
+    else if item.kind = "game"
+        onGameSelected(item)
     end if
 end sub
 

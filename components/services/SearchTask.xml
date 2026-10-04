@@ -23,6 +23,11 @@
                       series: { "<old seriesId>": { seriesId, name, year, method } }, unmatched: [text] }
        Only items whose IDs are missing from the loaded catalog are matched.
   selfTest: set true to run the matching self-test once both lists are loaded.
+
+  My Teams (MyTeams.brs):
+  In:  gamesRequest { id, teams: [{ id, name, aliases[], exclusions[], sports[] }] }
+  Out: gamesResult  { id, ready, games: [{ key, teamId, teamName, title, sport, sportLabel,
+                      start, live, replay, channels: [{ streamId, name, epgChannelId }] }] }
 -->
 <component name="SearchTask" extends="Task">
   <interface>
@@ -36,9 +41,12 @@
     <field id="matchRequest" type="assocarray" alwaysNotify="true" />
     <field id="matchResult" type="assocarray" alwaysNotify="true" />
     <field id="selfTest" type="boolean" value="false" />
+    <field id="gamesRequest" type="assocarray" alwaysNotify="true" />
+    <field id="gamesResult" type="assocarray" alwaysNotify="true" />
   </interface>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
   <script type="text/brightscript" uri="pkg:/components/services/ChannelMatch.brs" />
+  <script type="text/brightscript" uri="pkg:/components/services/MyTeams.brs" />
   <script type="text/brightscript" uri="pkg:/components/services/SearchTask.brs" />
 </component>

@@ -166,5 +166,10 @@ function settingsInfo() as Object
 end function
 
 sub onSettingsChosen(event as Object)
-    if event.GetData() = "account" then showSetup("")
+    choice = event.GetData()
+    if choice = "account"
+        showSetup("")
+    else if choice = "teams"
+        openTeams()
+    end if
 end sub

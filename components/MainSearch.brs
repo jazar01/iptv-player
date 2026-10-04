@@ -15,6 +15,7 @@ sub initSearch()
     m.searchTask.ObserveField("archive", "onArchiveList")
     m.searchTask.ObserveField("indexVersion", "onIndexChanged")
     m.searchTask.ObserveField("matchResult", "onMatchResult")
+    m.searchTask.ObserveField("gamesResult", "onGamesResult")
     ' match_selftest=1 in the manifest runs the channel-matching self-test.
     m.searchTask.selfTest = (CreateObject("roAppInfo").GetValue("match_selftest") = "1")
     m.searchTask.control = "RUN"
@@ -37,6 +38,8 @@ sub onIndexChanged()
         end for
     end for
     searchSend("matchRequest", { id: "saved", channels: channels, series: m.store.callFunc("getSavedSeries") })
+    ' The catalog changed: My Teams games may have too.
+    requestGames()
 end sub
 
 sub onMatchResult(event as Object)

@@ -39,10 +39,12 @@ end sub
 sub redraw()
     c = m.content
     if c = invalid then return
-    isChannel = (c.kind = "channel")
+    isChannel = (c.kind = "channel" or c.kind = "game")
     m.channel.visible = isChannel
     m.info.visible = not isChannel
-    if isChannel
+    if c.kind = "game"
+        drawGame(c)
+    else if isChannel
         drawChannel(c)
     else
         m.tick.control = "stop"
@@ -81,6 +83,47 @@ sub drawChannel(c as Object)
     else
         m.nextLine.text = ""
     end if
+end sub
+
+' My Teams game: matchup, sport and start (or LIVE with progress), REPLAY
+' tag, and the channel carrying it (+ how many more).
+sub drawGame(c as Object)
+    title = c.name
+    m.name.text = title
+    if title.Len() > 20 then m.name.font = m.titleFontSmall else m.name.font = m.titleFont
+    now = nowSeconds()
+    live = Instr(1, c.nowFlags, "live") > 0
+
+    detail = c.subtitle
+    if detail = "" then detail = c.teamName
+    if not live and c.nowStart > now then detail = detail + "   " + formatDayTime(c.nowStart)
+    m.nowTitle.text = detail
+    m.tags.text = UCase(c.nowFlags.Replace(",", "  "))
+
+    if live and c.nowEnd > c.nowStart
+        fraction = (now - c.nowStart) / (c.nowEnd - c.nowStart)
+        if fraction < 0 then fraction = 0
+        if fraction > 1 then fraction = 1
+        m.progressFill.width = 360 * fraction
+        m.progressTrack.visible = true
+        m.progressFill.visible = true
+        m.tick.control = "start"
+    else
+        m.progressTrack.visible = false
+        m.progressFill.visible = false
+        m.tick.control = "stop"
+    end if
+
+    line = ""
+    channels = c.channels
+    if type(channels) = "roArray" and channels.Count() > 0
+        if channels.Count() > 1
+            more = channels.Count() - 1
+            line = "+" + more.ToStr() + " more   "
+        end if
+        line = line + localizeName(asString(channels[0].name))
+    end if
+    m.nextLine.text = line
 end sub
 
 sub drawInfo(c as Object)

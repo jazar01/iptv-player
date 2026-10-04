@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Add or edit one team: name, sports (checklist), aliases, exclusions.
+  In:  team    { id, name, aliases[], exclusions[], sports[] } (empty to add)
+  Out: save    the edited team
+       remove  the team's ID, when Delete is chosen
+-->
+<component name="TeamEditScreen" extends="Group">
+  <interface>
+    <field id="team" type="assocarray" onChange="onTeam" />
+    <field id="save" type="assocarray" alwaysNotify="true" />
+    <field id="remove" type="string" alwaysNotify="true" />
+  </interface>
+
+  <children>
+    <Poster width="1920" height="1080" uri="pkg:/images/ui/background.jpg" />
+    <Label id="title" translation="[96,56]" width="1600" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" />
+    <LabelList id="menu" translation="[96,190]" itemSize="[1400,72]" numRows="7"
+      font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont"
+      color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png" />
+    <Label id="hint" translation="[96,720]" width="1500" wrap="true" font="font:SmallSystemFont" color="0x8C96A0FF" />
+    <Label id="status" translation="[96,820]" width="1500" wrap="true" font="font:MediumSystemFont" color="0xFFB060FF" />
+
+    <!-- Sports picker, shown over the menu. -->
+    <Group id="sportsPanel" visible="false">
+      <Poster translation="[1020,150]" width="760" height="860" uri="pkg:/images/ui/rounded.9.png" blendColor="0x1F2833F8" />
+      <Label translation="[1060,180]" width="680" font="font:MediumBoldSystemFont" color="0xFFFFFFFF" text="Sports" />
+      <Label translation="[1060,230]" width="680" font="font:SmallestSystemFont" color="0x8C96A0FF"
+        text="OK ticks or unticks. Back when done." />
+      <CheckList id="sports" translation="[1060,280]" itemSize="[680,52]" numRows="13"
+        font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont"
+        color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png" />
+    </Group>
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/teams/TeamEditScreen.brs" />
+</component>

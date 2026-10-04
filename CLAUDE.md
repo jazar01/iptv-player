@@ -52,6 +52,10 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   errors, progress reports every 30 s and on stop, live pause/rewind via the
   provider's timeshift `.m3u8` archive, kept `archiveLagSeconds` behind live).
 - `components/search/`: SearchScreen (MiniKeyboard plus results list).
+- `components/teams/`: TeamsScreen and TeamEditScreen (Settings → My Teams).
+- `components/services/MyTeams.brs`: finds saved teams' games in event-channel
+  names; runs in SearchTask (`gamesRequest` / `gamesResult`). MainTeams.brs
+  asks for games, labels replays and wires the screens.
 - `components/services/StateStore.*`: interface functions called via
   `callFunc`. Every mutation saves immediately and returns true only if it
   persisted.
@@ -165,4 +169,10 @@ is the final check.
   once, episode titles without the repeated series name and S01E01 code, via
   episodeTitlePrefix in data/guide-rules.json). Checked on a Roku: Home, Live
   TV list, series page, player strip (by eye).
-- Not yet built: the Later features in the requirements.
+- My Teams step 1 built (requirements: Later features, My Teams, "Built"):
+  Settings → My Teams, games from event-channel names (`MyTeams.brs` in
+  SearchTask, rules `myTeams` and `nameTimes` in data/guide-rules.json),
+  home row, replays, channel chooser, starts-later prompt. Saved state is
+  schema 4. Checked on a Roku: teams saved, a game found and listed.
+- Not yet built: My Teams step 2 (network broadcasts; needs the user's ABC
+  affiliate), usage-based ordering, off-device backup and sync.

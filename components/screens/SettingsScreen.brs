@@ -1,11 +1,14 @@
 sub init()
     m.menu = m.top.FindNode("menu")
     m.details = m.top.FindNode("details")
-    m.actions = ["account"]
+    m.actions = ["teams", "account"]
+    titles = ["My Teams", "Account and device name"]
 
     content = CreateObject("roSGNode", "ContentNode")
-    item = content.CreateChild("ContentNode")
-    item.title = "Account and device name"
+    for each title in titles
+        item = content.CreateChild("ContentNode")
+        item.title = title
+    end for
     m.menu.content = content
 
     m.menu.ObserveField("itemSelected", "onSelected")

@@ -7,7 +7,7 @@
     { "text": "ᴸᶦᵛᵉ", "flag": "live" },
     { "text": "ᴺᵉʷ", "flag": "new" }
   ],
-  "nameTimesComment": "Event times written into channel names, shown in the Roku's local time instead. pattern: a regex whose capture groups are listed in order (year, month, day, hour, minute, ampm); zone: a key in timezones. A missing year means the current year. The first matching rule wins.",
+  "nameTimesComment": "Event times written into channel names: shown in the Roku's local time, and used by My Teams. pattern: a regex whose capture groups are listed in order (year, month, monthName, day, hour, minute, ampm); zone: a key in timezones. A missing year means the current year. The first matching rule wins. display: false uses a rule for My Teams only, without rewriting the name.",
   "nameTimes": [
     {
       "comment": "NFL Game Pass style: 'NFL GP 03 | Rams @ Eagles (2026-10-04 17:00:00)'. UTC: a 1:00 PM ET kickoff is listed as 17:00.",
@@ -20,8 +20,75 @@
       "pattern": "\\((\\d{1,2})\\.(\\d{1,2}) (\\d{1,2}):(\\d{2}) ?([AP]M) ET\\)",
       "order": ["month", "day", "hour", "minute", "ampm"],
       "zone": "America/New_York"
+    },
+    {
+      "comment": "'NCAAF 01: #7 Alabama vs. #16 Mississippi State @ 3 Oct 12:00 PM ET'.",
+      "pattern": "@ (\\d{1,2}) ([A-Za-z]{3})[a-z]* (\\d{1,2}):(\\d{2}) ?([AP]M) ET\\b",
+      "order": ["day", "monthName", "hour", "minute", "ampm"],
+      "zone": "America/New_York"
+    },
+    {
+      "comment": "'NHL 01: Winnipeg Jets vs Detroit Red Wings @ Oct 04 01:00 PM ET', 'OHL 01 | ... OCT 04 01:00PM ET'.",
+      "pattern": "(?:@ )?\\b([A-Za-z]{3})[a-z]* (\\d{1,2}) (\\d{1,2}):(\\d{2}) ?([AP]M) ET\\b",
+      "order": ["monthName", "day", "hour", "minute", "ampm"],
+      "zone": "America/New_York"
+    },
+    {
+      "comment": "'DAZN UK 02: Força Lleida vs. CB San Pablo Burgos @ 4 Oct 11:00 AM London'.",
+      "pattern": "@ (\\d{1,2}) ([A-Za-z]{3})[a-z]* (\\d{1,2}):(\\d{2}) ?([AP]M) London\\b",
+      "order": ["day", "monthName", "hour", "minute", "ampm"],
+      "zone": "Europe/London"
+    },
+    {
+      "comment": "No zone given ('NBA 01: Nuggets vs Jazz @ 4 Oct 07:00 PM'): the provider's usual US Eastern.",
+      "pattern": "@ (\\d{1,2}) ([A-Za-z]{3})[a-z]* (\\d{1,2}):(\\d{2}) ?([AP]M)(?! *[A-Za-z])",
+      "order": ["day", "monthName", "hour", "minute", "ampm"],
+      "zone": "America/New_York"
     }
   ],
+  "myTeamsComment": "My Teams: games for saved teams found in event-channel names. eventCategories: live categories to scan (regexes on the category name). sports: the fixed sport list. sportRules: first pattern matching the category name plus channel name (lower case) decides the sport. separators: how a matchup's two sides are joined. replayWords: names containing these are replays. laterLanguages: channels with these words are listed after the others for the same game. Times in hours.",
+  "myTeams": {
+    "eventCategories": ["^sports\\s*\\|", "^ppv\\b"],
+    "skipCategories": ["\\bteams\\b", "\\breplays?\\b"],
+    "sports": [
+      { "id": "football", "label": "Football" },
+      { "id": "basketball", "label": "Basketball" },
+      { "id": "baseball", "label": "Baseball" },
+      { "id": "hockey", "label": "Hockey" },
+      { "id": "soccer", "label": "Soccer" },
+      { "id": "volleyball", "label": "Volleyball" },
+      { "id": "softball", "label": "Softball" },
+      { "id": "fieldhockey", "label": "Field hockey" },
+      { "id": "lacrosse", "label": "Lacrosse" },
+      { "id": "rugby", "label": "Rugby" },
+      { "id": "tennis", "label": "Tennis" },
+      { "id": "golf", "label": "Golf" },
+      { "id": "racing", "label": "Racing" },
+      { "id": "fighting", "label": "Boxing / MMA" }
+    ],
+    "sportRules": [
+      { "pattern": "field hockey", "sport": "fieldhockey" },
+      { "pattern": "volleyball", "sport": "volleyball" },
+      { "pattern": "softball", "sport": "softball" },
+      { "pattern": "lacrosse", "sport": "lacrosse" },
+      { "pattern": "rugby|\\bnrl\\b|super league", "sport": "rugby" },
+      { "pattern": "baseball|\\bmlb\\b|\\bmilb\\b", "sport": "baseball" },
+      { "pattern": "basketball|\\bnba\\b|\\bwnba\\b|\\bncaab\\b|\\bncaaw b\\b", "sport": "basketball" },
+      { "pattern": "hockey|\\bnhl\\b|\\bahl\\b|\\bohl\\b|\\bwhl\\b|\\bchl\\b|\\bqmjhl\\b", "sport": "hockey" },
+      { "pattern": "soccer|\\bmls\\b|\\bepl\\b|premier league|la ?liga|serie a|bundesliga|ligue ?1|uefa|fifa|\\befl\\b|super league|champions league", "sport": "soccer" },
+      { "pattern": "football|\\bnfl\\b|\\bncaaf\\b|\\bcfb\\b|redzone", "sport": "football" },
+      { "pattern": "tennis|\\batp\\b|\\bwta\\b", "sport": "tennis" },
+      { "pattern": "golf|\\bpga\\b|\\blpga\\b", "sport": "golf" },
+      { "pattern": "\\bf1\\b|formula|nascar|indycar|motogp|rally|\\bwrc\\b|motocross|speedway|racing", "sport": "racing" },
+      { "pattern": "\\bufc\\b|boxing|\\bmma\\b|fight", "sport": "fighting" }
+    ],
+    "separators": [" vs\\.? ", " v ", " @ ", " at "],
+    "replayWords": "replay|encore|re-air|rebroadcast|highlights|recap|classic",
+    "laterLanguages": "spanish|español|espanol|portugu|french|punjabi|\\(es\\)",
+    "liveHours": 3.5,
+    "lookbackHours": 4,
+    "aheadHours": 24
+  },
   "episodeTitleComment": "Episode titles often repeat the series name and code ('The Last Kingdom (2015) - S01E01 - Episode 1'). In the episode list, everything up to and including a match of this pattern is dropped ('Episode 1'), unless that would leave nothing.",
   "episodeTitlePrefix": "^.*\\bS\\d{1,2}\\s?E\\d{1,3}\\b\\s*[-:|]?\\s*",
   "channelMatchingComment": "Re-finding saved channels and series after the provider renumbers them. Names are compared lower-case, with these patterns (regexes) removed first, then punctuation; so 'ESPN (1080p)' matches 'ESPN HD'.",
