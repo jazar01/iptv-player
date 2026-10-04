@@ -30,6 +30,7 @@
 
     <function name="markWatched" />
     <function name="markUnwatched" />
+    <function name="removeFromContinue" />
     <function name="getSeriesProgress" />
     <function name="getSeriesList" />
 

@@ -6,6 +6,7 @@
        programs  EpgService update { streamId, now, upcoming }, applied in place
   Out: selected  itemSummary of the chosen card
        options   itemSummary when * is pressed on a channel
+       removeContinue  itemSummary when * is pressed on a Continue Watching card
        visibleChannels  stream IDs of channel cards on screen (for EpgService)
 -->
 <component name="HomeScreen" extends="Group">
@@ -14,6 +15,7 @@
     <field id="programs" type="assocarray" onChange="onPrograms" alwaysNotify="true" />
     <field id="selected" type="assocarray" alwaysNotify="true" />
     <field id="options" type="assocarray" alwaysNotify="true" />
+    <field id="removeContinue" type="assocarray" alwaysNotify="true" />
     <field id="visibleChannels" type="array" />
   </interface>
 

@@ -293,6 +293,29 @@ function markWatched(entry as Object) as Boolean
     return persist()
 end function
 
+' * on a Continue Watching card. Movie: its saved position goes. Series: it
+' leaves the row (no current episode) and its episodes' positions go, but the
+' watched ranges stay; playing an episode later brings it back.
+' entry: { resumeKind: "movie" | "episode", itemId, seriesId }
+function removeFromContinue(entry as Object) as Boolean
+    if entry.resumeKind = "movie"
+        removeResume("movie", toInt(entry.itemId))
+    else
+        seriesId = toInt(entry.seriesId)
+        s = findSeries(seriesId)
+        if s <> invalid
+            s.current = invalid
+            s.updatedAt = nowSeconds()
+        end if
+        kept = []
+        for each r in m.doc.resume
+            if not (r.kind = "episode" and toInt(r.seriesId) = seriesId) then kept.Push(r)
+        end for
+        m.doc.resume = kept
+    end if
+    return persist()
+end function
+
 ' Episodes only (manual). Leaves `current` alone.
 function markUnwatched(entry as Object) as Boolean
     s = findSeries(toInt(entry.seriesId))

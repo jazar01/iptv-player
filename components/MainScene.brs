@@ -126,6 +126,7 @@ function createSection(name as String) as Object
         screen = CreateObject("roSGNode", "HomeScreen")
         screen.ObserveField("selected", "onItemSelected")
         screen.ObserveField("options", "onToggleFavorite")
+        screen.ObserveField("removeContinue", "onRemoveContinue")
         screen.ObserveField("visibleChannels", "onVisibleChannels")
     else if name = "settings"
         screen = CreateObject("roSGNode", "SettingsScreen")

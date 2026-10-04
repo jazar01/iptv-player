@@ -64,6 +64,18 @@ sub onToggleFavorite(event as Object)
     if search <> invalid then search.favoriteIds = favoriteIdSet()
 end sub
 
+' * on a Continue Watching card: take it off the row (watched history stays).
+sub onRemoveContinue(event as Object)
+    item = event.GetData()
+    if m.store.callFunc("removeFromContinue", item)
+        showToast("Removed " + item.name + " from Continue Watching")
+    else
+        showToast("Couldn't save the change. Storage may be full.")
+    end if
+    refreshHome()
+    updateCatalogTags()
+end sub
+
 ' ---------------------------------------------------------------------------
 ' Now/next
 
