@@ -22,6 +22,8 @@
       "zone": "America/New_York"
     }
   ],
+  "episodeTitleComment": "Episode titles often repeat the series name and code ('The Last Kingdom (2015) - S01E01 - Episode 1'). In the episode list, everything up to and including a match of this pattern is dropped ('Episode 1'), unless that would leave nothing.",
+  "episodeTitlePrefix": "^.*\\bS\\d{1,2}\\s?E\\d{1,3}\\b\\s*[-:|]?\\s*",
   "channelMatchingComment": "Re-finding saved channels and series after the provider renumbers them. Names are compared lower-case, with these patterns (regexes) removed first, then punctuation; so 'ESPN (1080p)' matches 'ESPN HD'.",
   "channelMatching": {
     "ignorePatterns": [

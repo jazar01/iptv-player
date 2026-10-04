@@ -6,7 +6,7 @@
   </interface>
 
   <children>
-    <Rectangle id="bg" width="400" height="220" color="0x1E252DFF" />
+    <Poster id="bg" width="400" height="220" uri="pkg:/images/ui/rounded.9.png" blendColor="0x1F2833FF" />
 
     <Group id="channel">
       <Label id="name" translation="[20,14]" width="360" font="font:MediumBoldSystemFont" color="0xFFFFFFFF" />

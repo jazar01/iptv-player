@@ -31,7 +31,9 @@ end sub
 sub onInfo()
     info = m.top.info
     title = asString(info.name)
-    if toInt(info.year) > 0 then title = title + "  (" + toInt(info.year).ToStr() + ")"
+    ' Many providers already put the year in the name.
+    year = toInt(info.year)
+    if year > 0 and Instr(1, title, year.ToStr()) = 0 then title = title + "  (" + year.ToStr() + ")"
     m.title.text = title
 
     m.seasons = []
@@ -90,12 +92,27 @@ sub showSeason(index as Integer)
         node.season = e.season
         node.episode = e.episode
         node.name = e.name
+        node.displayName = episodeTitle(e.name)
         node.ext = e.ext
         node.duration = e.duration
     end for
     m.episodeList.content = content
     applyProgress()
 end sub
+
+' "The Last Kingdom (2015) - S01E01 - Episode 1" -> "Episode 1", using the
+' episodeTitlePrefix rule from data/guide-rules.json. Display only.
+function episodeTitle(name as String) as String
+    if m.episodePrefix = invalid
+        m.episodePrefix = false
+        json = ParseJson(ReadAsciiFile("pkg:/data/guide-rules.json"))
+        if type(json) = "roAssociativeArray" and asString(json.episodeTitlePrefix) <> "" then m.episodePrefix = CreateObject("roRegex", json.episodeTitlePrefix, "i")
+    end if
+    if type(m.episodePrefix) <> "roRegex" then return name
+    short = m.episodePrefix.Replace(name, "").Trim()
+    if short = "" then return name
+    return short
+end function
 
 sub onProgress()
     applyProgress()

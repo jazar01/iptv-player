@@ -25,7 +25,8 @@
   <children>
     <MiniKeyboard id="keyboard" translation="[96,190]" />
     <MarkupList id="resultList" translation="[720,190]" itemComponentName="CatalogItem"
-      itemSize="[1104,64]" itemSpacing="[0,4]" numRows="12" vertFocusAnimationStyle="floatingFocus" />
+      itemSize="[1104,64]" itemSpacing="[0,4]" numRows="12" vertFocusAnimationStyle="floatingFocus"
+      focusBitmapUri="pkg:/images/ui/row-focus.9.png" />
     <Label id="status" translation="[740,210]" width="1080" wrap="true"
       font="font:MediumSystemFont" color="0xA0A8B0FF" text="Type to search channels, movies and series." />
     <Timer id="typingDelay" duration="0.35" />

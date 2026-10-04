@@ -13,6 +13,15 @@ sub init()
     m.infoTrack = m.top.FindNode("infoTrack")
     m.infoFill = m.top.FindNode("infoFill")
 
+    ' Card titles: explicit sizes (the named system fonts are too close in
+    ' size to help); long names get the smaller one.
+    m.titleFont = CreateObject("roSGNode", "Font")
+    m.titleFont.uri = "font:BoldSystemFontFile"
+    m.titleFont.size = 36
+    m.titleFontSmall = CreateObject("roSGNode", "Font")
+    m.titleFontSmall.uri = "font:BoldSystemFontFile"
+    m.titleFontSmall.size = 28
+
     m.tick = m.top.FindNode("tick")
     m.tick.ObserveField("fire", "redraw")
     m.content = invalid
@@ -42,7 +51,10 @@ sub redraw()
 end sub
 
 sub drawChannel(c as Object)
-    m.name.text = localizeName(c.name)
+    name = localizeName(c.name)
+    m.name.text = name
+    ' Long names (event channels with times) step down a size so more fits.
+    if name.Len() > 20 then m.name.font = m.titleFontSmall else m.name.font = m.titleFont
     now = nowSeconds()
 
     if c.nowTitle <> "" and c.nowEnd > now

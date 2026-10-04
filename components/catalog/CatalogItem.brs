@@ -29,12 +29,12 @@ sub onTag()
     m.tag.text = m.content.tag
 end sub
 
-' Light text normally; dark text on the white focus bar.
+' Brighter text on the focused row's highlight.
 sub applyColors()
     if m.top.listHasFocus and m.top.focusPercent > 0.5
-        m.num.color = "0x3A444EFF"
-        m.name.color = "0x101418FF"
-        m.tag.color = "0x7A4E00FF"
+        m.num.color = "0xC8D0D8FF"
+        m.name.color = "0xFFFFFFFF"
+        m.tag.color = "0xFFD36BFF"
     else
         m.num.color = "0x8C96A0FF"
         m.name.color = "0xE6EAEEFF"

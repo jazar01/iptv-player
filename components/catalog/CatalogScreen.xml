@@ -30,9 +30,11 @@
   <children>
     <LabelList id="categoryList" translation="[96,170]" itemSize="[560,60]" numRows="14"
       font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont"
-      color="0xD0D6DCFF" focusedColor="0x101418FF" vertFocusAnimationStyle="floatingFocus" />
+      color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" vertFocusAnimationStyle="floatingFocus"
+      focusBitmapUri="pkg:/images/ui/row-focus.9.png" />
     <MarkupList id="itemList" translation="[720,170]" itemComponentName="CatalogItem"
-      itemSize="[1104,64]" itemSpacing="[0,4]" numRows="12" vertFocusAnimationStyle="floatingFocus" />
+      itemSize="[1104,64]" itemSpacing="[0,4]" numRows="12" vertFocusAnimationStyle="floatingFocus"
+      focusBitmapUri="pkg:/images/ui/row-focus.9.png" />
     <Label id="status" translation="[740,190]" width="1080" wrap="true"
       font="font:MediumSystemFont" color="0xA0A8B0FF" text="Loading categories ..." />
     <!-- Load a category after focus rests on it briefly, not on every step. -->

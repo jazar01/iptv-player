@@ -105,6 +105,15 @@ Home-screen logo and splash: `.\scripts\make-icons.ps1` draws them into
 `images/` (colors and text at the top of the script); the manifest points at
 them.
 
+UI images (focus highlights, rounded panels, background, player fade, top-bar
+mark): `.\scripts\make-ui-assets.ps1` draws them into `images/ui/`. Rounded
+shapes are Roku 9-patch `.9.png` files; `rounded.9.png` is white and tinted
+per use with `blendColor`. Focused cards use `card-focus.9.png`, focused
+list rows `row-focus.9.png` (light text on a dark highlight).
+
+Screenshots come back all black while video plays, and for the rest of that
+app session; restart the app (Home, then reopen) before screenshotting.
+
 Screenshot of the Roku screen (app must be running):
 `.\scripts\screenshot.ps1` saves to `out\screenshot-<time>.jpg`.
 
@@ -150,4 +159,10 @@ is the final check.
 - Channel matching built: favorites, Recently Viewed and series are re-found
   after a provider renumbering. Self-test passed on a Roku against the real
   catalog; a real renumbering hasn't happened yet.
-- Not yet built: the visual pass, and the Later features in the requirements.
+- Visual pass (own design, no mockup): gradient background, rounded cards and
+  panels, one focus style (blue outline on cards, dark highlight with blue bar
+  on list rows), top-bar logo mark, player fade, tidier series page (year
+  once, episode titles without the repeated series name and S01E01 code, via
+  episodeTitlePrefix in data/guide-rules.json). Checked on a Roku: Home, Live
+  TV list, series page, player strip (by eye).
+- Not yet built: the Later features in the requirements.

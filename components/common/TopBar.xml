@@ -13,8 +13,9 @@
   </interface>
 
   <children>
-    <Group id="tabs" translation="[96,52]" />
-    <Rectangle id="underline" translation="[96,104]" width="180" height="4" color="0x4DA3FFFF" visible="false" />
+    <Poster id="logo" translation="[96,46]" width="64" height="48" uri="pkg:/images/ui/logo-mark.png" />
+    <Group id="tabs" translation="[196,52]" />
+    <Rectangle id="underline" translation="[196,104]" width="160" height="4" color="0x4DA3FFFF" visible="false" />
     <Label id="clock" translation="[1424,52]" width="400" horizAlign="right"
       font="font:MediumSystemFont" color="0xD0D6DCFF" />
     <Timer id="clockTimer" duration="10" repeat="true" />

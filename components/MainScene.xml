@@ -10,13 +10,13 @@
 -->
 <component name="MainScene" extends="Scene">
   <children>
-    <Rectangle id="background" width="1920" height="1080" color="0x101418FF" />
+    <Poster id="background" width="1920" height="1080" uri="pkg:/images/ui/background.jpg" />
     <Group id="screenHost" />
     <TopBar id="topBar" visible="false" />
     <Group id="overlayHost" />
 
     <Group id="toast" visible="false">
-      <Rectangle translation="[460,950]" width="1000" height="72" color="0x2A333DF0" />
+      <Poster translation="[460,950]" width="1000" height="72" uri="pkg:/images/ui/rounded.9.png" blendColor="0x2E3946FF" />
       <Label id="toastText" translation="[480,950]" width="960" height="72"
         horizAlign="center" vertAlign="center" font="font:SmallSystemFont" color="0xFFFFFFFF" />
     </Group>

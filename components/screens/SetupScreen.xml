@@ -15,7 +15,7 @@
 
   <children>
     <!-- Shown as an overlay, so it covers the top bar and current section. -->
-    <Rectangle width="1920" height="1080" color="0x101418FF" />
+    <Poster width="1920" height="1080" uri="pkg:/images/ui/background.jpg" />
     <Label id="title" translation="[160,120]" width="1600"
       font="font:LargeBoldSystemFont" color="0xFFFFFFFF"
       text="Set up IPTV Player" />
@@ -25,7 +25,7 @@
 
     <LabelList id="menu" translation="[160,300]" itemSize="[1200,80]"
       font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont"
-      color="0xD0D6DCFF" focusedColor="0x101418FF" />
+      color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png" />
 
     <Label id="status" translation="[160,780]" width="1600" wrap="true"
       font="font:MediumSystemFont" color="0xFFB060FF" />

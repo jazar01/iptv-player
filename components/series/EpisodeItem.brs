@@ -12,7 +12,8 @@ sub onItemContent()
     if m.content = invalid then return
     m.content.ObserveFieldScoped("stateText", "onState")
     m.num.text = "E" + m.content.episode.ToStr()
-    m.name.text = m.content.name
+    m.name.text = m.content.displayName
+    if m.name.text = "" then m.name.text = m.content.name
     onState()
 end sub
 
@@ -20,11 +21,12 @@ sub onState()
     if m.content = invalid then return
     m.state.text = m.content.stateText
     if m.top.listHasFocus and m.top.focusPercent > 0.5
-        ' Dark text on the white focus bar.
-        m.num.color = "0x3A444EFF"
-        m.name.color = "0x101418FF"
-        m.state.color = "0x1E3A5FFF"
-        if m.content.state = "progress" then m.state.color = "0x7A4E00FF"
+        ' Brighter text on the focused row's highlight.
+        m.num.color = "0xC8D0D8FF"
+        m.name.color = "0xFFFFFFFF"
+        m.state.color = "0x7CC0FFFF"
+        if m.content.state = "progress" then m.state.color = "0xFFD36BFF"
+        if m.content.state = "watched" then m.state.color = "0xA0AAB4FF"
         return
     end if
     m.num.color = "0x8C96A0FF"

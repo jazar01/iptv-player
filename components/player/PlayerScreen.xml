@@ -45,7 +45,7 @@
     <Video id="video" width="1920" height="1080" />
 
     <Group id="liveOverlay" visible="false">
-      <Rectangle translation="[0,730]" width="1920" height="350" color="0x000000C8" />
+      <Poster translation="[0,640]" width="1920" height="440" uri="pkg:/images/ui/fade-bottom.png" />
       <Label id="modeLine" translation="[96,750]" width="1728" font="font:SmallBoldSystemFont" color="0xFFC94DFF" />
       <Label id="channelName" translation="[96,800]" width="1300" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" />
       <Label id="channelPos" translation="[1424,812]" width="400" horizAlign="right"
@@ -60,7 +60,7 @@
     </Group>
 
     <Group id="errorPanel" visible="false">
-      <Rectangle translation="[360,330]" width="1200" height="420" color="0x1E252DF0" />
+      <Poster translation="[360,330]" width="1200" height="420" uri="pkg:/images/ui/rounded.9.png" blendColor="0x1F2833F2" />
       <Label translation="[420,380]" width="1080" font="font:LargeBoldSystemFont" color="0xFFFFFFFF"
         text="Can't play this" />
       <Label id="errorMessage" translation="[420,460]" width="1080" height="200" wrap="true"

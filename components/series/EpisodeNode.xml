@@ -6,6 +6,8 @@
     <field id="season" type="integer" />
     <field id="episode" type="integer" />
     <field id="name" type="string" />
+    <!-- name without the repeated series name and S01E01 code, for the list -->
+    <field id="displayName" type="string" />
     <field id="ext" type="string" />
     <field id="duration" type="integer" />
     <field id="state" type="string" />

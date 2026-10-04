@@ -1,7 +1,8 @@
 sub init()
     m.sections = ["home", "live", "movies", "series", "search", "settings"]
     names = ["Home", "Live TV", "Movies", "Series", "Search", "Settings"]
-    m.TAB_WIDTH = 220
+    m.TAB_WIDTH = 200
+    m.TABS_X = 196
 
     tabs = m.top.FindNode("tabs")
     m.labels = []
@@ -48,12 +49,14 @@ sub highlight()
     for i = 0 to m.labels.Count() - 1
         if i = current
             m.labels[i].color = "0xFFFFFFFF"
+            m.labels[i].font = "font:MediumBoldSystemFont"
         else
             m.labels[i].color = "0x8C96A0FF"
+            m.labels[i].font = "font:MediumSystemFont"
         end if
     end for
     m.underline.visible = focused
-    m.underline.translation = [96 + m.index * m.TAB_WIDTH, 104]
+    m.underline.translation = [m.TABS_X + m.index * m.TAB_WIDTH, 104]
 end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
