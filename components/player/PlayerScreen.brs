@@ -301,6 +301,11 @@ sub onPrograms()
     if m.liveOverlay.visible then drawOverlay()
 end sub
 
+' "Favorite 3 of 12" changes when * adds or removes this channel.
+sub onChannelLabel()
+    if m.liveOverlay.visible then m.channelPos.text = m.top.channelLabel
+end sub
+
 sub showOverlay()
     if m.play = invalid or m.play.kind <> "live" then return
     drawOverlay()
@@ -335,9 +340,9 @@ sub drawOverlay()
     if m.mode = "timeshift"
         m.hints.text = "Play/Pause, Rewind, Fast-forward: move through the archive     Back: return to live"
     else if canRewind()
-        m.hints.text = "Up / Down: change favorite     Play/Pause: pause     Rewind: go back     *: show this again     Back: close"
+        m.hints.text = "Up/Down: change favorite    *: add/remove favorite    Play/Pause: pause    Rewind: go back    OK: show this    Back: close"
     else
-        m.hints.text = "Up / Down: change favorite channel     *: show this again     Back: close"
+        m.hints.text = "Up / Down: change favorite     *: add/remove favorite     OK: show this again     Back: close"
     end if
 
     m.channelName.text = localizeName(asString(m.play.name))
@@ -404,7 +409,13 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     else if key = "fastforward" and m.mode = "live"
         showNote("You're watching live.")
         return true
-    else if key = "options" or key = "OK" or key = "info"
+    else if key = "options"
+        ' * adds or removes the channel being watched as a favorite, like *
+        ' in every channel list. MainScene saves it and updates channelLabel.
+        m.top.toggleFavorite = { streamId: m.play.id, name: m.play.name, epgChannelId: asString(m.play.epgChannelId) }
+        showOverlay()
+        return true
+    else if key = "OK" or key = "info"
         showOverlay()
         return true
     end if

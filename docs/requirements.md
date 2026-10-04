@@ -81,7 +81,7 @@ The top bar holds Home, Live TV, Movies, Series, Search and Settings, plus a clo
 **Navigation behavior**
 
 - Returning from playback puts focus back on the same card in the same row.
-- The `*` options button adds or removes a favorite from any channel list.
+- The `*` options button adds or removes a favorite from any channel list, and for the channel being watched in the player.
 - While a live channel plays, channel up/down moves through favorites.
 
 **Speed**

@@ -201,6 +201,7 @@ sub startPlayer(play as Object, position as Integer)
         m.player.ObserveField("failed", "onPlayerFailed")
         m.player.ObserveField("channelStep", "onChannelStep")
         m.player.ObserveField("liveViewed", "onLiveViewed")
+        m.player.ObserveField("toggleFavorite", "onPlayerToggleFavorite")
         m.player.ObserveField("closed", "onPlayerClosed")
         pushOverlay(m.player)
     end if
@@ -281,6 +282,13 @@ end sub
 sub onLiveViewed(event as Object)
     channel = event.GetData()
     if not m.store.callFunc("addRecent", channel) then print "[main] WARNING: could not save recently viewed "; channel.name
+end sub
+
+' * during live playback: same as * in a channel list, then update the
+' player's "Favorite N of M".
+sub onPlayerToggleFavorite(event as Object)
+    onToggleFavorite(event)
+    if m.player <> invalid and m.playing <> invalid then m.player.channelLabel = favoriteLabel(m.playing.id)
 end sub
 
 ' Up / Down during live playback: next / previous favorite. From a channel

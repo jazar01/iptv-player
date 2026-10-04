@@ -14,6 +14,7 @@
   Out: progress      { play, position, duration, finished } every 30 s and on stop (not live)
        failed        { play, code, message } when the Video node errors
        channelStep   +1 / -1 when Up / Down is pressed during live playback
+       toggleFavorite { streamId, name, epgChannelId } when * is pressed during live playback
        liveViewed    { streamId, name, epgChannelId } after a minute on a live channel
        closed        true when the user leaves the player
 
@@ -29,7 +30,8 @@
   <interface>
     <field id="content" type="assocarray" onChange="onContent" />
     <field id="programs" type="assocarray" onChange="onPrograms" alwaysNotify="true" />
-    <field id="channelLabel" type="string" />
+    <field id="channelLabel" type="string" onChange="onChannelLabel" />
+    <field id="toggleFavorite" type="assocarray" alwaysNotify="true" />
     <field id="errorText" type="string" onChange="onErrorText" />
     <field id="progress" type="assocarray" alwaysNotify="true" />
     <field id="failed" type="assocarray" alwaysNotify="true" />
