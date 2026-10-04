@@ -81,31 +81,29 @@ sub onItemSelected()
 end sub
 
 ' Report the Favorites cards on screen (plus one either side) so EpgService
-' fetches guide data for those only.
+' fetches guide data for those only. Covers every row of channel cards
+' (Favorites, Recently Viewed): the focused row from the focused card, the
+' others from their start.
 sub updateVisible()
     content = m.list.content
     if content = invalid then return
-    favRow = -1
-    for i = 0 to m.rowIds.Count() - 1
-        if m.rowIds[i] = "favorites" then favRow = i
-    end for
-    if favRow < 0 then return
-
-    start = 0
     focus = m.list.rowItemFocused
-    if type(focus) = "roArray" and focus.Count() = 2 and focus[0] = favRow and focus[1] > 0 then start = focus[1] - 1
 
     ids = []
     key = ""
-    row = content.GetChild(favRow)
-    for i = start to start + 6
-        if i < row.GetChildCount()
-            node = row.GetChild(i)
-            if node.kind = "channel"
-                ids.Push(node.streamId)
-                key += node.streamId.ToStr() + ","
+    for r = 0 to content.GetChildCount() - 1
+        row = content.GetChild(r)
+        start = 0
+        if type(focus) = "roArray" and focus.Count() = 2 and focus[0] = r and focus[1] > 0 then start = focus[1] - 1
+        for i = start to start + 6
+            if i < row.GetChildCount()
+                node = row.GetChild(i)
+                if node.kind = "channel"
+                    ids.Push(node.streamId)
+                    key += node.streamId.ToStr() + ","
+                end if
             end if
-        end if
+        end for
     end for
     if key <> m.lastVisibleKey
         m.lastVisibleKey = key

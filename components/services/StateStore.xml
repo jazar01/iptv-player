@@ -20,6 +20,9 @@
     <function name="addFavorite" />
     <function name="removeFavorite" />
 
+    <function name="getRecent" />
+    <function name="addRecent" />
+
     <function name="getResume" />
     <function name="getPosition" />
     <function name="savePosition" />

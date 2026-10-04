@@ -6,7 +6,7 @@
 ' services: { store: StateStore, epg: EpgService }
 
 function homeRowModules() as Object
-    return [favoritesRow(), continueWatchingRow()]
+    return [favoritesRow(), continueWatchingRow(), recentRow()]
 end function
 
 function buildHomeRows(services as Object) as Object
@@ -31,22 +31,27 @@ function favoritesRow() as Object
 end function
 
 function favoritesRowItems(services as Object) as Object
-    favorites = services.store.callFunc("getFavorites")
+    return channelItems(services, services.store.callFunc("getFavorites"))
+end function
+
+' Saved channel records { streamId, name, epgChannelId } -> channel cards,
+' with now/next from EpgService's cache where it has it.
+function channelItems(services as Object, channels as Object) as Object
     ids = []
-    for each f in favorites
-        ids.Push(toInt(f.streamId))
+    for each c in channels
+        ids.Push(toInt(c.streamId))
     end for
     programs = services.epg.callFunc("getPrograms", ids)
 
     items = []
-    for each f in favorites
-        id = toInt(f.streamId)
+    for each c in channels
+        id = toInt(c.streamId)
         item = {
             kind: "channel"
             itemKey: "live:" + id.ToStr()
             streamId: id
-            name: asString(f.name)
-            epgChannelId: asString(f.epgChannelId)
+            name: asString(c.name)
+            epgChannelId: asString(c.epgChannelId)
         }
         entry = programs[id.ToStr()]
         if entry <> invalid
@@ -56,6 +61,31 @@ function favoritesRowItems(services as Object) as Object
         items.Push(item)
     end for
     return items
+end function
+
+' ---------------------------------------------------------------------------
+' Recently Viewed: live channels watched for about a minute, newest first,
+' leaving out channels already in Favorites.
+
+function recentRow() as Object
+    return {
+        id: "recent"
+        title: "Recently Viewed"
+        emptyText: "Channels you watch will appear here."
+        items: recentRowItems
+    }
+end function
+
+function recentRowItems(services as Object) as Object
+    favoriteIds = {}
+    for each f in services.store.callFunc("getFavorites")
+        favoriteIds[toInt(f.streamId).ToStr()] = true
+    end for
+    channels = []
+    for each r in services.store.callFunc("getRecent")
+        if not favoriteIds.DoesExist(toInt(r.streamId).ToStr()) then channels.Push(r)
+    end for
+    return channelItems(services, channels)
 end function
 
 ' ---------------------------------------------------------------------------

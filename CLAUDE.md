@@ -136,5 +136,9 @@ is the final check.
   provider's timeshift archive. Verified on a Roku: search, short pause,
   rewind and back to live on an SD channel, readable highlighted rows.
   Known limit: HD archives fail on this Roku (one-minute segments of ~45 MB
-  exceed its ~31.6 MB video buffer); the app says so and suggests SD.- Not yet built: channel matching (re-matching favorites after renumbering),
+  exceed its ~31.6 MB video buffer); the app says so and suggests SD.
+- Recently Viewed row (after Continue Watching): live channels watched for a
+  minute, favorites left out, up to 15. Saved state is schema 3. Row drawn on
+  a Roku; a channel being added after a minute not yet tried.
+- Not yet built: channel matching (re-matching favorites after renumbering),
   the visual pass, and the Later features in the requirements.

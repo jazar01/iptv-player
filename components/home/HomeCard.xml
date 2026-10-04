@@ -1,30 +1,30 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<!-- One 400x240 card in a home row or the Favorites grid. Content: HomeItem. -->
+<!-- One 400x220 card in a home row or the Favorites grid. Content: HomeItem. -->
 <component name="HomeCard" extends="Group">
   <interface>
     <field id="itemContent" type="node" onChange="onItemContent" />
   </interface>
 
   <children>
-    <Rectangle id="bg" width="400" height="240" color="0x1E252DFF" />
+    <Rectangle id="bg" width="400" height="220" color="0x1E252DFF" />
 
     <Group id="channel">
-      <Label id="name" translation="[20,16]" width="360" font="font:MediumBoldSystemFont" color="0xFFFFFFFF" />
-      <Label id="nowTitle" translation="[20,66]" width="360" height="80" wrap="true" maxLines="2"
+      <Label id="name" translation="[20,14]" width="360" font="font:MediumBoldSystemFont" color="0xFFFFFFFF" />
+      <Label id="nowTitle" translation="[20,58]" width="360" height="72" wrap="true" maxLines="2"
         font="font:SmallSystemFont" color="0xD0D6DCFF" />
-      <Label id="tags" translation="[20,148]" width="360" font="font:SmallestBoldSystemFont" color="0xFF7A6BFF" />
-      <Rectangle id="progressTrack" translation="[20,180]" width="360" height="6" color="0x3A444EFF" />
-      <Rectangle id="progressFill" translation="[20,180]" width="0" height="6" color="0x4DA3FFFF" />
-      <Label id="nextLine" translation="[20,198]" width="360" font="font:SmallestSystemFont" color="0x8C96A0FF" />
+      <Label id="tags" translation="[20,128]" width="360" font="font:SmallestBoldSystemFont" color="0xFF7A6BFF" />
+      <Rectangle id="progressTrack" translation="[20,160]" width="360" height="6" color="0x3A444EFF" />
+      <Rectangle id="progressFill" translation="[20,160]" width="0" height="6" color="0x4DA3FFFF" />
+      <Label id="nextLine" translation="[20,176]" width="360" font="font:SmallestSystemFont" color="0x8C96A0FF" />
     </Group>
 
     <Group id="info" visible="false">
-      <Label id="infoTitle" translation="[20,16]" width="360" wrap="true" maxLines="2"
+      <Label id="infoTitle" translation="[20,14]" width="360" wrap="true" maxLines="2"
         font="font:MediumBoldSystemFont" color="0xFFFFFFFF" />
-      <Label id="infoText" translation="[20,120]" width="360" wrap="true" maxLines="2"
+      <Label id="infoText" translation="[20,108]" width="360" wrap="true" maxLines="2"
         font="font:SmallSystemFont" color="0xA0A8B0FF" />
-      <Rectangle id="infoTrack" translation="[20,198]" width="360" height="6" color="0x3A444EFF" />
-      <Rectangle id="infoFill" translation="[20,198]" width="0" height="6" color="0x4DA3FFFF" />
+      <Rectangle id="infoTrack" translation="[20,184]" width="360" height="6" color="0x3A444EFF" />
+      <Rectangle id="infoFill" translation="[20,184]" width="0" height="6" color="0x4DA3FFFF" />
     </Group>
 
     <!-- Keeps the progress bar moving while the card is on screen. -->

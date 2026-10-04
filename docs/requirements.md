@@ -61,14 +61,16 @@ All devices share one account, so the connection limit can be exceeded. When the
 
 ## Home screen and navigation
 
-The home screen opens on fixed rows in a fixed order: Favorites, then Continue Watching. My Teams is added later, below Favorites, moving to the top only while a game is live or about to start.
+The home screen opens on fixed rows in a fixed order: Favorites, Continue Watching, then Recently Viewed. My Teams is added later, below Favorites, moving to the top only while a game is live or about to start.
 
 The top bar holds Home, Live TV, Movies, Series, Search and Settings, plus a clock. A reference mockup exists for the TV layout at 1920×1080.
 
 **Rows**
 
 - **Favorites:** each channel shows the current program, a progress bar and the next program, from `get_short_epg` for visible channels only.
-- **Continue Watching:** movies and series with time left; series point to the next unwatched episode.- Each row is a self-contained module that supplies its own content, so new rows slot in without reworking the screen.
+- **Continue Watching:** movies and series with time left; series point to the next unwatched episode.
+- **Recently Viewed:** live channels watched for about a minute or more, newest first, up to 15. Channels already in Favorites are left out. Cards look like Favorites cards (now, progress, next), and `*` adds a channel to Favorites. Saved per device with the other state, so it draws without the network.
+- Each row is a self-contained module that supplies its own content, so new rows slot in without reworking the screen.
 
 **Long rows**
 
@@ -163,7 +165,7 @@ All saved state is one versioned JSON document per device, shaped so it can late
 
 ```json
 {
-  "schema": 2,
+  "schema": 3,
   "deviceId": "<uuid>",
   "deviceName": "Living room",
   "credentials": { "server": "…", "username": "…", "password": "…" },
@@ -172,9 +174,12 @@ All saved state is one versioned JSON document per device, shaped so it can late
   "resume": [
     { "kind": "movie", "id": 777, "name": "…", "ext": "mp4", "position": 2210, "duration": 7680, "updatedAt": 0 },
     { "kind": "episode", "id": 901, "name": "…", "ext": "mkv", "seriesId": 55, "season": 2, "episode": 5, "position": 1234, "duration": 2640, "updatedAt": 0 }
-  ]
+  ],
+  "recent": [ { "streamId": 20271, "name": "ESPN 2", "epgChannelId": "ESPN2.us", "updatedAt": 0 } ]
 }
 ```
+
+Schema 3 added `recent`, the Recently Viewed channels (newest `updatedAt` first, at most 15).
 
 Schema 2 (milestone 3) added `name` and `ext` to resume entries and the episode details to `series.current`, so Continue Watching draws and plays without the network. `series.current` is the episode to continue (in progress or next unwatched); its position lives in the matching `resume` entry. A series whose last episode is watched has `current: null` and leaves Continue Watching.
 
@@ -183,7 +188,9 @@ Schema 2 (milestone 3) added `name` and `ext` to resume entries and the episode 
 | Timestamps | `updatedAt` from `roDateTime().AsSeconds()` on every record. |
 | Deletions | Marked `deleted` with a timestamp, not removed, so a later sync cannot resurrect them. Cleared after a few weeks while storage is local-only. |
 | Watch history | Episode ranges per season (`S1:1-10,S2:1-4`), about 60 bytes per series. Merges as a union. |
-| Resume | Newest copy wins. Capped at about 50 entries, oldest dropped. Names capped at 60 characters to save registry space. || Times | Stored in UTC. |
+| Resume | Newest copy wins. Capped at about 50 entries, oldest dropped. Names capped at 60 characters to save registry space. |
+| Recently viewed | Per device, like usage scores; not merged across devices. Capped at 15. The first thing trimmed when the registry is nearly full. |
+| Times | Stored in UTC. |
 
 Later features add fields to this document: favorite teams, and a separate per-device usage-score table. The schema number increases with each change.
 

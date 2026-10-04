@@ -6,7 +6,7 @@
        programs  EpgService update { streamId, now, upcoming }, applied in place
   Out: selected  itemSummary of the chosen card
        options   itemSummary when * is pressed on a channel
-       visibleChannels  stream IDs of Favorites cards on screen (for EpgService)
+       visibleChannels  stream IDs of channel cards on screen (for EpgService)
 -->
 <component name="HomeScreen" extends="Group">
   <interface>
@@ -19,10 +19,11 @@
 
   <children>
     <!-- 96px left gutter; a 400px card plus 30px gap means the fifth card is
-         cut off at the right edge, showing there is more. -->
+         cut off at the right edge, showing there is more. Three 300px rows
+         (label + 220px card) fit below the top bar. -->
     <RowList id="list" translation="[0,170]" itemComponentName="HomeCard"
-      numRows="3" itemSize="[1920,330]"
-      rowItemSize="[[400,240]]" rowItemSpacing="[[30,0]]"
+      numRows="3" itemSize="[1920,300]"
+      rowItemSize="[[400,220]]" rowItemSpacing="[[30,0]]"
       focusXOffset="[96]" rowLabelOffset="[[96,14]]"
       showRowLabel="[true]" showRowCounter="[true]"
       rowLabelFont="font:MediumBoldSystemFont" rowLabelColor="0xD0D6DCFF"

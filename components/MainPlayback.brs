@@ -200,6 +200,7 @@ sub startPlayer(play as Object, position as Integer)
         m.player.ObserveField("progress", "onPlayerProgress")
         m.player.ObserveField("failed", "onPlayerFailed")
         m.player.ObserveField("channelStep", "onChannelStep")
+        m.player.ObserveField("liveViewed", "onLiveViewed")
         m.player.ObserveField("closed", "onPlayerClosed")
         pushOverlay(m.player)
     end if
@@ -273,6 +274,13 @@ sub onConnectionCheck(res as Object)
     if result.maxConnections > 0 and result.activeConnections >= result.maxConnections
         m.player.errorText = "All " + result.maxConnections.ToStr() + " connections on this account are in use. Stop watching on another TV, then try again."
     end if
+end sub
+
+' A minute on a live channel: add it to Recently Viewed. Home refreshes when
+' the player closes.
+sub onLiveViewed(event as Object)
+    channel = event.GetData()
+    if not m.store.callFunc("addRecent", channel) then print "[main] WARNING: could not save recently viewed "; channel.name
 end sub
 
 ' Up / Down during live playback: next / previous favorite. From a channel

@@ -14,6 +14,7 @@
   Out: progress      { play, position, duration, finished } every 30 s and on stop (not live)
        failed        { play, code, message } when the Video node errors
        channelStep   +1 / -1 when Up / Down is pressed during live playback
+       liveViewed    { streamId, name, epgChannelId } after a minute on a live channel
        closed        true when the user leaves the player
 
   Live modes: "live" -> Play/Pause pauses ("paused") -> Play continues from the
@@ -32,7 +33,9 @@
     <field id="errorText" type="string" onChange="onErrorText" />
     <field id="progress" type="assocarray" alwaysNotify="true" />
     <field id="failed" type="assocarray" alwaysNotify="true" />
-    <field id="channelStep" type="integer" alwaysNotify="true" />    <field id="closed" type="boolean" alwaysNotify="true" />
+    <field id="channelStep" type="integer" alwaysNotify="true" />
+    <field id="liveViewed" type="assocarray" alwaysNotify="true" />
+    <field id="closed" type="boolean" alwaysNotify="true" />
   </interface>
 
   <children>
@@ -68,7 +71,10 @@
     <!-- An archive stream that never starts playing counts as failed. Generous:
          the provider's archive segments are a full minute each. -->
     <Timer id="timeshiftTimeout" duration="30" />
-    <Timer id="saveTimer" duration="30" repeat="true" />  </children>
+    <Timer id="saveTimer" duration="30" repeat="true" />
+    <!-- A live channel counts as viewed (Recently Viewed) after a minute. -->
+    <Timer id="viewedTimer" duration="60" />
+  </children>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
   <script type="text/brightscript" uri="pkg:/components/player/PlayerScreen.brs" />

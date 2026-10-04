@@ -2,7 +2,8 @@
 ' docs/requirements.md). Records carry updatedAt; deletions are tombstones.
 
 sub init()
-    m.SCHEMA = 2
+    m.SCHEMA = 3
+    m.RECENT_CAP = 15
     m.RESUME_CAP = 50
     m.TOMBSTONE_DAYS = 28
     m.STALE_SERIES_DAYS = 30
@@ -92,6 +93,29 @@ function findFavorite(streamId as Integer) as Dynamic
         if toInt(f.streamId) = streamId then return f
     end for
     return invalid
+end function
+
+' ---------------------------------------------------------------------------
+' Recently viewed live channels (watched for about a minute). Newest first,
+' capped; per device and least important, so trimmed first when space runs
+' short.
+
+function getRecent() as Object
+    list = []
+    list.Append(m.doc.recent)
+    list.SortBy("updatedAt", "r")
+    return list
+end function
+
+' channel: { streamId, name, epgChannelId }
+function addRecent(channel as Object) as Boolean
+    id = toInt(channel.streamId)
+    kept = [{ streamId: id, name: shortName(channel.name), epgChannelId: asString(channel.epgChannelId), updatedAt: nowSeconds() }]
+    for each r in getRecent()
+        if toInt(r.streamId) <> id and kept.Count() < m.RECENT_CAP then kept.Push(r)
+    end for
+    m.doc.recent = kept
+    return persist()
 end function
 
 ' ---------------------------------------------------------------------------
@@ -351,6 +375,7 @@ function newDocument() as Object
         favorites: []
         series: []
         resume: []
+        recent: []
     }
 end function
 
@@ -360,7 +385,7 @@ sub normalizeDocument(doc as Object)
     if toInt(doc.schema) > m.SCHEMA then print "[state] WARNING: saved schema "; doc.schema; " is newer than this build ("; m.SCHEMA; ")"
     if asString(doc.deviceId) = "" then doc.deviceId = CreateObject("roDeviceInfo").GetRandomUUID()
     doc.deviceName = asString(doc.deviceName)
-    for each key in ["favorites", "series", "resume"]
+    for each key in ["favorites", "series", "resume", "recent"]
         if type(doc[key]) <> "roArray" then doc[key] = []
     end for
 
@@ -373,6 +398,12 @@ sub normalizeDocument(doc as Object)
         end for
         doc.schema = 2
         print "[state] migrated saved state to schema 2"
+    end if
+
+    ' Schema 3: `recent` (Recently Viewed channels), created empty above.
+    if toInt(doc.schema) < 3
+        doc.schema = 3
+        print "[state] migrated saved state to schema 3"
     end if
 end sub
 
@@ -404,6 +435,14 @@ function writeWithTrimming() as String
     print "[state] registry nearly full; trimming"
     purgeTombstones(&h7FFFFFFF)
     result = m.backend.write(m.doc)
+
+    ' Recently viewed first: least important, rebuilt by normal viewing.
+    recent = m.doc.recent
+    recent.SortBy("updatedAt")
+    while result = "nospace" and recent.Count() > 0
+        recent.Shift()
+        result = m.backend.write(m.doc)
+    end while
 
     resume = m.doc.resume
     resume.SortBy("updatedAt")
