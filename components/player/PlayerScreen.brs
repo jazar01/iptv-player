@@ -132,6 +132,7 @@ sub onVideoState()
         code = m.video.errorCode
         detail = asString(m.video.errorStr)
         print "[player] error "; code; " "; redact(m.video.errorMsg); " / "; redact(detail)
+        logAudioTracks()
         message = friendlyError(code, httpStatus(detail))
         m.errorMessage.text = message
         m.errorPanel.visible = true
@@ -313,6 +314,19 @@ end sub
 sub onErrorCopySelected()
     i = m.errorCopyList.itemSelected
     if i >= 0 and i < m.errorCopyItems.Count() then m.top.copyChosen = m.errorCopyItems[i]
+end sub
+
+' Diagnostics for audio errors ("Unsupported AAC stream"): the stream's audio
+' tracks as the Video node sees them, and the formats it reports.
+sub logAudioTracks()
+    tracks = m.video.availableAudioTracks
+    if type(tracks) = "roArray"
+        print "[player] audio tracks: "; tracks.Count()
+        for each t in tracks
+            if type(t) = "roAssociativeArray" then print "[player]   track "; asString(t.Track); " lang="; asString(t.Language); " name="; asString(t.Name); " format="; asString(t.Format)
+        end for
+    end if
+    print "[player] audioFormat="; asString(m.video.audioFormat); " videoFormat="; asString(m.video.videoFormat)
 end sub
 
 sub onErrorText()
