@@ -68,7 +68,7 @@ The top bar holds Home, Live TV, Movies, Series, Search and Settings, plus a clo
 **Rows**
 
 - **Favorites:** each channel shows the current program, a progress bar and the next program, from `get_short_epg` for visible channels only.
-- **Continue Watching:** movies and series with time left; series point to the next unwatched episode. `*` on a card removes it: a movie's saved position is cleared; a series leaves the row and its saved positions are cleared, but its watched episodes are kept, and playing an episode again brings it back.
+- **Continue Watching:** movies and series with time left; series point to the next unwatched episode, skipping any marked watched by hand (a series with none left leaves the row). `*` on a card removes it: a movie's saved position is cleared; a series leaves the row and its saved positions are cleared, but its watched episodes are kept, and playing an episode again brings it back.
 - **Recently Viewed:** live channels watched for about a minute or more, newest first, up to 15. Channels already in Favorites are left out. Cards look like Favorites cards (now, progress, next), and `*` adds a channel to Favorites. Saved per device with the other state, so it draws without the network.
 - Each row is a self-contained module that supplies its own content, so new rows slot in without reworking the screen.
 

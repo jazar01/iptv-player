@@ -310,15 +310,17 @@ function normalizeSeason(season as Integer, list as Dynamic) as Object
     return { season: season, episodes: episodes }
 end function
 
-' Episode descriptor for the episode after episodeId, or invalid if it's the
-' last one (or the series info isn't loaded).
+' Episode descriptor for the first episode after episodeId that isn't marked
+' watched, or invalid if there's none (the series is finished) or the series
+' info isn't loaded.
 function nextEpisodeAfter(seriesId as Dynamic, episodeId as Dynamic) as Dynamic
     info = m.seriesInfo[toInt(seriesId).ToStr()]
     if info = invalid then return invalid
+    watched = m.store.callFunc("getSeriesProgress", seriesId).watched
     found = false
     for each s in info.seasons
         for each e in s.episodes
-            if found then return e
+            if found and not watched.DoesExist(e.season.ToStr() + ":" + e.episode.ToStr()) then return e
             if e.id = toInt(episodeId) then found = true
         end for
     end for
@@ -415,6 +417,13 @@ sub continueSeries(item as Object)
         showToast("That episode is no longer listed. Opening the series instead.")
         openSeries({ itemId: item.seriesId, name: item.seriesName, year: item.year })
         return
+    end if
+    ' Marked watched by hand since it became current (and not started): go on
+    ' to the next unwatched one.
+    progress = m.store.callFunc("getSeriesProgress", info.seriesId)
+    if progress.watched.DoesExist(ep.season.ToStr() + ":" + ep.episode.ToStr()) and not progress.resume.DoesExist(ep.id.ToStr())
+        nextEp = nextEpisodeAfter(info.seriesId, ep.id)
+        if nextEp <> invalid then ep = episodeSummaryFor(info, nextEp)
     end if
     playEpisode(ep, false)
 end sub
