@@ -173,7 +173,48 @@ function channelDetails(req as Object) as Object
             end for
         end if
     end if
+    ' No copies and asked for (a failed channel): similar channels by name.
+    result.similar = []
+    if result.copies.Count() = 0 and isTrue(req.similar) then result.similar = similarChannels(e)
     return result
+end function
+
+' Channels whose names share this one's main words, for a channel with no
+' copies ("Tennis Channel 2" -> Tennis Channel, Tennis Channel Plus). Main
+' words: the name after any provider prefix ("US | "), without quality tags,
+' punctuation, numbers or short words. Shorter names first, up to 15.
+function similarChannels(e as Object) as Object
+    name = e.name
+    bar = 0
+    p = Instr(1, name, "|")
+    while p > 0
+        bar = p
+        p = Instr(p + 1, name, "|")
+    end while
+    if bar > 0 then name = Mid(name, bar + 1)
+    words = []
+    for each w in matchKey(name, currentMatchRules()).Split(" ")
+        if w.Len() >= 3 and not CreateObject("roRegex", "^[0-9]+$", "").IsMatch(w) then words.Push(w)
+    end for
+    found = []
+    if words.Count() = 0 then return found
+    for each c in m.index.live
+        if c.itemId <> e.itemId
+            matched = true
+            for each w in words
+                if Instr(1, c.key, w) = 0
+                    matched = false
+                    exit for
+                end if
+            end for
+            if matched then found.Push({ streamId: c.itemId, name: c.name, epgChannelId: c.epgChannelId, archiveDays: c.archiveDays, length: c.name.Len() })
+        end if
+    end for
+    found.SortBy("length")
+    while found.Count() > 15
+        found.Pop()
+    end while
+    return found
 end function
 
 ' Live category ID -> name, from the cached category list.

@@ -15,6 +15,7 @@
        errorText     replaces the error message (e.g. after a connection-limit check)
        errorCopies   [{ streamId, name, epgChannelId, archiveDays }] other copies offered on
                      the error panel (OK on one: copyChosen)
+       errorCopiesLabel  heading for that list (set first): other copies, or similar channels
        channelInfo   channel info for the side panel (MainChannelInfo.brs); live stream
                      details are added here while it's open
   Out: progress      { play, position, duration, finished } every 30 s and on stop (not live)
@@ -54,6 +55,7 @@
     <field id="channelInfo" type="assocarray" onChange="onChannelInfo" />
     <field id="infoRequested" type="assocarray" alwaysNotify="true" />
     <field id="copyChosen" type="assocarray" alwaysNotify="true" />
+    <field id="errorCopiesLabel" type="string" />
     <field id="errorCopies" type="array" onChange="onErrorCopies" />
   </interface>
 

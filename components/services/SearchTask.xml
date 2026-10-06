@@ -40,9 +40,11 @@
   Out: localsResult  { id, market, ready, items: [get_live_streams-shaped items] } (ABC, CBS, NBC, FOX)
   In:  iconsRequest  { id, streamIds: [] }   logos for Home channel cards
   Out: iconsResult   { id, ready, icons: { "<streamId>": url or "" } }
-  In:  infoRequest   { id, streamId, market }   channel info
+  In:  infoRequest   { id, streamId, market, similar }   channel info (similar: also find
+                     channels with similar names when there are no copies)
   Out: infoResult    { id, streamId, found, name, icon, epgChannelId, archiveDays, category, local,
-                       copies: [{ streamId, name, epgChannelId, archiveDays }] }  (other copies: same guide ID, up to 15)
+                       copies: [{ streamId, name, epgChannelId, archiveDays }], similar: [same] }
+                     (copies: same guide ID; similar: names sharing the main words; up to 15 each)
   In:  marketsRequest { id }
   Out: marketsResult  { id, ready, markets: [{ key: "GA|Atlanta", label: "Atlanta, GA", stations: "ABC, CBS, NBC, FOX" }] }
 -->

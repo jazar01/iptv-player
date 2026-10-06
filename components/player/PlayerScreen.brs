@@ -295,6 +295,7 @@ sub onErrorCopies()
         item.title = title
     end for
     m.errorCopyList.content = content
+    if m.top.errorCopiesLabel <> "" then m.top.FindNode("copiesHead").text = m.top.errorCopiesLabel
     m.top.FindNode("errorBg").height = 680
     m.top.FindNode("copiesHead").visible = true
     m.errorCopyList.visible = true

@@ -36,7 +36,17 @@ sub onInfoResult(event as Object)
     result = event.GetData()
     if result.id = "failed"
         ' For the error panel (onPlayerFailed): only if that channel is still the one failing.
-        if m.player <> invalid and m.playing <> invalid and toInt(m.playing.id) = result.streamId and type(result.copies) = "roArray" then m.player.errorCopies = result.copies
+        if m.player = invalid or m.playing = invalid or toInt(m.playing.id) <> result.streamId then return
+        if type(result.copies) = "roArray" and result.copies.Count() > 0
+            print "[main] offering "; result.copies.Count(); " other copies"
+            m.player.errorCopiesLabel = "Try another copy of this channel   (OK to play)"
+            m.player.errorCopies = result.copies
+        else if type(result.similar) = "roArray" and result.similar.Count() > 0
+            ' No copies: channels with similar names (may be different programming).
+            print "[main] no copies; offering "; result.similar.Count(); " similar channels"
+            m.player.errorCopiesLabel = "No other copies. Similar channels   (OK to play)"
+            m.player.errorCopies = result.similar
+        end if
         return
     end if
     if m.infoFor = invalid or result.streamId <> m.infoFor.streamId then return
