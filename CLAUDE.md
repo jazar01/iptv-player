@@ -182,7 +182,7 @@ is the final check.
   SearchTask, rules `myTeams` and `nameTimes` in data/guide-rules.json),
   home row, replays, channel chooser, starts-later prompt. Saved state is
   schema 4. Checked on a Roku: teams saved, a game found and listed.
-- My Teams step 2 built: network broadcasts from the short guides of 16
+- My Teams step 2 built: network broadcasts from the full schedules of 16
   national channels (`myTeams.networks` by guide ID) plus the device's local
   ABC/CBS/NBC/FOX stations (Settings → Local stations, schema 5 `market`,
   stations found from provider channel names; the row can be switched off

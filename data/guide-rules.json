@@ -111,8 +111,9 @@
       { "epg": "truTV.us", "label": "truTV" }
     ],
     "networkAvoid": "backup|\\blbw\\b|low bw|\\bwest\\b|pacific|overflow",
+    "guideAction": "get_simple_data_table",
     "guideListings": 30,
-    "guideMaxAgeMinutes": 25
+    "guideMaxAgeMinutes": 60
   },
   "episodeTitleComment": "Episode titles often repeat the series name and code ('The Last Kingdom (2015) - S01E01 - Episode 1'). In the episode list, everything up to and including a match of this pattern is dropped ('Episode 1'), unless that would leave nothing.",
   "episodeTitlePrefix": "^.*\\bS\\d{1,2}\\s?E\\d{1,3}\\b\\s*[-:|]?\\s*",

@@ -258,7 +258,7 @@ A home-screen row of my favorite teams' games in the next 24 hours, for only the
 
 - **Favorite team record:** name, aliases (including mascot), exclusions, chosen sports, `updatedAt`, deleted flag.
 - **Event channels:** parse sport, matchup and start time from stream names in the selected sports categories.
-- **Network broadcasts:** short guide for about 15 national sports channels plus the preferred ABC affiliate.
+- **Network broadcasts:** the guide for about 15 national sports channels plus the preferred ABC affiliate.
 - **Matching:** title and description, title matches ranked higher. Only the sports categories I select are scanned.
 - **Sport mapping:** an editable rule table maps provider wording ("Volleyball:", "NCAAF", "College Football :") to one fixed sport list.
 - **Duplicates:** one card per game; other channels showing it are listed as fallbacks.
@@ -286,7 +286,7 @@ A home-screen row of my favorite teams' games in the next 24 hours, for only the
 
 - **Channels:** 16 national sports channels (ESPN, ESPN2, ESPNU, SEC, ACC, Big Ten, FS1, FS2, CBS Sports Network, NFL, MLB, NBA TV, NHL Network, TNT, TBS, truTV), listed by guide ID in `data/guide-rules.json` (`myTeams.networks`), plus the ABC, CBS, NBC and FOX stations of the device's market. Among copies of a feed, backup, low-bandwidth, West and overflow copies are skipped.
 - **Local market:** Settings → Local stations picks the device's market from a list built from the provider's local-station channels (`GA | Atlanta | ABC 2 WSB` in `US | Local ABC`; patterns `localCategories` and `localName` in the rules). Saved per device (schema 5, `market`); empty until chosen, since a default would be wrong in other homes. Atlanta resolves to ABC WSB, CBS WANF and WUPA, FOX WAGA, NBC WXIA.
-- **Guides:** each channel's next ~30 programs (`get_short_epg`) are saved to `cachefs:` through ApiTask, at most every 25 minutes, and searched in SearchTask: the title first; the description only when the title names a sport or a matchup (so talk shows that mention a team don't count), with the matchup taken from its first sentence.
+- **Guides:** each channel's whole schedule (`get_simple_data_table`, about 2–3 days, 70–170 listings) is saved to `cachefs:` through ApiTask, at most every hour, and searched in SearchTask: the title first; the description only when the title names a sport or a matchup (so talk shows that mention a team don't count), with the matchup taken from its first sentence. (Learned Oct 6, 2026: this provider ignores `get_short_epg`'s limit and sends only 4 listings, a few hours, so an evening NLDS game on FS1 was missed until the guides switched; the call is `guideAction` in `data/guide-rules.json`.) Listings that name a team but don't make a game are logged with the reason (`[teams]   skipped:`).
 - **Merging:** a network broadcast joins the event-channel card for the same game (same team and sport, within 90 minutes). The network channel is listed first, since it's always on, and its guide title and end time are used.
 - **"No channel" cards** aren't built: every source the app has comes with a channel, so they would need an outside schedule, which this feature avoids.
 - Verified on a Roku: the Braves–Dodgers game was found on FS1 and merged with its event channel.

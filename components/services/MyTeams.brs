@@ -166,6 +166,7 @@ function findGames(req as Object) as Object
     categories = eventCategoryNames()
     now = nowSeconds()
     timer = CreateObject("roTimespan")
+    m.teamSkips = []            ' listings naming a team that didn't make a game (logged)
 
     teams = []
     for each t in req.teams
@@ -193,6 +194,11 @@ function findGames(req as Object) as Object
                 ' Team words first: cheap, and rules out almost every channel.
                 if anyMatch(t.matchers, e.name) and not anyMatch(t.exclusions, e.name)
                     found = findNameTime(e.name, false)
+                    if found = invalid
+                        noteSkip(e.name, "no date and time in the name")
+                    else if found.utc < now - rules.lookbackSeconds or found.utc > now + rules.aheadSeconds
+                        noteSkip(e.name, "starts " + formatDayTime(found.utc) + ", outside the window")
+                    end if
                     if found <> invalid and found.utc >= now - rules.lookbackSeconds and found.utc <= now + rules.aheadSeconds
                         sport = detectSport(LCase(categoryName + " " + e.name), rules)
                         replay = rules.replay <> invalid and rules.replay.IsMatch(e.name)
@@ -200,16 +206,22 @@ function findGames(req as Object) as Object
                         info = { start: found.utc, ends: 0, title: gameTitle(e.name, found.text, t, rules), sport: sport, replay: replay }
                         channel = { streamId: e.itemId, name: e.name, epgChannelId: e.epgChannelId, network: false, later: later }
                         if sport <> ""
-                            if t.sports.Count() = 0 or t.sports.DoesExist(sport) then mergeGame(groups, t, info, channel, now, rules)
+                            if t.sports.Count() = 0 or t.sports.DoesExist(sport) then mergeGame(groups, t, info, channel, now, rules) else noteSkip(e.name, "sport " + sport + " isn't one of " + t.name + "'s")
                         else if t.nameMatcher.IsMatch(e.name)
                             mergeGame(groups, t, info, channel, now, rules)
                         else
                             ' Unknown sport and only an alias ("Atlanta"): too weak to
                             ' be a game on its own; it may join one found another way.
                             weak.Push({ team: t, info: info, channel: channel })
+                            noteSkip(e.name, "sport unknown and only an alias matched (can only join a game)")
                         end if
                     end if
                 end if
+            end for
+        else
+            ' Not an event category: say so if it looks like a game listing.
+            for each t in teams
+                if anyMatch(t.matchers, e.name) and findNameTime(e.name, false) <> invalid then noteSkip(e.name, "category " + e.categoryId + " isn't an event category")
             end for
         end if
     end for
@@ -244,6 +256,9 @@ function findGames(req as Object) as Object
         end if
     end for
     if locals <> "" then print "[teams]   local stations: "; locals
+    for each s in m.teamSkips
+        print "[teams]   skipped: "; s
+    end for
     for each g in result.games
         names = ""
         for each c in g.channels
@@ -254,6 +269,11 @@ function findGames(req as Object) as Object
     end for
     return result
 end function
+
+' Why a listing naming a team didn't become a game, for the console (first 20).
+sub noteSkip(name as String, reason as String)
+    if m.teamSkips <> invalid and m.teamSkips.Count() < 20 then m.teamSkips.Push(Left(name, 100) + "  -- " + reason)
+end sub
 
 ' info: { start, ends (0 if unknown), title, sport, replay }
 ' channel: { streamId, name, epgChannelId, network, later }
@@ -439,7 +459,8 @@ function listMarkets() as Object
 end function
 
 function networkGuideFile(streamId as Integer) as String
-    return "cachefs:/teams/guide_" + streamId.ToStr() + ".json"
+    ' "schedule": the whole-schedule guide (guideAction), not the old short one.
+    return "cachefs:/teams/schedule_" + streamId.ToStr() + ".json"
 end function
 
 sub addNetworkGames(groups as Object, teams as Object, networks as Object, now as Integer, rules as Object)
@@ -464,6 +485,7 @@ sub addNetworkGames(groups as Object, teams as Object, networks as Object, now a
                             ' Network programs must name their sport ("MLB Baseball",
                             ' "WNBA Basketball"), which keeps out news and talk shows.
                             sport = detectSport(LCase(text), rules)
+                            if sport = "" then noteSkip(n.label + ": " + title, "guide listing doesn't name its sport")
                             if sport <> "" and (t.sports.Count() = 0 or t.sports.DoesExist(sport))
                                 replay = rules.replay <> invalid and rules.replay.IsMatch(title)
                                 ' Matchup from the title, or from the description's first sentence.

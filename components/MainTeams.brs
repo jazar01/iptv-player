@@ -105,17 +105,23 @@ sub fetchNetworkGuides(networks as Object)
     if nowSeconds() - m.guideFetchedAt < maxAge then return
     listings = toInt(cfg.guideListings)
     if listings <= 0 then listings = 30
+    ' get_short_epg is capped by some providers (this one sends 4 listings,
+    ' a few hours); get_simple_data_table is the channel's whole schedule.
+    action = asString(cfg.guideAction)
+    if action = "" then action = "get_short_epg"
     m.guideFetchedAt = nowSeconds()
     m.guidePending = networks.Count()
     for each n in networks
+        params = { stream_id: n.streamId }
+        if action = "get_short_epg" then params.limit = listings
         sendRequest({
             id: "teamGuide"
-            action: "get_short_epg"
-            params: { stream_id: n.streamId, limit: listings }
+            action: action
+            params: params
             cacheFile: n.guideFile
             saveOnly: true
             maxAgeSeconds: maxAge
-            timeoutMs: 20000
+            timeoutMs: 30000
         })
     end for
 end sub
