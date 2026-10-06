@@ -319,15 +319,36 @@ Items within each row are ordered by a decaying score that combines recency and 
 - **Pinning:** `*` in the Favorites grid offers Pin to front / Unpin / Remove. Pinned favorites come first in the order they were pinned; pinning applies immediately.
 - **Recently Viewed** stays newest first (not part of usage ordering).
 
-### Off-device backup and sync
+### Off-device backup and sync (V2)
 
-A small web service I host stores each device's saved document.
+Planned for version 2; not started. Prompted by Oct 6, 2026, when a failed sideload removed the Basement Roku's dev app and with it all its saved state. Decisions so far:
 
-- GET and PUT of each device's JSON document.
-- A remote backend inside `StateStore`; sync on launch and after changes.
-- On a fresh install, offer "Restore from: Living room".
-- Merge record by record using `updatedAt`, honoring deletions.
-- The server can later compute results (full-guide search for My Teams) and push parsing-rule updates.
+**Service: interchangeable storage, nothing more.**
+
+- A tiny protocol, documented in the repo: `GET /devices`, `GET /devices/<id>`, `PUT /devices/<id>`. No provider-specific features.
+- The server stores sealed files only; encryption, merging and restore all happen on the Roku, so any host works.
+- Two implementations kept in the repo: a Cloudflare Worker (free tier, Workers KV) and a portable script that stores files in a folder (any PC, Pi, NAS or Docker). `scripts/test-backup-server.ps1` checks any host against the protocol before switching.
+- `scripts/backup-export.ps1` / `backup-import.ps1` keep a local copy of all backups and move them between hosts.
+
+**Switching hosts without touching the TVs.**
+
+- The app is built with a hostname you control (e.g. `backup.<your domain>`) and a household key, set once in `scripts/deploy.local.ps1` (git-ignored) and baked in at deploy. Moving providers is a DNS change (short TTL), with the same key on the new server.
+- Each backup is encrypted (AES) and every request signed (HMAC) on the Roku, so the key never travels and a plain-HTTP host is still safe. HTTPS is an extra layer, not a requirement, which keeps the choice of host open.
+- The TVs are the source of truth: each keeps its full state locally and re-sends its backup when the server's copy is out of date, so a new, empty server refills itself within one launch of each TV.
+
+**Never slows or blocks the Roku.**
+
+- Its own background Task: not the render thread, not ApiTask's provider request slots.
+- Local-first: StateStore saves to the registry as now; the backup is notified afterwards and nothing waits on it.
+- Batched uploads (latest version only, at most every few minutes), never while a stream is starting; ~5 s timeouts; backing off up to hours when unreachable; failures logged, never shown.
+- Launch never waits. Only a fresh install (no local state) asks the service, and only offers "Restore from: Basement / Family Room" if it answers within a couple of seconds; otherwise Settings → Restore from backup stays available.
+- Off entirely when no backup hostname is configured. Verified against a server that never answers before relying on it.
+
+**Sharing between TVs: some, not all (to decide).** The saved document already supports record-by-record merging (`updatedAt`, tombstones), so chosen kinds of records (for example favorites, teams, series favorites, watch progress) can merge across TVs while others stay per TV (device name, local market, Recently Viewed, usage ordering). Which ones is still open.
+
+**Still open:** the domain/hostname to use, and which records are shared.
+
+Later, the service could also compute results the Roku can't (full-guide search, e.g. for My Teams) and push parsing-rule updates.
 
 ## Open questions
 

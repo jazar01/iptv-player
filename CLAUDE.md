@@ -208,4 +208,5 @@ is the final check.
 - Local stations also in Search (first, tagged LOCAL) and Live TV (a
   "Local stations" first category answered by SearchTask localsRequest,
   LOCAL tags). Not yet checked on a Roku.
-- Not yet built: off-device backup and sync.
+- Not yet built: off-device backup and sync, planned for V2 (design and open
+  decisions in the requirements: "Off-device backup and sync (V2)").
