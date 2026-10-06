@@ -248,7 +248,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return true
     else if key = "options" and m.itemList.HasFocus()
         node = focusedItem()
-        if node <> invalid and m.top.kind = "live" then m.top.options = itemSummary(node)
+        if node <> invalid and (m.top.kind = "live" or m.top.kind = "series") then m.top.options = itemSummary(node)
         return true
     end if
     return false

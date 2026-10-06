@@ -18,6 +18,7 @@ function rowHint(rowId as String) as String
     if rowId = "favorites" then return "Press * to pin or remove a favorite."
     if rowId = "recent" then return "Press * to add a channel to Favorites."
     if rowId = "continue" then return "Press * to remove an item from Continue Watching."
+    if rowId = "favseries" then return "Press * to remove a series from Favorite Series."
     return ""
 end function
 
@@ -106,7 +107,7 @@ end sub
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if press and key = "options"
         node = focusedNode()
-        if node <> invalid and (node.kind = "channel" or node.kind = "resume") then m.top.options = itemSummary(node)
+        if node <> invalid and (node.kind = "channel" or node.kind = "resume" or node.kind = "series") then m.top.options = itemSummary(node)
         return true
     end if
     return false

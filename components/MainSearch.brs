@@ -203,5 +203,8 @@ function favoriteIdSet() as Object
     for each f in m.store.callFunc("getFavorites")
         ids[toInt(f.streamId).ToStr()] = true
     end for
+    for each s in m.store.callFunc("getFavoriteSeries")
+        ids["s" + toInt(s.seriesId).ToStr()] = true     ' favorite series: "s<id>"
+    end for
     return ids
 end function

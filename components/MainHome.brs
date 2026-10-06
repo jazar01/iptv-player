@@ -105,6 +105,10 @@ sub onToggleFavorite(event as Object)
 end sub
 
 sub toggleFavorite(channel as Object)
+    if asString(channel.kind) = "series"
+        toggleSeriesFavorite(channel)
+        return
+    end if
     if channel.streamId = invalid or channel.streamId = 0 then return
     if m.store.callFunc("isFavorite", channel.streamId)
         saved = m.store.callFunc("removeFavorite", channel.streamId)

@@ -229,6 +229,10 @@ sub drawInfo(c as Object)
             m.infoTrack.visible = true
             m.infoFill.visible = true
         end if
+    else if c.kind = "series"
+        ' Favorite Series: name (year), and where you are in it.
+        m.infoTitle.text = c.name
+        m.infoText.text = c.subtitle
     else if c.kind = "seeAll"
         m.infoTitle.text = "See all"
         m.infoText.text = c.message

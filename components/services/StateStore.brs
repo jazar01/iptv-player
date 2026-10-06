@@ -491,6 +491,41 @@ function remapEpisodes(seriesId as Dynamic, episodes as Object) as Boolean
     return persist()
 end function
 
+' Favorite series: a `favorite` mark on the series record (so re-matching
+' after a renumbering covers them, and they're never trimmed).
+' entry: { seriesId, name, year }
+function setSeriesFavorite(entry as Object, favorite as Boolean) as Boolean
+    id = toInt(entry.seriesId)
+    s = findSeries(id)
+    if s = invalid
+        if not favorite then return true
+        s = { seriesId: id, watched: "", current: invalid }
+        m.doc.series.Push(s)
+    end if
+    if asString(entry.name) <> "" then s.name = shortName(entry.name)
+    if toInt(entry.year) > 0 then s.year = toInt(entry.year)
+    if s.name = invalid then s.name = ""
+    if s.year = invalid then s.year = 0
+    s.favorite = favorite
+    s.deleted = false
+    s.updatedAt = nowSeconds()
+    return persist()
+end function
+
+function isSeriesFavorite(seriesId as Dynamic) as Boolean
+    s = findSeries(toInt(seriesId))
+    return s <> invalid and not isTrue(s.deleted) and isTrue(s.favorite)
+end function
+
+' [{ seriesId, name, year, current, watched }] for favorite series.
+function getFavoriteSeries() as Object
+    list = []
+    for each s in m.doc.series
+        if not isTrue(s.deleted) and isTrue(s.favorite) then list.Push(s)
+    end for
+    return list
+end function
+
 ' Every saved series (for re-matching), not only those in Continue Watching.
 function getSavedSeries() as Object
     list = []
@@ -910,12 +945,19 @@ function writeWithTrimming() as String
         result = m.backend.write(m.doc)
     end while
 
+    ' Stale series, oldest first; favorite series are never trimmed.
     series = m.doc.series
     series.SortBy("updatedAt")
     staleBefore = nowSeconds() - m.STALE_SERIES_DAYS * 86400
-    while result = "nospace" and series.Count() > 0 and toInt(series[0].updatedAt) < staleBefore
-        series.Shift()
-        result = m.backend.write(m.doc)
+    i = 0
+    while result = "nospace" and i < series.Count()
+        if toInt(series[i].updatedAt) >= staleBefore then exit while
+        if isTrue(series[i].favorite)
+            i = i + 1
+        else
+            series.Delete(i)
+            result = m.backend.write(m.doc)
+        end if
     end while
 
     return result

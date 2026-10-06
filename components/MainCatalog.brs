@@ -52,6 +52,59 @@ sub onLocalsResult(event as Object)
     end if
 end sub
 
+' ---------------------------------------------------------------------------
+' Favorite series: a "Favorite series" category first in the Series list
+' (while there are any), FAVORITE tags, and * to add or remove one from the
+' Series list, Search, a series page or the Home row.
+
+function seriesCategoriesWithFavorites(categories as Object) as Object
+    if m.store.callFunc("getFavoriteSeries").Count() = 0 then return categories
+    list = [{ category_id: "__favseries", category_name: "Favorite series" }]
+    list.Append(categories)
+    return list
+end function
+
+' The category's items, from saved state (get_series-shaped, by name).
+sub showFavoriteSeriesCategory()
+    screen = catalogScreen("series")
+    if screen = invalid then return
+    items = []
+    for each s in m.store.callFunc("getFavoriteSeries")
+        items.Push({ series_id: s.seriesId, name: s.name, year: s.year })
+    end for
+    items.SortBy("name", "i")
+    screen.items = { categoryId: "__favseries", items: items }
+end sub
+
+' item: { itemId (series ID), name, year } (seriesName preferred if present).
+sub toggleSeriesFavorite(item as Object)
+    seriesId = toInt(item.itemId)
+    if seriesId = 0 then seriesId = toInt(item.seriesId)
+    if seriesId = 0 then return
+    name = asString(item.seriesName)
+    if name = "" then name = asString(item.name)
+    favorite = not m.store.callFunc("isSeriesFavorite", seriesId)
+    if m.store.callFunc("setSeriesFavorite", { seriesId: seriesId, name: name, year: item.year }, favorite)
+        if favorite then showToast("Added " + name + " to Favorite Series") else showToast("Removed " + name + " from Favorite Series")
+    else
+        showToast("Couldn't save the change. Storage may be full.")
+    end if
+    onFavoriteSeriesChanged()
+end sub
+
+sub onFavoriteSeriesChanged()
+    refreshHome()
+    updateCatalogTags()
+    screen = catalogScreen("series")
+    if screen <> invalid and m.seriesCategories <> invalid
+        screen.categories = seriesCategoriesWithFavorites(m.seriesCategories)
+        showFavoriteSeriesCategory()    ' only shown if it's the open category
+    end if
+    search = m.sections.search
+    if search <> invalid then search.favoriteIds = favoriteIdSet()
+    if m.seriesScreen <> invalid then m.seriesScreen.isFavorite = m.store.callFunc("isSeriesFavorite", m.seriesScreenId)
+end sub
+
 ' Settings -> Local stations changed: refresh the Live TV entry and tags.
 sub onMarketChangedForCatalog()
     m.localIds = {}
@@ -121,6 +174,9 @@ sub onCatalogCategories(res as Object)
             if not res.fromCache then searchSend("load", { kind: "categories" })
             m.liveCategories = res.data
             screen.categories = liveCategoriesWithLocal(res.data)
+        else if kind = "series"
+            m.seriesCategories = res.data
+            screen.categories = seriesCategoriesWithFavorites(res.data)
         else
             screen.categories = res.data
         end if
@@ -135,6 +191,10 @@ sub onWantCategory(event as Object)
     id = event.GetData()
     if id = "__local"
         requestLocalStations("live")
+        return
+    end if
+    if id = "__favseries"
+        showFavoriteSeriesCategory()
         return
     end if
     sendRequest({
@@ -182,6 +242,9 @@ function catalogTags(kind as String) as Object
         for each s in m.store.callFunc("getSeriesList")
             tags[toInt(s.seriesId).ToStr()] = "WATCHING"
         end for
+        for each s in m.store.callFunc("getFavoriteSeries")
+            tags[toInt(s.seriesId).ToStr()] = "FAVORITE"
+        end for
     end if
     return tags
 end function
@@ -205,6 +268,7 @@ sub resetCatalogs()
     m.catalogState = {}
     m.seriesInfo = {}
     m.liveCategories = invalid
+    m.seriesCategories = invalid
 end sub
 
 ' ---------------------------------------------------------------------------
@@ -216,7 +280,9 @@ sub openSeries(item as Object)
     m.seriesScreen = CreateObject("roSGNode", "SeriesScreen")
     m.seriesScreen.ObserveField("selected", "onEpisodeSelected")
     m.seriesScreen.ObserveField("options", "onEpisodeOptions")
+    m.seriesScreen.ObserveField("favoriteToggle", "onSeriesFavoriteToggle")
     m.seriesScreenId = seriesId
+    m.seriesScreen.isFavorite = m.store.callFunc("isSeriesFavorite", seriesId)
     progress = m.store.callFunc("getSeriesProgress", seriesId)
     m.seriesScreen.focusEpisodeId = progress.currentEpisodeId
     m.seriesScreen.progress = progress
@@ -375,6 +441,10 @@ function episodeSummaryFor(info as Object, e as Object) as Object
         year: info.year
     }
 end function
+
+sub onSeriesFavoriteToggle(event as Object)
+    toggleSeriesFavorite(event.GetData())
+end sub
 
 sub onEpisodeSelected(event as Object)
     playEpisode(event.GetData(), true)

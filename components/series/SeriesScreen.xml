@@ -1,14 +1,17 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
   One series: seasons on the left, episodes on the right, each marked
-  watched, in progress or new. * marks an episode watched or unwatched.
+  watched, in progress or new. * on an episode marks it watched or unwatched;
+  * on the seasons adds the series to (or removes it from) Favorite Series.
 
   In:  info      { seriesId, name, year, seasons: [{ season, episodes: [{ id, season, episode, name, ext, duration }] }] }
        progress  StateStore getSeriesProgress() result
        focusEpisodeId  episode to focus when info arrives (the series' current one)
+       isFavorite  whether the series is in Favorite Series (shown in the title)
        status    message while loading or on error
   Out: selected  episode summary (see episodeSummary)
-       options   same, when * is pressed
+       options   same, when * is pressed on an episode
+       favoriteToggle  { itemId, name, year } when * is pressed on the seasons
 -->
 <component name="SeriesScreen" extends="Group">
   <interface>
@@ -20,13 +23,15 @@
     <field id="status" type="string" onChange="onStatus" alwaysNotify="true" />
     <field id="selected" type="assocarray" alwaysNotify="true" />
     <field id="options" type="assocarray" alwaysNotify="true" />
+    <field id="isFavorite" type="boolean" onChange="drawTitle" />
+    <field id="favoriteToggle" type="assocarray" alwaysNotify="true" />
   </interface>
 
   <children>
     <Poster width="1920" height="1080" uri="pkg:/images/ui/background.jpg" />
     <Label id="title" translation="[96,56]" width="1600" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" />
     <Label translation="[96,120]" width="1600" font="font:SmallSystemFont" color="0x8C96A0FF"
-      text="Press * to mark an episode watched or unwatched." />
+      text="* on an episode: mark it watched or unwatched.   * on the seasons: add to or remove from Favorite Series." />
     <LabelList id="seasonList" translation="[96,190]" itemSize="[300,64]" numRows="12"
       font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont"
       color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" vertFocusAnimationStyle="floatingFocus"

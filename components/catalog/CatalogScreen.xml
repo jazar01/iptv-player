@@ -12,7 +12,8 @@
        status      message shown where the item list goes
   Out: wantCategory category ID whose items should be loaded
        selected    { kind: "channel" | "movie" | "series", itemId, streamId, name, epgChannelId, ext, year }
-       options     same, when * is pressed (live only: toggles a favorite)
+       options     same, when * is pressed (live: favorite or channel info; series:
+                   add to or remove from Favorite Series)
 -->
 <component name="CatalogScreen" extends="Group">
   <interface>

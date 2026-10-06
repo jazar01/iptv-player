@@ -28,13 +28,21 @@ sub onStatus()
     m.status.visible = (m.top.status <> "")
 end sub
 
+' The title, marked when the series is a favorite.
+sub drawTitle()
+    title = asString(m.baseTitle)
+    if m.top.isFavorite then title = title + "   -   Favorite"
+    m.title.text = title
+end sub
+
 sub onInfo()
     info = m.top.info
     title = asString(info.name)
     ' Many providers already put the year in the name.
     year = toInt(info.year)
     if year > 0 and Instr(1, title, year.ToStr()) = 0 then title = title + "  (" + year.ToStr() + ")"
-    m.title.text = title
+    m.baseTitle = title
+    drawTitle()
 
     m.seasons = []
     m.shownSeason = -1
@@ -177,6 +185,11 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     else if key = "left" and m.episodeList.HasFocus()
         m.inEpisodes = false
         m.seasonList.SetFocus(true)
+        return true
+    else if key = "options" and m.seasonList.HasFocus()
+        ' * on the seasons: add the whole series to (or remove it from) Favorite Series.
+        info = m.top.info
+        if type(info) = "roAssociativeArray" then m.top.favoriteToggle = { itemId: info.seriesId, name: info.name, year: info.year }
         return true
     else if key = "options" and m.episodeList.HasFocus()
         i = m.episodeList.itemFocused

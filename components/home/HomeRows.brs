@@ -9,9 +9,9 @@
 ' below Favorites, or at the top while
 ' one of the games is live or starts within 30 minutes (requirements).
 function homeRowModules(services as Object) as Object
-    if not services.store.callFunc("getSettings").showMyTeams or services.store.callFunc("getTeams").Count() = 0 then return [favoritesRow(), continueWatchingRow(), recentRow()]
-    if gameIsOnSoon(services.games) then return [myTeamsRow(), favoritesRow(), continueWatchingRow(), recentRow()]
-    return [favoritesRow(), myTeamsRow(), continueWatchingRow(), recentRow()]
+    if not services.store.callFunc("getSettings").showMyTeams or services.store.callFunc("getTeams").Count() = 0 then return [favoritesRow(), continueWatchingRow(), favoriteSeriesRow(), recentRow()]
+    if gameIsOnSoon(services.games) then return [myTeamsRow(), favoritesRow(), continueWatchingRow(), favoriteSeriesRow(), recentRow()]
+    return [favoritesRow(), myTeamsRow(), continueWatchingRow(), favoriteSeriesRow(), recentRow()]
 end function
 
 function gameIsOnSoon(games as Dynamic) as Boolean
@@ -67,7 +67,9 @@ end function
 function buildHomeRows(services as Object) as Object
     rows = []
     for each module in homeRowModules(services)
-        rows.Push({ id: module.id, title: module.title, emptyText: module.emptyText, items: module.items(services) })
+        items = module.items(services)
+        ' Optional rows (hideWhenEmpty) only appear once they have something.
+        if items.Count() > 0 or not isTrue(module.hideWhenEmpty) then rows.Push({ id: module.id, title: module.title, emptyText: module.emptyText, items: items })
     end for
     return rows
 end function
@@ -329,6 +331,54 @@ function continueWatchingRowItems(services as Object) as Object
     end for
     for each e in ranked
         items.Push(e.item)
+    end for
+    return items
+end function
+
+' ---------------------------------------------------------------------------
+' Favorite Series: series marked with * (Series list, Search, a series
+' page), most watched first. Hidden while there are none.
+
+function favoriteSeriesRow() as Object
+    return {
+        id: "favseries"
+        title: "Favorite Series"
+        emptyText: ""
+        hideWhenEmpty: true
+        items: favoriteSeriesRowItems
+    }
+end function
+
+function favoriteSeriesRowItems(services as Object) as Object
+    list = services.store.callFunc("getFavoriteSeries")
+    list.SortBy("name", "i")
+    ordered = []
+    for i = 0 to list.Count() - 1
+        s = list[i]
+        ordered.Push({ s: s, sortKey: rankKey(usageScore(services.usage, "s" + toInt(s.seriesId).ToStr()), i) })
+    end for
+    ordered.SortBy("sortKey")
+    items = []
+    for each o in ordered
+        s = o.s
+        progress = "Not started"
+        if type(s.current) = "roAssociativeArray"
+            progress = "Next up:  S" + toInt(s.current.season).ToStr() + " E" + toInt(s.current.episode).ToStr()
+        else if asString(s.watched) <> ""
+            progress = "Watched"
+        end if
+        name = asString(s.name)
+        year = toInt(s.year)
+        if year > 0 and Instr(1, name, year.ToStr()) = 0 then name = name + " (" + year.ToStr() + ")"
+        items.Push({
+            kind: "series"
+            itemKey: "series:" + toInt(s.seriesId).ToStr()
+            itemId: toInt(s.seriesId)
+            name: name
+            seriesName: asString(s.name)
+            year: year
+            subtitle: progress
+        })
     end for
     return items
 end function

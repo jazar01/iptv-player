@@ -160,6 +160,10 @@ end sub
 
 sub onCatalogOptions(event as Object)
     channel = event.GetData()
+    if asString(channel.kind) = "series"
+        toggleSeriesFavorite(channel)      ' Series list: * adds or removes it
+        return
+    end if
     if channel.streamId = invalid or channel.streamId = 0 then return
     favLabel = "Add to Favorites"
     if m.store.callFunc("isFavorite", channel.streamId) then favLabel = "Remove from Favorites"

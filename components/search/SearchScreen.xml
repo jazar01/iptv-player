@@ -4,7 +4,7 @@
   movies, then series). Results update after a short pause in typing.
 
   In:  results    SearchTask results { text, items }
-       favoriteIds { "<streamId>": true }, to tag favorite channels
+       favoriteIds { "<streamId>": true, "s<seriesId>": true }, to tag favorite channels and series
        status     message shown where the results go
   Out: query      search text (after the typing pause)
        selected   { kind, itemId, streamId, name, epgChannelId, ext, year, archiveDays }

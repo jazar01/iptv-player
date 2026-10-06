@@ -120,7 +120,7 @@ end function
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if press and key = "options"
         node = itemAt(m.list.rowItemFocused)
-        if node <> invalid and node.kind = "channel" then m.top.options = itemSummary(node)
+        if node <> invalid and (node.kind = "channel" or node.kind = "series") then m.top.options = itemSummary(node)
         if node <> invalid and node.kind = "resume" then m.top.removeContinue = itemSummary(node)
         return true
     end if

@@ -82,6 +82,7 @@ function resultTag(node as Object) as String
         return "CHANNEL"
     end if
     if node.itemKind = "movie" then return "MOVIE"
+    if m.favoriteIds.DoesExist("s" + node.itemId.ToStr()) then return "FAVORITE"
     return "SERIES"
 end function
 
@@ -137,7 +138,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         i = m.resultList.itemFocused
         if i >= 0 and i < resultCount()
             node = m.resultList.content.GetChild(i)
-            if node.itemKind = "channel" then m.top.options = resultSummary(node)
+            if node.itemKind = "channel" or node.itemKind = "series" then m.top.options = resultSummary(node)
         end if
         return true
     end if
