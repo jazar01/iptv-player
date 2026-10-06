@@ -34,6 +34,11 @@ end sub
 
 sub onInfoResult(event as Object)
     result = event.GetData()
+    if result.id = "failed"
+        ' For the error panel (onPlayerFailed): only if that channel is still the one failing.
+        if m.player <> invalid and m.playing <> invalid and toInt(m.playing.id) = result.streamId and type(result.copies) = "roArray" then m.player.errorCopies = result.copies
+        return
+    end if
     if m.infoFor = invalid or result.streamId <> m.infoFor.streamId then return
     if result.found then m.infoFor.details = result
     deliverChannelInfo()

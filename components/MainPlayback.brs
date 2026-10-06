@@ -299,6 +299,8 @@ end sub
 ' instead of the generic message.
 sub onPlayerFailed()
     checkConnections("failed")
+    ' A live channel: offer its other copies on the error panel.
+    if m.playing <> invalid and m.playing.kind = "live" then searchSend("infoRequest", { id: "failed", streamId: m.playing.id, market: m.store.callFunc("getMarket").key })
 end sub
 
 ' How many of the account's connections are in use (player_api.php with no

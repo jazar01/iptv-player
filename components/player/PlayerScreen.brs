@@ -12,6 +12,9 @@ sub init()
     m.hints = m.top.FindNode("hints")
     m.errorPanel = m.top.FindNode("errorPanel")
     m.errorMessage = m.top.FindNode("errorMessage")
+    m.errorCopyList = m.top.FindNode("errorCopies")
+    m.errorCopyList.ObserveField("itemSelected", "onErrorCopySelected")
+    m.errorCopyItems = []
     m.overlayTimer = m.top.FindNode("overlayTimer")
     m.saveTimer = m.top.FindNode("saveTimer")
     m.timeshiftTimeout = m.top.FindNode("timeshiftTimeout")
@@ -57,6 +60,7 @@ sub onContent()
     m.programs = invalid
     m.finished = false
     m.errorPanel.visible = false
+    hideErrorCopies()
 
     ' Never print play.url: it contains the password.
     print "[player] "; play.kind; " "; play.id; " '"; play.name; "' from "; toInt(play.startPosition); " s"
@@ -273,6 +277,43 @@ function formatMbps(bps as Integer) as String
     tenths = Int(bps / 100000 + 0.5)
     return Int(tenths / 10).ToStr() + "." + (tenths mod 10).ToStr() + " Mbps"
 end function
+
+' ---------------------------------------------------------------------------
+' Other copies on the error panel (MainScene sends them for a failed live
+' channel). OK on one plays it.
+
+sub onErrorCopies()
+    list = m.top.errorCopies
+    if not m.errorPanel.visible or type(list) <> "roArray" or list.Count() = 0 then return
+    m.errorCopyItems = list
+    content = CreateObject("roSGNode", "ContentNode")
+    for each c in list
+        item = content.CreateChild("ContentNode")
+        title = localizeName(asString(c.name))
+        if toInt(c.archiveDays) > 0 then title = title + "   (rewind)"
+        item.title = title
+    end for
+    m.errorCopyList.content = content
+    m.top.FindNode("errorBg").height = 680
+    m.top.FindNode("copiesHead").visible = true
+    m.errorCopyList.visible = true
+    m.top.FindNode("errorBack").translation = [420, 960]
+    m.errorCopyList.SetFocus(true)
+end sub
+
+sub hideErrorCopies()
+    m.errorCopyItems = []
+    m.errorCopyList.visible = false
+    m.top.FindNode("copiesHead").visible = false
+    m.top.FindNode("errorBg").height = 420
+    m.top.FindNode("errorBack").translation = [420, 680]
+    if m.errorCopyList.HasFocus() then m.video.SetFocus(true)
+end sub
+
+sub onErrorCopySelected()
+    i = m.errorCopyList.itemSelected
+    if i >= 0 and i < m.errorCopyItems.Count() then m.top.copyChosen = m.errorCopyItems[i]
+end sub
 
 sub onErrorText()
     m.errorMessage.text = m.top.errorText
@@ -589,7 +630,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         end if
         return true
     end if
-    if m.play = invalid or m.play.kind <> "live" then return false
+    ' Error panel with other copies: Up/Down stay in its list.
+    if m.errorPanel.visible and m.errorCopyList.visible and (key = "up" or key = "down") then return true
 
     if key = "up"
         m.top.channelStep = 1

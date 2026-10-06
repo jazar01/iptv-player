@@ -13,6 +13,8 @@
        preview       { name, label } the channel Up/Down has reached, shown on the overlay
                      before its stream loads (MainScene loads it once the presses stop)
        errorText     replaces the error message (e.g. after a connection-limit check)
+       errorCopies   [{ streamId, name, epgChannelId, archiveDays }] other copies offered on
+                     the error panel (OK on one: copyChosen)
        channelInfo   channel info for the side panel (MainChannelInfo.brs); live stream
                      details are added here while it's open
   Out: progress      { play, position, duration, finished } every 30 s and on stop (not live)
@@ -23,7 +25,7 @@
        liveWatched   same, after channelViewSeconds playing (usage scores; surfing doesn't count)
        infoRequested { streamId, name, epgChannelId } when OK is pressed with the live
                      overlay already up (opens the channel info panel)
-       copyChosen    a copy picked from the panel's Other copies
+       copyChosen    a copy picked from the info panel's Other copies or the error panel
        closed        true when the user leaves the player
 
   Live modes: "live" -> Play/Pause pauses ("paused") -> Play continues from the
@@ -52,6 +54,7 @@
     <field id="channelInfo" type="assocarray" onChange="onChannelInfo" />
     <field id="infoRequested" type="assocarray" alwaysNotify="true" />
     <field id="copyChosen" type="assocarray" alwaysNotify="true" />
+    <field id="errorCopies" type="array" onChange="onErrorCopies" />
   </interface>
 
   <children>
@@ -74,12 +77,20 @@
     </Group>
 
     <Group id="errorPanel" visible="false">
-      <Poster translation="[360,330]" width="1200" height="420" uri="pkg:/images/ui/rounded.9.png" blendColor="0x1F2833F2" />
+      <Poster id="errorBg" translation="[360,330]" width="1200" height="420" uri="pkg:/images/ui/rounded.9.png" blendColor="0x1F2833F2" />
       <Label translation="[420,380]" width="1080" font="font:LargeBoldSystemFont" color="0xFFFFFFFF"
         text="Can't play this" />
       <Label id="errorMessage" translation="[420,460]" width="1080" height="200" wrap="true"
         font="font:MediumSystemFont" color="0xD0D6DCFF" />
-      <Label translation="[420,680]" width="1080" font="font:SmallSystemFont" color="0x8C96A0FF"
+      <!-- A live channel's other copies (same guide ID), when it has any:
+           often encoded differently, so one may play where this didn't. -->
+      <Label id="copiesHead" translation="[420,670]" width="1080" font="font:SmallBoldSystemFont" color="0x4DA3FFFF"
+        visible="false" text="Try another copy of this channel   (OK to play)" />
+      <LabelList id="errorCopies" translation="[420,712]" itemSize="[1080,48]" numRows="4" visible="false"
+        font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont"
+        color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png"
+        vertFocusAnimationStyle="floatingFocus" />
+      <Label id="errorBack" translation="[420,680]" width="1080" font="font:SmallSystemFont" color="0x8C96A0FF"
         text="Press Back to return." />
     </Group>
 

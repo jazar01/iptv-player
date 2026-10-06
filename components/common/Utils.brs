@@ -295,7 +295,8 @@ end function
 ' passwords). Set on both the dialog and its text box: Roku's defaults for the
 ' text box spell letter by letter.
 sub setKeyboardVoice(dlg as Object, mode as String)
-    dlg.keyboardDomain = mode
+    ' Keyboard dialogs have keyboardDomain; DynamicMiniKeyboard (Search) doesn't.
+    if dlg.HasField("keyboardDomain") then dlg.keyboardDomain = mode
     editBox = dlg.textEditBox
     if editBox <> invalid then editBox.voiceEntryType = mode
 end sub
