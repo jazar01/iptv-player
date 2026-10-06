@@ -276,6 +276,7 @@ function continueWatchingRowItems(services as Object) as Object
                     ext: asString(r.ext)
                     position: position
                     duration: duration
+                    logo: iconFor(services, "m" + toInt(r.id).ToStr())
                 } })
             end if
         else if r.kind = "episode"
@@ -300,6 +301,7 @@ function continueWatchingRowItems(services as Object) as Object
             subtitle: "S" + toInt(c.season).ToStr() + " E" + toInt(c.episode).ToStr()
             position: 0
             duration: 0
+            logo: iconFor(services, "s" + toInt(s.seriesId).ToStr())
         }
         r = resumeByEpisode[toInt(c.episodeId).ToStr()]
         if r <> invalid
@@ -378,7 +380,14 @@ function favoriteSeriesRowItems(services as Object) as Object
             seriesName: asString(s.name)
             year: year
             subtitle: progress
+            logo: iconFor(services, "s" + toInt(s.seriesId).ToStr())
         })
     end for
     return items
+end function
+
+' Logo or poster URL looked up by MainHome ("" until known, or none).
+function iconFor(services as Object, key as String) as String
+    if type(services.icons) <> "roAssociativeArray" then return ""
+    return asString(services.icons[key])
 end function

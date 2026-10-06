@@ -34,6 +34,7 @@ sub init()
     initTeams()
     initSearch()
     initChannelInfo()
+    initMovies()
 
     m.api.ObserveField("response", "onApiResponse")
     m.api.ObserveField("ready", "onApiReady")
@@ -92,6 +93,8 @@ sub onApiResponse(event as Object)
         onSeriesInfo(res)
     else if res.id = "catalogAll"
         onCatalogAll(res)
+    else if res.id = "movieInfo"
+        onMovieInfo(res)
     else if res.id = "channelGuide"
         onChannelGuide(res)
     else if res.id = "teamLogo"
@@ -175,6 +178,10 @@ sub removeOverlay(node as Object)
     end for
     m.overlayHost.RemoveChild(node)
     if m.rowGrid <> invalid and m.rowGrid.IsSameNode(node) then m.rowGrid = invalid
+    if m.movieScreen <> invalid and m.movieScreen.IsSameNode(node)
+        m.movieScreen = invalid
+        m.movieItem = invalid
+    end if
     if m.seriesScreen <> invalid and m.seriesScreen.IsSameNode(node) then m.seriesScreen = invalid
     if m.teamsScreen <> invalid and m.teamsScreen.IsSameNode(node) then m.teamsScreen = invalid
     if m.teamEditScreen <> invalid and m.teamEditScreen.IsSameNode(node) then m.teamEditScreen = invalid

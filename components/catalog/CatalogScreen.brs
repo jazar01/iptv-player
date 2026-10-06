@@ -166,6 +166,9 @@ sub fillNode(node as Object, raw as Object)
         end if
     else
         node.ext = asString(raw.container_extension)
+        ' Poster (movies) or cover (series), for the details page.
+        node.logo = asString(raw.stream_icon)
+        if node.logo = "" then node.logo = asString(raw.cover)
         node.year = itemYear(raw)
         ' Movies show the year in a column; series keep it in the name.
         if node.year > 0 and kind = "movie" then node.num = node.year.ToStr()
@@ -219,6 +222,7 @@ function itemSummary(node as Object) as Object
         ext: node.ext
         year: node.year
         archiveDays: node.archiveDays
+        poster: node.logo
     }
 end function
 

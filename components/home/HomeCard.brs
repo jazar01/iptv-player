@@ -26,6 +26,8 @@ sub init()
     m.initials = m.top.FindNode("initials")
     m.logo = m.top.FindNode("logo")
     m.logo.ObserveField("loadStatus", "onLogoStatus")
+    m.cardPoster = m.top.FindNode("cardPoster")
+    m.cardPoster.ObserveField("loadStatus", "onCardPosterStatus")
     m.channelLogo = m.top.FindNode("channelLogo")
     m.channelLogo.ObserveField("loadStatus", "onChannelLogoStatus")
     m.logoName = ""
@@ -61,6 +63,7 @@ sub redraw()
     end if
     ' Last, so it can narrow the name drawn above (or reset a recycled card).
     drawChannelLogo(c, localizeName(asString(c.name)))
+    drawCardPoster(c)
 end sub
 
 ' Channel cards: the provider's logo at the top right, with the name beside
@@ -84,6 +87,30 @@ sub onChannelLogoStatus()
         if asString(m.logoName).Len() > 11 then m.name.font = m.titleFontSmall
     else
         m.name.width = 360
+    end if
+end sub
+
+' Continue Watching and Favorite Series: poster at the right once it loads;
+' the title and detail beside it are narrowed to make room.
+sub drawCardPoster(c as Object)
+    uri = ""
+    if c.kind = "resume" or c.kind = "series" then uri = c.logo
+    if m.cardPoster.uri <> uri then m.cardPoster.uri = uri
+    onCardPosterStatus()
+end sub
+
+sub onCardPosterStatus()
+    shown = (m.cardPoster.uri <> "" and m.cardPoster.loadStatus = "ready")
+    m.cardPoster.visible = shown
+    if shown
+        m.infoTitle.width = 266
+        m.infoText.width = 266
+        m.infoText.maxLines = 1     ' a second line would run into the progress bar
+    else
+        m.infoText.width = 360
+        m.infoText.maxLines = 2
+        ' Other kinds' title width is drawBadge's (narrow on "no game" cards).
+        if m.content <> invalid and (m.content.kind = "resume" or m.content.kind = "series") then m.infoTitle.width = 360
     end if
 end sub
 

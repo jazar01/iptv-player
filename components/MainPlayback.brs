@@ -189,18 +189,6 @@ sub onResumeClosed()
     m.resumeDialog = invalid
 end sub
 
-function formatDuration(seconds as Integer) as String
-    h = seconds \ 3600
-    mm = (seconds mod 3600) \ 60
-    ss = seconds mod 60
-    text = ""
-    if h > 0 then text = h.ToStr() + ":"
-    if h > 0 and mm < 10 then text = text + "0"
-    text = text + mm.ToStr() + ":"
-    if ss < 10 then text = text + "0"
-    return text + ss.ToStr()
-end function
-
 ' ---------------------------------------------------------------------------
 ' Player
 
@@ -244,6 +232,8 @@ sub onPlayerClosed()
     m.stepTarget = invalid
     removeOverlay(player)
     refreshHome()
+    ' Back on a movie page: its Resume button reflects where playback stopped.
+    if m.movieScreen <> invalid and m.movieItem <> invalid then m.movieScreen.position = m.store.callFunc("getPosition", "movie", m.movieItem.itemId)
     updateCatalogTags()
     refreshSeriesProgress()
 end sub

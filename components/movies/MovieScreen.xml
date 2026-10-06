@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Movie details, shown when a movie is chosen in Movies or Search: the
+  backdrop behind, the poster, title, year / runtime / rating / genre, plot,
+  director and cast, and Play (or Resume / Start over).
+
+  In:  movie     { name, year, poster } known before details arrive
+       details   { name, year, runtime, rating, genre, plot, director, cast,
+                   poster, backdrop } from get_vod_info (MainMovies.brs)
+       position  saved position in seconds (0: not started)
+       status    message while loading or on error
+  Out: play      { position } when Play / Resume / Start over is chosen
+-->
+<component name="MovieScreen" extends="Group">
+  <interface>
+    <field id="movie" type="assocarray" onChange="draw" />
+    <field id="details" type="assocarray" onChange="draw" />
+    <field id="position" type="integer" onChange="drawButtons" />
+    <field id="status" type="string" onChange="draw" alwaysNotify="true" />
+    <field id="play" type="assocarray" alwaysNotify="true" />
+  </interface>
+
+  <children>
+    <Poster width="1920" height="1080" uri="pkg:/images/ui/background.jpg" />
+    <!-- The backdrop, darkened (more on the left, where the text is). -->
+    <Poster id="backdrop" width="1920" height="1080" loadDisplayMode="zoomToFill" visible="false" />
+    <Rectangle width="1920" height="1080" color="0x0B1016B8" />
+    <Rectangle width="1100" height="1080" color="0x0B101670" />
+
+    <Poster id="poster" translation="[96,150]" width="400" height="600" loadDisplayMode="scaleToFit" />
+    <Label id="title" translation="[560,150]" width="1260" wrap="true" maxLines="2"
+      font="font:LargeBoldSystemFont" color="0xFFFFFFFF" />
+    <Label id="meta" translation="[560,250]" width="1260" font="font:SmallSystemFont" color="0xC8D0D8FF" />
+    <Label id="plot" translation="[560,310]" width="1180" wrap="true" maxLines="7" lineSpacing="4"
+      font="font:SmallSystemFont" color="0xE6EAEEFF" />
+    <Label id="people" translation="[560,620]" width="1180" wrap="true" maxLines="3" lineSpacing="4"
+      font="font:SmallestSystemFont" color="0x8C96A0FF" />
+    <LabelList id="buttons" translation="[560,780]" itemSize="[520,64]" numRows="2"
+      font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont"
+      color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png"
+      vertFocusAnimationStyle="floatingFocus" />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/movies/MovieScreen.brs" />
+</component>

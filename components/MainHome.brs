@@ -8,7 +8,7 @@ sub initHome()
     ' session, so nothing reshuffles (requirements: re-sort at launch only).
     m.launchTime = nowSeconds()
     m.usageScores = m.store.callFunc("getUsageScores")
-    m.channelIcons = {}         ' streamId -> logo URL ("" = none), from SearchTask
+    m.channelIcons = {}         ' streamId (channels), "m<id>" (movie posters), "s<id>" (series covers) -> URL, "" = none
     m.iconsPending = false
 end sub
 
@@ -31,14 +31,20 @@ end sub
 sub requestChannelIcons(rows as Object)
     if m.iconsPending or m.searchTask = invalid then return
     missing = []
+    movies = []
+    series = []
     for each row in rows
         for each item in row.items
             if item.kind = "channel" and not m.channelIcons.DoesExist(toInt(item.streamId).ToStr()) then missing.Push(item.streamId)
+            ' Continue Watching: movie posters and series covers.
+            if item.kind = "resume" and item.resumeKind = "movie" and not m.channelIcons.DoesExist("m" + toInt(item.itemId).ToStr()) then movies.Push(item.itemId)
+            if item.kind = "resume" and item.resumeKind = "episode" and not m.channelIcons.DoesExist("s" + toInt(item.seriesId).ToStr()) then series.Push(item.seriesId)
+            if item.kind = "series" and not m.channelIcons.DoesExist("s" + toInt(item.itemId).ToStr()) then series.Push(item.itemId)
         end for
     end for
-    if missing.Count() = 0 then return
+    if missing.Count() + movies.Count() + series.Count() = 0 then return
     m.iconsPending = true
-    searchSend("iconsRequest", { id: "home", streamIds: missing })
+    searchSend("iconsRequest", { id: "home", streamIds: missing, movieIds: movies, seriesIds: series })
 end sub
 
 sub onIconsResult(event as Object)
@@ -85,7 +91,7 @@ sub onItemSelected(event as Object)
     else if item.kind = "channel"
         playLive(item)
     else if item.kind = "movie"
-        playMovie(item, true)
+        openMovie(item)         ' details page; it plays from there
     else if item.kind = "series"
         openSeries(item)
     else if item.kind = "resume" and item.resumeKind = "movie"

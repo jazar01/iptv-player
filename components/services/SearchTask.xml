@@ -38,8 +38,8 @@
        their guideFile (saved to cachefs: by ApiTask for MainScene).
   In:  localsRequest { id, market }
   Out: localsResult  { id, market, ready, items: [get_live_streams-shaped items] } (ABC, CBS, NBC, FOX)
-  In:  iconsRequest  { id, streamIds: [] }   logos for Home channel cards
-  Out: iconsResult   { id, ready, icons: { "<streamId>": url or "" } }
+  In:  iconsRequest  { id, streamIds: [], movieIds: [], seriesIds: [] }   logos and posters for Home cards
+  Out: iconsResult   { id, ready, icons: { "<streamId>" | "m<movieId>" | "s<seriesId>": url or "" } }
   In:  infoRequest   { id, streamId, market, similar }   channel info (similar: also find
                      channels with similar names when there are no copies)
   Out: infoResult    { id, streamId, found, name, icon, epgChannelId, archiveDays, category, local,

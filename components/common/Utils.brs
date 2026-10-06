@@ -300,3 +300,16 @@ sub setKeyboardVoice(dlg as Object, mode as String)
     editBox = dlg.textEditBox
     if editBox <> invalid then editBox.voiceEntryType = mode
 end sub
+
+' Seconds -> "1:12:05" or "12:05" (resume positions).
+function formatDuration(seconds as Integer) as String
+    h = seconds \ 3600
+    mm = (seconds mod 3600) \ 60
+    ss = seconds mod 60
+    text = ""
+    if h > 0 then text = h.ToStr() + ":"
+    if h > 0 and mm < 10 then text = text + "0"
+    text = text + mm.ToStr() + ":"
+    if ss < 10 then text = text + "0"
+    return text + ss.ToStr()
+end function

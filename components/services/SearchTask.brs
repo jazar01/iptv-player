@@ -135,13 +135,26 @@ end sub
 ' has none or isn't in the list). req: { id, streamIds: [] }
 function channelIcons(req as Object) as Object
     result = { id: req.id, ready: m.index.live.Count() > 0, icons: {} }
-    if not result.ready or type(req.streamIds) <> "roArray" then return result
+    if not result.ready then return result
+    if type(req.streamIds) <> "roArray" then req.streamIds = []
     for each id in req.streamIds
         key = toInt(id).ToStr()
         e = m.byId.live[key]
         icon = ""
         if e <> invalid then icon = asString(e.icon)
         result.icons[key] = icon
+    end for
+    ' Continue Watching: movie posters ("m<id>") and series covers ("s<id>").
+    for each pair in [["movieIds", "movie", "m"], ["seriesIds", "series", "s"]]
+        ids = req[pair[0]]
+        if type(ids) = "roArray" and m.index[pair[1]].Count() > 0     ' not loaded yet: ask again later
+            for each id in ids
+                e = m.byId[pair[1]][toInt(id).ToStr()]
+                icon = ""
+                if e <> invalid then icon = asString(e.icon)
+                result.icons[pair[2] + toInt(id).ToStr()] = icon
+            end for
+        end if
     end for
     return result
 end function
@@ -390,6 +403,9 @@ function indexEntry(kind as String, item as Object) as Object
         if kind = "series" then e.itemId = toInt(item.series_id) else e.itemId = toInt(item.stream_id)
         e.ext = asString(item.container_extension)
         e.year = itemYear(item)
+        ' Movie poster or series cover: the details page and Continue Watching.
+        e.icon = asString(item.stream_icon)
+        if e.icon = "" then e.icon = asString(item.cover)
         ' Movies show the year in a column; series keep it in the name.
         if e.year > 0 and kind = "movie" then e.num = e.year.ToStr()
     end if

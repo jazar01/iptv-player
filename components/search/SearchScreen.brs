@@ -112,6 +112,7 @@ function resultSummary(node as Object) as Object
         ext: node.ext
         year: node.year
         archiveDays: node.archiveDays
+        poster: node.logo
     }
 end function
 

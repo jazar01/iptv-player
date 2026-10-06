@@ -50,6 +50,8 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   home row is a new module there.
 - `components/catalog/`: CatalogScreen, one instance each for Live TV, Movies
   and Series (`kind`); categories plus a paged item list.
+- `components/movies/`: MovieScreen (movie details page; filled by
+  `MainMovies.brs` from `get_vod_info`).
 - `components/series/`: SeriesScreen (seasons, episodes with watched / in
   progress / new; * toggles watched).
 - `components/player/`: ChannelInfoPanel (channel info side panel; filled by
