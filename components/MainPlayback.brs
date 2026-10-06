@@ -296,8 +296,11 @@ sub onPlayerProgress(event as Object)
 end sub
 
 ' The Video node failed. If the account is at its connection limit, say so
-' instead of the generic message.
-sub onPlayerFailed()
+' instead of the generic message, but not for format errors (-5 codec,
+' -6 protected): those streams did connect, and a full count then only
+' reflects streams just left that the provider hasn't timed out yet.
+sub onPlayerFailed(event as Object)
+    m.failCode = toInt(event.GetData().code)
     checkConnections("failed")
     ' A live channel: offer its other copies on the error panel.
     if m.playing <> invalid and m.playing.kind = "live" then searchSend("infoRequest", { id: "failed", streamId: m.playing.id, market: m.store.callFunc("getMarket").key, similar: true })
@@ -318,7 +321,8 @@ sub onConnectionCheck(res as Object)
     print "[main] connection check: "; result.activeConnections; " of "; result.maxConnections; " in use"
     reason = ""
     if type(res.context) = "roAssociativeArray" then reason = asString(res.context.reason)
-    if reason = "failed" and m.player <> invalid and result.maxConnections > 0 and result.activeConnections >= result.maxConnections
+    formatError = (m.failCode = -5 or m.failCode = -6)
+    if reason = "failed" and not formatError and m.player <> invalid and result.maxConnections > 0 and result.activeConnections >= result.maxConnections
         m.player.errorText = "All " + result.maxConnections.ToStr() + " connections on this account are in use. Stop watching on another TV, then try again."
     else if reason = "info"
         deliverChannelInfo()

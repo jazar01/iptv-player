@@ -199,11 +199,12 @@ sub onStreamingSegment()
     if type(seg) <> "roAssociativeArray" then return
     ' segType 1 is audio and 3 captions: their bit rate isn't the picture's.
     if toInt(seg.segType) = 1 or toInt(seg.segType) = 3 then return
-    ' Some streams report only the bit rate, not the size.
-    format = ""
-    if toInt(seg.width) > 0 then format = toInt(seg.width).ToStr() + "x" + toInt(seg.height).ToStr() + ", "
-    if toInt(seg.segBitrateBps) > 0 then format = format + Int(toInt(seg.segBitrateBps) / 1000).ToStr() + " kbps"
-    if format = "" then return
+    ' Only segments that report a picture size count. This provider's streams
+    ' report none (type 0, no width or height) and a flat 128 kbps that is the
+    ' playlist's declared figure, not the picture's, so nothing is shown.
+    if toInt(seg.width) <= 0 then return
+    format = toInt(seg.width).ToStr() + "x" + toInt(seg.height).ToStr()
+    if toInt(seg.segBitrateBps) > 0 then format = format + ", " + Int(toInt(seg.segBitrateBps) / 1000).ToStr() + " kbps"
     if format = m.lastFormat then return
     if m.lastFormat = "" then print "[player] stream format: "; format else print "[player] stream format: "; format; " (was "; m.lastFormat; ")"
     m.lastFormat = format
