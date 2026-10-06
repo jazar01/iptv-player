@@ -15,6 +15,9 @@
       font="font:SmallSystemFont" color="0x8C96A0FF" />
     <Label id="name" translation="[130,0]" width="760" height="64" vertAlign="center"
       font="font:SmallSystemFont" color="0xE6EAEEFF" />
+    <!-- Live TV: what's on now, under the name. -->
+    <Label id="nowLine" translation="[112,46]" width="778" height="32" vertAlign="center" visible="false"
+      font="font:SmallestSystemFont" color="0x8C96A0FF" />
     <Label id="tag" translation="[900,0]" width="184" height="64" vertAlign="center" horizAlign="right"
       font="font:SmallestBoldSystemFont" color="0xFFC94DFF" />
   </children>

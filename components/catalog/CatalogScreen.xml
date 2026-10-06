@@ -17,7 +17,7 @@
 -->
 <component name="CatalogScreen" extends="Group">
   <interface>
-    <field id="kind" type="string" value="live" />
+    <field id="kind" type="string" value="live" onChange="onKind" />
     <field id="categories" type="array" onChange="onCategories" />
     <field id="items" type="assocarray" onChange="onItems" />
     <field id="tags" type="assocarray" onChange="onTags" />
@@ -27,6 +27,10 @@
     <field id="wantCategory" type="string" alwaysNotify="true" />
     <field id="selected" type="assocarray" alwaysNotify="true" />
     <field id="options" type="assocarray" alwaysNotify="true" />
+    <!-- Live TV: what's on now. visibleChannels out (stream IDs of rows on
+         screen), programs in (EpgService entries, applied to their rows). -->
+    <field id="visibleChannels" type="array" />
+    <field id="programs" type="assocarray" onChange="onPrograms" alwaysNotify="true" />
   </interface>
 
   <children>

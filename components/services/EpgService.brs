@@ -105,7 +105,7 @@ sub onApiResponse(event as Object)
     m.top.programs = { streamId: key, now: current, upcoming: upcoming }
 end sub
 
-' Xtream short EPG listing -> { title, flags, start, ends }. Uses the UTC
+' Xtream short EPG listing -> { title, flags, start, ends, description }. Uses the UTC
 ' start/stop timestamps, never the provider's local-time strings.
 function toProgram(listing as Object) as Dynamic
     start = toInt(listing.start_timestamp)
@@ -113,9 +113,14 @@ function toProgram(listing as Object) as Dynamic
     if start <= 0 or ends <= start then return invalid
 
     title = asString(listing.title)
-    if m.rules.base64Titles then title = decodeBase64(title)
+    description = asString(listing.description)
+    if m.rules.base64Titles
+        title = decodeBase64(title)
+        description = decodeBase64(description)
+    end if
     clean = cleanTitle(title)
-    return { title: clean.title, flags: clean.flags, start: start, ends: ends }
+    ' The description (episode synopsis) for the player strip and channel info.
+    return { title: clean.title, flags: clean.flags, start: start, ends: ends, description: cleanTitle(description).title }
 end function
 
 function decodeBase64(text as String) as String

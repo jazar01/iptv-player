@@ -73,7 +73,10 @@ sub onChannelGuide(res as Object)
             if m.infoFor.programs.Count() < 4
                 start = toInt(listing.start_timestamp)
                 when = formatClock(start)
-                if start <= now then when = "Now"
+                if start <= now
+                    when = "Now"
+                    m.infoFor.nowDescription = guideTitle(listing.description)
+                end if
                 if formatDayTime(start).Split(" ")[0] <> today then when = formatDayTime(start)
                 m.infoFor.programs.Push(when + "   " + guideTitle(listing.title))
             end if
@@ -135,7 +138,7 @@ sub deliverChannelInfo()
     connections = connectionsText()
     if connections <> "" then facts.Push("Account connections:   " + connections)
 
-    info = { name: name, logo: logo, facts: facts, programs: f.programs, programsNote: f.programsNote, copies: copies }
+    info = { name: name, logo: logo, facts: facts, programs: f.programs, programsNote: f.programsNote, nowDescription: asString(f.nowDescription), copies: copies }
     if f.source = "player"
         if m.player <> invalid then m.player.channelInfo = info
     else if m.infoPanel <> invalid

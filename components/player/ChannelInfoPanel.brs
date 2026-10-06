@@ -6,7 +6,7 @@ sub init()
     m.copiesKey = ""
     ' Top to bottom, in this order, below the logo and name.
     m.stack = []
-    for each id in ["facts", "playbackHead", "playbackLines", "programsHead", "programs", "copiesHead", "copies"]
+    for each id in ["facts", "playbackHead", "playbackLines", "programsHead", "programs", "nowDesc", "copiesHead", "copies"]
         m.stack.Push(m.top.FindNode(id))
     end for
     m.logo.ObserveField("loadStatus", "onLogoStatus")
@@ -50,6 +50,10 @@ sub draw()
         programs.visible = (programs.text <> "")
     end if
     m.top.FindNode("programsHead").visible = programs.visible
+    ' What's on now, described (when the guide has a description).
+    nowDesc = m.top.FindNode("nowDesc")
+    nowDesc.text = asString(info.nowDescription)
+    nowDesc.visible = (nowDesc.text <> "")
 
     drawCopies(info.copies)
     layout()

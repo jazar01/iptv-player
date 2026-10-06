@@ -18,6 +18,9 @@ sub init()
     m.categoryList.ObserveField("itemFocused", "onCategoryFocused")
     m.categoryList.ObserveField("itemSelected", "onCategorySelected")
     m.itemList.ObserveField("itemFocused", "onItemFocused")
+    m.byStream = {}             ' Live TV: streamId -> row node, for what's on now
+    m.lastVisibleKey = ""
+    onKind()
     m.itemList.ObserveField("itemSelected", "onItemSelected")
     m.delay.ObserveField("fire", "loadFocusedCategory")
     m.top.ObserveField("focusedChild", "onFocusedChild")
@@ -96,6 +99,7 @@ sub requestCategory(id as String)
     m.focusItemsWhenLoaded = false
     m.top.status = "Loading ..."
     m.itemList.content = CreateObject("roSGNode", "ContentNode")
+    m.byStream = {}
     m.shownCategory = ""
     m.top.wantCategory = id
 end sub
@@ -117,6 +121,7 @@ sub onItems()
     if type(d.items) = "roArray" then m.allItems = d.items
     m.loaded = 0
     m.itemList.content = CreateObject("roSGNode", "ContentNode")
+    m.byStream = {}
     while m.loaded < m.allItems.Count() and m.loaded <= keep
         appendPage()
     end while
@@ -131,6 +136,8 @@ sub onItems()
         if m.focusItemsWhenLoaded then focusItems()
     end if
     m.focusItemsWhenLoaded = false
+    m.lastVisibleKey = ""
+    reportVisible()
 end sub
 
 sub appendPage()
@@ -140,6 +147,7 @@ sub appendPage()
     for i = m.loaded to last
         node = content.CreateChild("CatalogNode")
         fillNode(node, m.allItems[i])
+        if m.top.kind = "live" then m.byStream[node.itemId.ToStr()] = node
     end for
     m.loaded = last + 1
 end sub
@@ -160,6 +168,7 @@ sub fillNode(node as Object, raw as Object)
         node.epgChannelId = asString(raw.epg_channel_id)
         node.showLogo = true
         node.logo = asString(raw.stream_icon)
+        node.tall = true
         if toInt(raw.tv_archive) = 1
             node.archiveDays = toInt(raw.tv_archive_duration)
             if node.archiveDays <= 0 then node.archiveDays = 1
@@ -186,6 +195,7 @@ end function
 
 sub onItemFocused()
     if m.loaded < m.allItems.Count() and m.itemList.itemFocused >= m.loaded - 20 then appendPage()
+    reportVisible()
 end sub
 
 sub onTags()
@@ -257,3 +267,54 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     end if
     return false
 end function
+
+' ---------------------------------------------------------------------------
+' Live TV: taller rows with what's on now. The rows on screen are reported
+' (visibleChannels) so EpgService fetches only those; programs come back
+' here and are set on their rows.
+
+' Called from init too: kind defaults to "live", and setting a field to the
+' value it already has doesn't notify.
+sub onKind()
+    if m.top.kind = "live"
+        m.itemList.itemSize = [1104, 84]
+        m.itemList.numRows = 9
+    else
+        m.itemList.itemSize = [1104, 64]
+        m.itemList.numRows = 12
+    end if
+end sub
+
+sub reportVisible()
+    if m.top.kind <> "live" then return
+    content = m.itemList.content
+    if content = invalid then return
+    first = m.itemList.itemFocused - 1
+    if first < 0 then first = 0
+    ids = []
+    key = ""
+    for i = first to first + 10
+        if i < content.GetChildCount()
+            node = content.GetChild(i)
+            ids.Push(node.itemId)
+            key += node.itemId.ToStr() + ","
+        end if
+    end for
+    if key <> m.lastVisibleKey
+        m.lastVisibleKey = key
+        m.top.visibleChannels = ids
+    end if
+end sub
+
+sub onPrograms()
+    entry = m.top.programs
+    node = m.byStream[asString(entry.streamId)]
+    if node = invalid then return
+    current = entry.now
+    if type(current) = "roAssociativeArray" and toInt(current.ends) > nowSeconds()
+        node.nowEnd = toInt(current.ends)
+        node.nowTitle = asString(current.title)
+    else
+        node.nowTitle = ""
+    end if
+end sub

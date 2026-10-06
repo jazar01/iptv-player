@@ -5,6 +5,7 @@ sub init()
     m.channelName = m.top.FindNode("channelName")
     m.channelPos = m.top.FindNode("channelPos")
     m.nowTitle = m.top.FindNode("nowTitle")
+    m.nowDesc = m.top.FindNode("nowDesc")
     m.nowTime = m.top.FindNode("nowTime")
     m.progressTrack = m.top.FindNode("progressTrack")
     m.progressFill = m.top.FindNode("progressFill")
@@ -453,6 +454,34 @@ end function
 ' recorded. The window is kept short (10 minutes before that point): the
 ' provider builds the archive playlist on request and long ones are slow.
 ' The Video node's own rewind then moves within that window.
+' Replay (the curved-arrow button): the program on now, from its start, via the archive.
+' Needs the guide's start time and an archive that reaches back that far.
+sub startOver()
+    if not canRewind()
+        showNote("This channel can't start over (the provider keeps no archive for it).")
+        return
+    end if
+    current = invalid
+    if m.programs <> invalid then current = m.programs.now
+    if type(current) <> "roAssociativeArray" or toInt(current.start) <= 0
+        showNote("No guide information for this channel, so there's no start to go back to. Rewind goes back 10 minutes.")
+        return
+    end if
+    start = toInt(current.start)
+    if start < nowSeconds() - toInt(m.play.archiveDays) * 86400
+        showNote("This program started before the archive begins.")
+        return
+    end if
+    if start > archiveEdge() - 60
+        ' Started within the last few minutes: not recorded yet.
+        showNote("This program has only just started; the archive hasn't caught up yet.")
+        return
+    end if
+    print "[player] start over: "; current.title; " from "; formatClock(start)
+    m.note = "From the start:  " + asString(current.title)
+    startTimeshift(start, 0)
+end sub
+
 sub rewindLive()
     if not canRewind()
         showNote("This channel can't be paused or rewound (the provider keeps no archive for it).")
@@ -547,6 +576,7 @@ sub onPreview()
     m.channelPos.text = asString(p.label)
     m.modeLine.text = "CHANGING CHANNEL ..."
     m.nowTitle.text = ""
+    m.nowDesc.text = ""
     m.nowTime.text = ""
     m.nextLine.text = ""
     m.progressFill.width = 0
@@ -591,7 +621,7 @@ sub drawOverlay()
     if m.mode = "timeshift"
         m.hints.text = "Play/Pause, Rewind, Fast-forward: move through the archive     Back: return to live"
     else if canRewind()
-        m.hints.text = "Up/Down: change favorite    *: add/remove favorite    Play/Pause: pause    Rewind: go back    OK again: channel info    Back: close"
+        m.hints.text = "Up/Down: change favorite    *: favorite    Play/Pause: pause    Rewind: go back    Replay: start this program over    OK again: channel info    Back: close"
     else
         m.hints.text = "Up / Down: change favorite     *: add/remove favorite     OK again: channel info     Back: close"
     end if
@@ -609,6 +639,7 @@ sub drawOverlay()
 
     if type(current) = "roAssociativeArray" and current.ends > now
         m.nowTitle.text = current.title
+        m.nowDesc.text = asString(current.description)
         m.nowTime.text = formatClock(current.start) + " - " + formatClock(current.ends)
         fraction = (now - current.start) / (current.ends - current.start)
         if fraction < 0 then fraction = 0
@@ -618,6 +649,7 @@ sub drawOverlay()
         m.progressFill.visible = true
     else
         m.nowTitle.text = "No guide information"
+        m.nowDesc.text = ""
         m.nowTime.text = ""
         m.progressTrack.visible = false
         m.progressFill.visible = false
@@ -660,6 +692,9 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return true
     else if key = "play" and m.mode = "paused"
         resumeFromPause()
+        return true
+    else if key = "replay"
+        startOver()
         return true
     else if key = "rewind" and (m.mode = "live" or m.mode = "paused")
         rewindLive()

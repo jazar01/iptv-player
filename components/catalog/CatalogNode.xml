@@ -22,5 +22,10 @@
     <!-- Channel rows: a logo column (logo "" leaves it empty, names stay aligned). -->
     <field id="showLogo" type="boolean" />
     <field id="logo" type="string" />
+    <!-- Live TV rows: what's on now (EpgService, for rows on screen). -->
+    <field id="nowTitle" type="string" />
+    <field id="nowEnd" type="integer" />
+    <!-- Live TV rows are taller (84 px) to fit the now-playing line. -->
+    <field id="tall" type="boolean" />
   </interface>
 </component>

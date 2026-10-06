@@ -201,6 +201,8 @@ sub onPrograms(event as Object)
     if home <> invalid then home.programs = entry
     if m.rowGrid <> invalid then m.rowGrid.programs = entry
     if m.player <> invalid then m.player.programs = entry
+    live = catalogScreen("live")
+    if live <> invalid then live.programs = entry
 end sub
 
 ' Settings -> Favorites in Recently Viewed: off (the default) leaves channels

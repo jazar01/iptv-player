@@ -3,16 +3,21 @@ sub init()
     m.name = m.top.FindNode("name")
     m.tag = m.top.FindNode("tag")
     m.logo = m.top.FindNode("logo")
+    m.nowLine = m.top.FindNode("nowLine")
     m.logo.ObserveField("loadStatus", "onLogoStatus")
     m.content = invalid
 end sub
 
 ' The list recycles items; move the tag observer to the new content.
 sub onItemContent()
-    if m.content <> invalid then m.content.UnobserveFieldScoped("tag")
+    if m.content <> invalid
+        m.content.UnobserveFieldScoped("tag")
+        m.content.UnobserveFieldScoped("nowTitle")
+    end if
     m.content = m.top.itemContent
     if m.content = invalid then return
     m.content.ObserveFieldScoped("tag", "onTag")
+    m.content.ObserveFieldScoped("nowTitle", "drawNow")
     m.num.text = m.content.num
     name = localizeName(m.content.name)
     year = m.content.year
@@ -40,8 +45,29 @@ sub onItemContent()
     if m.content.showLogo then logo = m.content.logo
     if m.logo.uri <> logo then m.logo.uri = logo
     onLogoStatus()
+    drawNow()
     onTag()
     applyColors()
+end sub
+
+' Live TV rows (tall): the name over what's on now, or centered alone until
+' the guide answers. Other rows: one line, 64 px.
+sub drawNow()
+    tall = m.content.tall
+    height = 64
+    if tall then height = 84
+    m.tag.height = height
+    m.logo.translation = [16, Int((height - 48) / 2)]
+    showNow = tall and m.content.nowTitle <> ""
+    if showNow
+        m.name.translation = [m.name.translation[0], 4]
+        m.name.height = 44
+        m.nowLine.text = m.content.nowTitle + "     until " + formatClock(m.content.nowEnd)
+    else
+        m.name.translation = [m.name.translation[0], 0]
+        m.name.height = height
+    end if
+    m.nowLine.visible = showNow
 end sub
 
 ' Hidden until loaded, so a missing or broken logo leaves the column empty.

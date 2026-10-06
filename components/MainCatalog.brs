@@ -135,6 +135,7 @@ function createCatalogScreen(kind as String) as Object
     screen.ObserveField("wantCategory", "onWantCategory")
     screen.ObserveField("selected", "onItemSelected")
     screen.ObserveField("options", "onCatalogOptions")      ' live only: favorite or channel info
+    screen.ObserveField("visibleChannels", "onCatalogVisible")      ' live: what's on now
     return screen
 end function
 
@@ -511,4 +512,17 @@ sub continueSeries(item as Object)
         if nextEp <> invalid then ep = episodeSummaryFor(info, nextEp)
     end if
     playEpisode(ep, false)
+end sub
+
+' Live TV rows on screen: programs the guide already has go straight to the
+' rows; EpgService fetches the rest (onPrograms relays them).
+sub onCatalogVisible(event as Object)
+    ids = event.GetData()
+    screen = event.GetRoSGNode()
+    m.lastVisible = ids
+    cached = m.epg.callFunc("getPrograms", ids)
+    for each key in cached
+        screen.programs = cached[key]
+    end for
+    m.epg.callFunc("want", ids)
 end sub
