@@ -70,8 +70,17 @@ sub openMarkets()
     searchSend("marketsRequest", { id: "settings" })
 end sub
 
+' Until the channel and category lists are in, the list is empty; it's
+' asked for again after each (re)index while the screen is open.
 sub onMarketsResult(event as Object)
-    if m.marketScreen <> invalid then m.marketScreen.markets = event.GetData().markets
+    if m.marketScreen = invalid then return
+    result = event.GetData()
+    m.marketScreen.loading = (result.markets.Count() = 0)
+    m.marketScreen.markets = result.markets
+end sub
+
+sub refreshMarketsScreen()
+    if m.marketScreen <> invalid and m.marketScreen.loading then searchSend("marketsRequest", { id: "settings" })
 end sub
 
 sub onMarketChosen(event as Object)

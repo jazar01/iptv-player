@@ -25,11 +25,9 @@ sub onMarkets()
     end for
     m.list.content = content
     m.list.jumpToItem = focus
-    if m.markets.Count() = 0
-        m.status.text = "No local stations found in the catalog yet. Try again in a minute."
-    else
-        m.status.visible = false
-    end if
+    m.status.visible = (m.markets.Count() = 0)
+    ' Usually the channel list is still loading; this fills in by itself.
+    m.status.text = "No markets yet. The channel list may still be loading; they'll appear here when it's ready."
 end sub
 
 sub onSelected()

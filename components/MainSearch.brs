@@ -58,6 +58,7 @@ sub onIndexChanged()
     ' The catalog changed: My Teams games may have too.
     requestGames()
     if m.localsWaiting then requestLocalStations("live")
+    refreshMarketsScreen()
 end sub
 
 sub onMatchResult(event as Object)
