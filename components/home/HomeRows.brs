@@ -5,22 +5,13 @@
 ' module: { id, title, emptyText, items(services) -> array of HomeItem field AAs }
 ' services: { store: StateStore, epg: EpgService }
 
-' My Teams appears once a team is saved (unless switched off in Settings):
-' below Favorites, or at the top while
-' one of the games is live or starts within 30 minutes (requirements).
+' My Teams appears once a team is saved (unless switched off in Settings),
+' always in the same place: after Favorites, or first (Settings).
 function homeRowModules(services as Object) as Object
     if not services.store.callFunc("getSettings").showMyTeams or services.store.callFunc("getTeams").Count() = 0 then return [favoritesRow(), continueWatchingRow(), favoriteSeriesRow(), recentRow()]
-    if gameIsOnSoon(services.games) then return [myTeamsRow(), favoritesRow(), continueWatchingRow(), favoriteSeriesRow(), recentRow()]
+    ' A fixed place, chosen in Settings: first, or (default) after Favorites.
+    if services.store.callFunc("getSettings").myTeamsFirst then return [myTeamsRow(), favoritesRow(), continueWatchingRow(), favoriteSeriesRow(), recentRow()]
     return [favoritesRow(), myTeamsRow(), continueWatchingRow(), favoriteSeriesRow(), recentRow()]
-end function
-
-function gameIsOnSoon(games as Dynamic) as Boolean
-    if type(games) <> "roArray" then return false
-    now = nowSeconds()
-    for each g in games
-        if g.live or (g.start >= now and g.start - now <= 1800) then return true
-    end for
-    return false
 end function
 
 ' Usage ordering (requirements: Usage-based item ordering). services.usage is

@@ -414,3 +414,17 @@ sub onTeamLogoAgain(event as Object)
         if t.id = teamId and not m.logoPending.DoesExist(t.id) then lookupTeamLogo(t)
     end for
 end sub
+
+' Settings -> My Teams on Home: After Favorites (default) or First. The row
+' stays in that place.
+sub toggleMyTeamsFirst()
+    first = not m.store.callFunc("getSettings").myTeamsFirst
+    if m.store.callFunc("setSetting", "myTeamsFirst", first)
+        if first then showToast("My Teams is now first on Home") else showToast("My Teams is now after Favorites on Home")
+    else
+        showToast("Couldn't save the change. Storage may be full.")
+    end if
+    settings = m.sections.settings
+    if settings <> invalid then settings.info = settingsInfo()
+    refreshHome()
+end sub

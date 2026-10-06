@@ -61,7 +61,7 @@ All devices share one account, so the connection limit can be exceeded. When the
 
 ## Home screen and navigation
 
-The home screen opens on fixed rows in a fixed order: Favorites, Continue Watching, then Recently Viewed. My Teams is added later, below Favorites, moving to the top only while a game is live or about to start.
+The home screen opens on fixed rows in a fixed order: Favorites, Continue Watching, then Recently Viewed. My Teams sits below Favorites, or first if Settings → My Teams on Home says First; it stays in that place. (It used to jump to the top while a game was live or about to start, which also happened for replays; dropped Oct 2026 in favor of a fixed place.)
 
 The top bar holds Home, Live TV, Movies, Series, Search and Settings, plus a clock. A reference mockup exists for the TV layout at 1920×1080.
 

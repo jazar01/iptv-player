@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
   Settings. In: info { deviceName, deviceId, server, version, connections, market,
-  showMyTeams, showNoGameTeams, showFavoritesInRecent }.
+  showMyTeams, myTeamsFirst, showNoGameTeams, showFavoritesInRecent }.
   Out: chosen ("teams" opens My Teams, "teamsRow" toggles the My Teams row,
+  "teamsPosition" switches it between after Favorites and first,
   "noGameTeams" toggles cards for teams with no game,
   "market" opens Local stations, "recentFavorites" toggles favorites in
   Recently Viewed, "account" opens Setup).
@@ -18,7 +19,7 @@
       font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont"
       color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png"
       vertFocusAnimationStyle="floatingFocus" />
-    <Label id="details" translation="[96,620]" width="1600" wrap="true"
+    <Label id="details" translation="[96,680]" width="1600" wrap="true"
       font="font:SmallSystemFont" color="0x8C96A0FF" />
   </children>
 

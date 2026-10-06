@@ -67,7 +67,7 @@ function setMarket(market as Object) as Boolean
 end function
 
 ' Per-device on/off options: { showMyTeams, showNoGameTeams,
-' showFavoritesInRecent }. New options
+' showFavoritesInRecent, myTeamsFirst }. New options
 ' join this object with a default (normalizeDocument), so adding one doesn't
 ' change the document's shape.
 function getSettings() as Object
@@ -75,6 +75,7 @@ function getSettings() as Object
         showMyTeams: isTrue(m.doc.settings.showMyTeams)
         showNoGameTeams: isTrue(m.doc.settings.showNoGameTeams)
         showFavoritesInRecent: isTrue(m.doc.settings.showFavoritesInRecent)
+        myTeamsFirst: isTrue(m.doc.settings.myTeamsFirst)
     }
 end function
 
@@ -819,7 +820,7 @@ function newDocument() as Object
         teams: []
         seenGames: []
         market: { key: "", label: "" }
-        settings: { showMyTeams: true, showNoGameTeams: true, showFavoritesInRecent: false }
+        settings: { showMyTeams: true, showNoGameTeams: true, showFavoritesInRecent: false, myTeamsFirst: false }
     }
 end function
 
@@ -871,6 +872,7 @@ sub normalizeDocument(doc as Object)
     if doc.settings.showMyTeams = invalid then doc.settings.showMyTeams = true
     if doc.settings.showNoGameTeams = invalid then doc.settings.showNoGameTeams = true
     if doc.settings.showFavoritesInRecent = invalid then doc.settings.showFavoritesInRecent = false
+    if doc.settings.myTeamsFirst = invalid then doc.settings.myTeamsFirst = false
 
     ' Team names are shown capitalized ("Alabama Crimson Tide"); tidy any saved
     ' before that rule (display only: matching ignores case).

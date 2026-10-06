@@ -1,7 +1,7 @@
 sub init()
     m.menu = m.top.FindNode("menu")
     m.details = m.top.FindNode("details")
-    m.actions = ["teams", "teamsRow", "noGameTeams", "market", "recentFavorites", "account"]
+    m.actions = ["teams", "teamsRow", "teamsPosition", "noGameTeams", "market", "recentFavorites", "account"]
     buildMenu({})
 
     m.menu.ObserveField("itemSelected", "onSelected")
@@ -14,9 +14,12 @@ sub buildMenu(info as Object)
     if marketLabel = "" then marketLabel = "not set"
     showMyTeams = (info.showMyTeams = invalid or isTrue(info.showMyTeams))
     showNoGameTeams = (info.showNoGameTeams = invalid or isTrue(info.showNoGameTeams))
+    teamsPosition = "After Favorites"
+    if isTrue(info.myTeamsFirst) then teamsPosition = "First"
     titles = [
         "My Teams"
         "Show My Teams on Home:   " + onOff(showMyTeams)
+        "My Teams on Home:   " + teamsPosition
         "Show teams with no game:   " + onOff(showNoGameTeams)
         "Local stations:   " + marketLabel
         "Favorites in Recently Viewed:   " + onOff(isTrue(info.showFavoritesInRecent))
