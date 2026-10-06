@@ -85,7 +85,12 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
 - `end`, `next`, `stop` and `step` are reserved in BrightScript, even as AA
   keys with dot access: programs use `start`/`ends`, EPG entries
   `now`/`upcoming`.
-- `(expr).Method()` isn't valid BrightScript; assign to a variable first.
+- `(expr).Method()` isn't valid BrightScript, and neither is a statement that
+  starts with a call result (`f(x).y.Delete(k)`); assign to a variable first.
+  BrighterScript misses it but the Roku won't compile it, and **a failed
+  sideload removes the installed dev app together with its registry**: all
+  saved state on that Roku is lost (happened Oct 6, 2026). `deploy.ps1` now
+  checks for the call-result pattern before uploading.
 - A field's onChange doesn't fire when it's set to the value it already
   holds. Fields that hide initial XML text by being set to "" (status
   messages) need `alwaysNotify="true"`.

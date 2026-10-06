@@ -80,6 +80,26 @@ if (-not $SkipCheck) {
         Pop-Location
     }
     if ($checkExit -ne 0) { throw 'Code check failed; nothing was packaged or uploaded. Fix the errors above.' }
+
+    # Rules the Roku's compiler enforces but BrighterScript doesn't. A build the
+    # Roku won't compile is worse than a failed check: the failed install
+    # removes the existing dev app, and its saved data (registry) with it.
+    # Learned Oct 6, 2026, when that wiped the Basement Roku.
+    #   - A statement can't start with a call result: catalogState(k).x.Delete(id)
+    $rokuOnly = @()
+    foreach ($file in Get-ChildItem (Join-Path $root 'components'), (Join-Path $root 'source') -Recurse -Filter *.brs) {
+        $n = 0
+        foreach ($line in Get-Content $file.FullName) {
+            $n++
+            if ($line -match '^\s*[A-Za-z_][A-Za-z0-9_]*\([^()]*\)\.[A-Za-z_]') {
+                $rokuOnly += "$($file.FullName.Substring($root.Length + 1)):${n}: statement starts with a call result: $($line.Trim())"
+            }
+        }
+    }
+    if ($rokuOnly) {
+        $rokuOnly | ForEach-Object { Write-Host $_ }
+        throw 'The Roku would refuse to compile this (see above); nothing was uploaded. Assign the call to a variable first.'
+    }
     Write-Host 'Code check passed.'
 }
 
@@ -127,12 +147,13 @@ function Install-Roku([string]$Ip, [string]$DevPassword) {
     $status = $lines[-1].Trim()
     $body = ($lines | Select-Object -SkipLast 1) -join "`n"
     if ($status -eq '401') { throw 'The Roku rejected the developer password (HTTP 401).' }
-    if ($status -ne '200') { throw "The Roku installer answered HTTP $status." }
 
-    # The installer page reports results as on-page messages.
+    # The installer page reports results as on-page messages (also on errors,
+    # so they're shown before giving up).
     $messages = [regex]::Matches($body, "'Set message content', '([^']*)'") | ForEach-Object { $_.Groups[1].Value }
     if (-not $messages) { $messages = [regex]::Matches($body, '<font color="red">([^<]*)</font>') | ForEach-Object { $_.Groups[1].Value } }
     $messages | Where-Object { $_ } | ForEach-Object { Write-Host "  Roku: $_" }
+    if ($status -ne '200') { throw "The Roku installer answered HTTP $status." }
 
     if ($body -match 'Install Failure') { throw 'Install failed. Run with -Console (or telnet to port 8085) to see compiler errors.' }
     if ($body -match 'Identical to previous version') { return 'identical' }
