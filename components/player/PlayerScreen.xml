@@ -10,6 +10,8 @@
                                    lagSeconds: how far behind live the archive is recorded }
        programs      EpgService entry for the live overlay (ignored if not for this channel)
        channelLabel  e.g. "Favorite 3 of 12", shown on the live overlay
+       preview       { name, label } the channel Up/Down has reached, shown on the overlay
+                     before its stream loads (MainScene loads it once the presses stop)
        errorText     replaces the error message (e.g. after a connection-limit check)
        channelInfo   channel info for the side panel (MainChannelInfo.brs); live stream
                      details are added here while it's open
@@ -37,6 +39,7 @@
     <field id="content" type="assocarray" onChange="onContent" />
     <field id="programs" type="assocarray" onChange="onPrograms" alwaysNotify="true" />
     <field id="channelLabel" type="string" onChange="onChannelLabel" />
+    <field id="preview" type="assocarray" onChange="onPreview" />
     <field id="toggleFavorite" type="assocarray" alwaysNotify="true" />
     <field id="errorText" type="string" onChange="onErrorText" />
     <field id="progress" type="assocarray" alwaysNotify="true" />

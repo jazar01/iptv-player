@@ -476,6 +476,25 @@ sub onPrograms()
     if m.liveOverlay.visible then drawOverlay()
 end sub
 
+' Up/Down: name the channel being reached right away; its stream comes
+' when the presses stop (onContent).
+sub onPreview()
+    p = m.top.preview
+    if m.play = invalid or m.play.kind <> "live" or type(p) <> "roAssociativeArray" then return
+    if isTrue(p.restore)
+        if m.liveOverlay.visible then drawOverlay()
+        return
+    end if
+    showOverlay()
+    m.channelName.text = localizeName(asString(p.name))
+    m.channelPos.text = asString(p.label)
+    m.modeLine.text = "CHANGING CHANNEL ..."
+    m.nowTitle.text = ""
+    m.nowTime.text = ""
+    m.nextLine.text = ""
+    m.progressFill.width = 0
+end sub
+
 ' "Favorite 3 of 12" changes when * adds or removes this channel.
 sub onChannelLabel()
     if m.liveOverlay.visible then m.channelPos.text = m.top.channelLabel
@@ -515,9 +534,9 @@ sub drawOverlay()
     if m.mode = "timeshift"
         m.hints.text = "Play/Pause, Rewind, Fast-forward: move through the archive     Back: return to live"
     else if canRewind()
-        m.hints.text = "Up/Down: change favorite    *: add/remove favorite    Play/Pause: pause    Rewind: go back    OK: show this    Back: close"
+        m.hints.text = "Up/Down: change favorite    *: add/remove favorite    Play/Pause: pause    Rewind: go back    OK again: channel info    Back: close"
     else
-        m.hints.text = "Up / Down: change favorite     *: add/remove favorite     OK: show this again     Back: close"
+        m.hints.text = "Up / Down: change favorite     *: add/remove favorite     OK again: channel info     Back: close"
     end if
 
     m.channelName.text = localizeName(asString(m.play.name))

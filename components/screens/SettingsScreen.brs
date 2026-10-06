@@ -44,5 +44,7 @@ sub onInfo()
     info = m.top.info
     buildMenu(asString(info.market), isTrue(info.showMyTeams), isTrue(info.showNoGameTeams))
     nl = Chr(10)
-    m.details.text = "Device name:  " + asString(info.deviceName) + nl + "Server:  " + asString(info.server) + nl + "Device ID:  " + asString(info.deviceId) + nl + "App version:  " + asString(info.version)
+    connections = asString(info.connections)
+    if connections = "" then connections = "checking ..."
+    m.details.text = "Device name:  " + asString(info.deviceName) + nl + "Server:  " + asString(info.server) + nl + "Connections:  " + connections + "  (all devices on this account)" + nl + "Device ID:  " + asString(info.deviceId) + nl + "App version:  " + asString(info.version)
 end sub

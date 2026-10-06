@@ -9,6 +9,16 @@ sub initPlayback()
     m.resumeDialog = invalid
     m.tzRules = invalid
     m.guideRules = invalid
+    m.connections = invalid     ' { active, max } from the provider, last checked
+
+    ' Up/Down while watching: the channel shows at once, but its stream
+    ' loads only once the presses stop, so skipping through channels
+    ' doesn't open (and leave counting against the account) a stream each.
+    m.stepTarget = invalid      ' favorite the presses have reached
+    m.stepTimer = CreateObject("roSGNode", "Timer")
+    m.stepTimer.duration = 0.6
+    m.stepTimer.ObserveField("fire", "onStepTimer")
+    m.top.AppendChild(m.stepTimer)
 end sub
 
 ' item: { streamId, name, epgChannelId, archiveDays? }. Archive days come
@@ -230,6 +240,8 @@ sub onPlayerClosed()
     m.player = invalid
     m.playing = invalid
     if m.infoFor <> invalid and m.infoFor.source = "player" then m.infoFor = invalid
+    m.stepTimer.control = "stop"
+    m.stepTarget = invalid
     removeOverlay(player)
     refreshHome()
     updateCatalogTags()
@@ -286,17 +298,40 @@ end sub
 ' The Video node failed. If the account is at its connection limit, say so
 ' instead of the generic message.
 sub onPlayerFailed()
-    sendRequest({ id: "connCheck", action: "" })
+    checkConnections("failed")
+end sub
+
+' How many of the account's connections are in use (player_api.php with no
+' action: user_info.active_cons / max_connections). Counts every device on
+' the account, and streams just left until the provider times them out.
+' reason: "failed" | "info" | "settings"
+sub checkConnections(reason as String)
+    sendRequest({ id: "connCheck", action: "", context: { reason: reason } })
 end sub
 
 sub onConnectionCheck(res as Object)
     result = evaluateLogin(res)
-    if not result.ok or m.player = invalid then return
+    if not result.ok then return
+    m.connections = { active: result.activeConnections, max: result.maxConnections }
     print "[main] connection check: "; result.activeConnections; " of "; result.maxConnections; " in use"
-    if result.maxConnections > 0 and result.activeConnections >= result.maxConnections
+    reason = ""
+    if type(res.context) = "roAssociativeArray" then reason = asString(res.context.reason)
+    if reason = "failed" and m.player <> invalid and result.maxConnections > 0 and result.activeConnections >= result.maxConnections
         m.player.errorText = "All " + result.maxConnections.ToStr() + " connections on this account are in use. Stop watching on another TV, then try again."
+    else if reason = "info"
+        deliverChannelInfo()
+    else if reason = "settings"
+        settings = m.sections.settings
+        if settings <> invalid then settings.info = settingsInfo()
     end if
 end sub
+
+' "2 of 3 in use", or "" before the first check.
+function connectionsText() as String
+    c = m.connections
+    if c = invalid or c.max <= 0 then return ""
+    return c.active.ToStr() + " of " + c.max.ToStr() + " in use"
+end function
 
 ' A minute on a live channel: add it to Recently Viewed. Home refreshes when
 ' the player closes.
@@ -325,14 +360,30 @@ sub onChannelStep(event as Object)
     favorites = m.store.callFunc("getFavorites")
     count = favorites.Count()
     if count = 0 then return
-    index = favoriteIndex(favorites, m.playing.id)
+    current = m.playing.id
+    if m.stepTarget <> invalid then current = m.stepTarget.streamId
+    index = favoriteIndex(favorites, current)
     if index < 0
         if direction > 0 then index = 0 else index = count - 1
     else
         index = (index + direction + count) mod count
     end if
     f = favorites[index]
-    playLive({ streamId: f.streamId, name: f.name, epgChannelId: f.epgChannelId })
+    m.stepTarget = { streamId: f.streamId, name: f.name, epgChannelId: f.epgChannelId }
+    m.player.preview = { name: f.name, label: favoriteLabel(f.streamId) }
+    m.stepTimer.control = "stop"
+    m.stepTimer.control = "start"
+end sub
+
+sub onStepTimer()
+    target = m.stepTarget
+    m.stepTarget = invalid
+    if target = invalid or m.player = invalid or m.playing = invalid or m.playing.kind <> "live" then return
+    if toInt(target.streamId) <> toInt(m.playing.id)
+        playLive(target)
+    else
+        m.player.preview = { restore: true }     ' back where it started: redraw the overlay
+    end if
 end sub
 
 function favoriteIndex(favorites as Object, streamId as Dynamic) as Integer

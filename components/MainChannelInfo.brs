@@ -21,6 +21,7 @@ sub showChannelInfo(channel as Object, source as String)
         pushOverlay(m.infoPanel)
     end if
     deliverChannelInfo()
+    checkConnections("info")
     searchSend("infoRequest", { id: source, streamId: streamId, market: m.store.callFunc("getMarket").key })
     sendRequest({
         id: "channelGuide"
@@ -116,6 +117,8 @@ sub deliverChannelInfo()
     guide = "Guide " + epg
     if epg = "" then guide = "No guide ID"
     facts.Push(guide + "   -   Stream " + f.streamId.ToStr())
+    connections = connectionsText()
+    if connections <> "" then facts.Push("Account connections:   " + connections)
 
     info = { name: name, logo: logo, facts: facts, programs: f.programs, programsNote: f.programsNote, copies: copies }
     if f.source = "player"

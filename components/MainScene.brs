@@ -122,6 +122,7 @@ sub showSection(name as String)
         refreshHome()
     else if name = "settings"
         screen.info = settingsInfo()
+        checkConnections("settings")
     else if name = "search"
         onSearchShown(screen)
     else

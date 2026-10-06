@@ -57,7 +57,7 @@ The sideloaded build and the beta channel are different apps to Roku, so each ke
 3. It reads `max_connections` and `allowed_output_formats` from the response, confirming HLS is available.
 4. It generates a device ID (UUID) and asks for a device name, such as "Living room". Roku's built-in client ID is not used, because it differs between sideload and beta builds.
 
-All devices share one account, so the connection limit can be exceeded. When the provider refuses a stream for that reason, the app shows a clear message instead of failing silently.
+All devices share one account, so the connection limit can be exceeded. When the provider refuses a stream for that reason, the app shows a clear message instead of failing silently. Settings and the channel info panel show how many connections are in use ("2 of 3", from `user_info.active_cons`), counting every device on the account. Live streams (HLS) have no hang-up: a stream just left keeps counting until the provider times it out (typically 30 s to a few minutes), so fast channel changes used to hold extra connections. Up/Down while watching therefore names the channel at once but loads its stream only once the presses stop for 0.6 s.
 
 ## Home screen and navigation
 

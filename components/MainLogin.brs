@@ -36,6 +36,7 @@ sub onLogin(res as Object)
     print "[main] allowed_output_formats: "; joinStrings(result.formats, ", ")
     if not result.hls then print "[main] WARNING: provider does not list m3u8; live HLS playback may not work"
     m.serverTimezone = result.timezone
+    m.connections = { active: result.activeConnections, max: result.maxConnections }
 
     ' Save (and, for a new account, clear the old one's data) before the
     ' catalog refresh, so the refresh is for this account.
@@ -173,6 +174,7 @@ function settingsInfo() as Object
         deviceId: device.deviceId
         server: server
         version: CreateObject("roAppInfo").GetVersion()
+        connections: connectionsText()
         market: m.store.callFunc("getMarket").label
         showMyTeams: m.store.callFunc("getSettings").showMyTeams
         showNoGameTeams: m.store.callFunc("getSettings").showNoGameTeams
