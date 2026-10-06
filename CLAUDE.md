@@ -101,6 +101,11 @@ Deploy to the Roku (runs the code check, zips, sideloads, streams the console):
 
     .\scripts\deploy.ps1 -Console
 
+Deploy to every Roku listed in `$LocalRokus` in `scripts/deploy.local.ps1`
+(packages once, continues past failures, prints a summary):
+
+    .\scripts\deploy.ps1 -All
+
 Roku IP and developer password: `-RokuIp`/`-Password`, then
 `$env:ROKU_IP`/`$env:ROKU_DEV_PASSWORD`, then `scripts/deploy.local.ps1`
 (git-ignored; template in `deploy.local.example.ps1`). Never commit or print

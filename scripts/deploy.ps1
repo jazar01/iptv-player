@@ -19,8 +19,15 @@
     $env:ROKU_IP/$env:ROKU_DEV_PASSWORD, then scripts\deploy.local.ps1 if it
     exists (copy deploy.local.example.ps1; it is git-ignored).
 
+    With -All, the package is built once and installed on every Roku listed in
+    $LocalRokus in deploy.local.ps1, continuing past any that fail, with a
+    summary at the end (exit code 1 if any failed).
+
 .EXAMPLE
     .\scripts\deploy.ps1 -Console
+
+.EXAMPLE
+    .\scripts\deploy.ps1 -All
 
 .EXAMPLE
     $env:ROKU_IP = '192.168.1.50'; $env:ROKU_DEV_PASSWORD = '...'
@@ -36,7 +43,8 @@ param(
     [string]$User = 'rokudev',
     [switch]$PackageOnly,
     [switch]$SkipCheck,
-    [switch]$Console
+    [switch]$Console,
+    [switch]$All
 )
 
 $ErrorActionPreference = 'Stop'
@@ -101,35 +109,18 @@ if ($PackageOnly) { return }
 
 # --- Sideload ----------------------------------------------------------------
 
-$localConfig = Join-Path $PSScriptRoot 'deploy.local.ps1'
-if (Test-Path $localConfig) {
-    . $localConfig
-    if (-not $RokuIp) { $RokuIp = $LocalRokuIp }
-    if (-not $Password) { $Password = $LocalRokuPassword }
-}
-if (-not $RokuIp) { throw 'Roku IP not set. Pass -RokuIp, set $env:ROKU_IP, or put it in scripts\deploy.local.ps1.' }
-if (-not $Password) { throw 'Developer password not set. Pass -Password, set $env:ROKU_DEV_PASSWORD, or put it in scripts\deploy.local.ps1.' }
 if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exe not found (it ships with Windows 10 and later).' }
 
-$consoleClient = $null
-if ($Console) {
-    try {
-        $consoleClient = [System.Net.Sockets.TcpClient]::new($RokuIp, 8085)
-    }
-    catch {
-        Write-Warning "Could not connect to the debug console on ${RokuIp}:8085: $($_.Exception.Message)"
-    }
-}
-
-try {
+# Uploads the package to one Roku's developer installer. Returns 'installed'
+# or 'identical' (already has this exact build); throws on failure.
+function Install-Roku([string]$Ip, [string]$DevPassword) {
     # Credentials go to curl on stdin so the password isn't on the command line.
-    $escaped = $Password.Replace('\', '\\').Replace('"', '\"')
+    $escaped = $DevPassword.Replace('\', '\\').Replace('"', '\"')
     $curlConfig = "user = `"${User}:$escaped`""
-    Write-Host "Installing on $RokuIp ..."
     $output = $curlConfig | & curl.exe --config - --silent --show-error --digest `
-        --max-time 120 --write-out "`n%{http_code}" `
+        --connect-timeout 10 --max-time 120 --write-out "`n%{http_code}" `
         --form 'mysubmit=Install' --form "archive=@$zipPath" `
-        "http://$RokuIp/plugin_install"
+        "http://$Ip/plugin_install"
     if ($LASTEXITCODE -ne 0) { throw "Upload failed (curl exit code $LASTEXITCODE). Is the Roku on and in Developer Mode?" }
 
     $lines = @($output)
@@ -143,10 +134,62 @@ try {
     if (-not $messages) { $messages = [regex]::Matches($body, '<font color="red">([^<]*)</font>') | ForEach-Object { $_.Groups[1].Value } }
     $messages | Where-Object { $_ } | ForEach-Object { Write-Host "  Roku: $_" }
 
-    if ($body -match 'Install Failure') {
-        throw 'Install failed. Run with -Console (or telnet to port 8085) to see compiler errors.'
+    if ($body -match 'Install Failure') { throw 'Install failed. Run with -Console (or telnet to port 8085) to see compiler errors.' }
+    if ($body -match 'Identical to previous version') { return 'identical' }
+    return 'installed'
+}
+
+$localConfig = Join-Path $PSScriptRoot 'deploy.local.ps1'
+if (Test-Path $localConfig) { . $localConfig }
+
+# --- Every Roku in deploy.local.ps1 ($LocalRokus) ---------------------------
+
+if ($All) {
+    if ($Console) { throw '-Console works with one Roku; leave it off with -All.' }
+    if (-not $LocalRokus) { throw 'No Rokus listed. Add $LocalRokus to scripts\deploy.local.ps1 (see deploy.local.example.ps1).' }
+    $results = @()
+    foreach ($roku in $LocalRokus) {
+        $name = if ($roku.Name) { $roku.Name } else { $roku.Ip }
+        $devPassword = if ($roku.Password) { $roku.Password } elseif ($Password) { $Password } else { $LocalRokuPassword }
+        Write-Host "Installing on $name ($($roku.Ip)) ..."
+        try {
+            if (-not $devPassword) { throw 'No developer password (set Password for it or $LocalRokuPassword).' }
+            $outcome = Install-Roku $roku.Ip $devPassword
+            $text = if ($outcome -eq 'identical') { 'already up to date' } else { 'installed' }
+            $results += [pscustomobject]@{ Roku = $name; IP = $roku.Ip; Result = $text }
+        }
+        catch {
+            Write-Warning "  $name failed: $($_.Exception.Message)"
+            $results += [pscustomobject]@{ Roku = $name; IP = $roku.Ip; Result = "FAILED: $($_.Exception.Message)" }
+        }
     }
-    if ($body -match 'Identical to previous version') {
+    Write-Host ''
+    $results | Format-Table -AutoSize | Out-String | Write-Host
+    if ($results | Where-Object { $_.Result -like 'FAILED*' }) { exit 1 }
+    return
+}
+
+# --- One Roku ----------------------------------------------------------------
+
+if (-not $RokuIp) { $RokuIp = $LocalRokuIp }
+if (-not $Password) { $Password = $LocalRokuPassword }
+if (-not $RokuIp) { throw 'Roku IP not set. Pass -RokuIp, set $env:ROKU_IP, or put it in scripts\deploy.local.ps1.' }
+if (-not $Password) { throw 'Developer password not set. Pass -Password, set $env:ROKU_DEV_PASSWORD, or put it in scripts\deploy.local.ps1.' }
+
+$consoleClient = $null
+if ($Console) {
+    try {
+        $consoleClient = [System.Net.Sockets.TcpClient]::new($RokuIp, 8085)
+    }
+    catch {
+        Write-Warning "Could not connect to the debug console on ${RokuIp}:8085: $($_.Exception.Message)"
+    }
+}
+
+try {
+    Write-Host "Installing on $RokuIp ..."
+    $outcome = Install-Roku $RokuIp $Password
+    if ($outcome -eq 'identical') {
         Write-Host 'The Roku already has this exact build; it was not reinstalled.'
     }
     else {
