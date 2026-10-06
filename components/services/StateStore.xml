@@ -41,6 +41,7 @@
     <function name="getTeams" />
     <function name="saveTeam" />
     <function name="deleteTeam" />
+    <function name="setTeamLogo" />
     <function name="getSeenGames" />
     <function name="recordSeenGames" />
 

@@ -111,6 +111,27 @@
       { "epg": "truTV.us", "label": "truTV" }
     ],
     "networkAvoid": "backup|\\blbw\\b|low bw|\\bwest\\b|pacific|overflow",
+    "logos": {
+      "comment": "Team logos from TheSportsDB (free key 123): searched by team name, then each alias, and picked by sport (our sport ID -> TheSportsDB strSport). imageSuffix /small is a 250 px PNG.",
+      "searchUrl": "https://www.thesportsdb.com/api/v1/json/123/searchteams.php?t=",
+      "imageSuffix": "/small",
+      "sports": {
+        "football": "American Football",
+        "basketball": "Basketball",
+        "baseball": "Baseball",
+        "hockey": "Ice Hockey",
+        "soccer": "Soccer",
+        "volleyball": "Volleyball",
+        "softball": "Softball",
+        "fieldhockey": "Field Hockey",
+        "lacrosse": "Lacrosse",
+        "rugby": "Rugby",
+        "tennis": "Tennis",
+        "golf": "Golf",
+        "racing": "Motorsport",
+        "fighting": "Fighting"
+      }
+    },
     "guideAction": "get_simple_data_table",
     "guideListings": 30,
     "guideMaxAgeMinutes": 60

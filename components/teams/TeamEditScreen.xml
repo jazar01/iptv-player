@@ -2,14 +2,18 @@
 <!--
   Add or edit one team: name, sports (checklist), aliases, exclusions.
   In:  team    { id, name, aliases[], exclusions[], sports[] } (empty to add)
+  In:  logoStatus  "looking" | "found" | "none" | "failed" | "" (not looked up)
   Out: save    the edited team
        remove  the team's ID, when Delete is chosen
+       lookupLogo  the team's ID, when Logo is chosen (look it up again)
 -->
 <component name="TeamEditScreen" extends="Group">
   <interface>
     <field id="team" type="assocarray" onChange="onTeam" />
     <field id="save" type="assocarray" alwaysNotify="true" />
     <field id="remove" type="string" alwaysNotify="true" />
+    <field id="logoStatus" type="string" onChange="refresh" />
+    <field id="lookupLogo" type="string" alwaysNotify="true" />
   </interface>
 
   <children>

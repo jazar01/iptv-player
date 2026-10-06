@@ -8,7 +8,8 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
 ## Rules
 
 - All saved state goes through StateStore; all HTTP goes through ApiTask.
-  (Exception: the Video node fetches streams itself.)
+  (Exceptions: the Video node fetches streams itself, and Poster nodes load
+  My Teams logos from their URL.)
 - Provider parsing rules are data, not code.
 - Screens talk only to MainScene (interface fields in, output fields out). They
   never call ApiTask or StateStore directly.

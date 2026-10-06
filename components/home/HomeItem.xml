@@ -38,6 +38,8 @@
     <!-- My Teams game cards: the channels carrying the game, best first. -->
     <field id="channels" type="array" />
     <field id="teamName" type="string" />
+    <!-- My Teams cards: the team's logo URL ("" = show initials). -->
+    <field id="logo" type="string" />
     <field id="epgVersion" type="integer" />
   </interface>
 </component>

@@ -22,6 +22,11 @@ sub init()
     m.titleFontSmall.uri = "font:BoldSystemFontFile"
     m.titleFontSmall.size = 28
 
+    m.badge = m.top.FindNode("badge")
+    m.initials = m.top.FindNode("initials")
+    m.logo = m.top.FindNode("logo")
+    m.logo.ObserveField("loadStatus", "onLogoStatus")
+
     m.tick = m.top.FindNode("tick")
     m.tick.ObserveField("fire", "redraw")
     m.content = invalid
@@ -42,6 +47,7 @@ sub redraw()
     isChannel = (c.kind = "channel" or c.kind = "game")
     m.channel.visible = isChannel
     m.info.visible = not isChannel
+    drawBadge(c)
     if c.kind = "game"
         drawGame(c)
     else if isChannel
@@ -51,6 +57,52 @@ sub redraw()
         drawInfo(c)
     end if
 end sub
+
+' My Teams cards get the team's logo (initials until it loads, or if there's
+' none). Game cards: bottom right, so the matchup and start time keep the
+' full width. "No game" cards: top right, beside the team name, so the
+' message and sports below keep it. Text next to the logo is narrowed.
+sub drawBadge(c as Object)
+    isGame = (c.kind = "game")
+    isTeam = isGame or c.kind = "noGame"
+    m.badge.visible = isTeam
+    narrow = 276
+    full = 360
+    if isGame then m.badge.translation = [306, 128] else m.badge.translation = [306, 14]
+    m.tags.width = full
+    m.nextLine.width = full
+    m.infoTitle.width = full
+    if isGame
+        m.tags.width = narrow
+        m.nextLine.width = narrow
+    else if isTeam
+        m.infoTitle.width = narrow
+    end if
+    if not isTeam
+        m.logo.uri = ""
+        return
+    end if
+    m.initials.text = teamInitials(c.teamName)
+    if m.logo.uri <> c.logo then m.logo.uri = c.logo
+    onLogoStatus()
+end sub
+
+sub onLogoStatus()
+    loaded = (m.logo.uri <> "" and m.logo.loadStatus = "ready")
+    m.logo.visible = loaded
+    m.initials.visible = not loaded
+end sub
+
+' "Atlanta Braves" -> "AB", "Alabama" -> "AL".
+function teamInitials(name as String) as String
+    words = []
+    for each w in name.Trim().Split(" ")
+        if w <> "" then words.Push(w)
+    end for
+    if words.Count() = 0 then return ""
+    if words.Count() = 1 then return UCase(Left(words[0], 2))
+    return UCase(Left(words[0], 1) + Left(words[words.Count() - 1], 1))
+end function
 
 sub drawChannel(c as Object)
     name = localizeName(c.name)

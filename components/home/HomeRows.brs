@@ -143,6 +143,10 @@ function myTeamsRowItems(services as Object) as Object
         ordered.Push({ g: g, sortKey: liveFirst + Right("0000000000" + toInt(g.start).ToStr(), 10) + rankKey(usageScore(services.usage, "t" + asString(g.teamId)), i) })
     end for
     ordered.SortBy("sortKey")
+    logos = {}      ' team ID -> logo URL ("" if none)
+    for each t in services.store.callFunc("getTeams")
+        logos[t.id] = asString(t.logo)
+    end for
     for each o in ordered
         g = o.g
         flags = ""
@@ -157,6 +161,7 @@ function myTeamsRowItems(services as Object) as Object
             name: g.title
             teamName: g.teamName
             subtitle: g.sportLabel
+            logo: asString(logos[asString(g.teamId)])
             nowStart: g.start
             nowEnd: g.start + 12600
             nowFlags: flags
@@ -185,6 +190,7 @@ function myTeamsRowItems(services as Object) as Object
                     name: t.name
                     teamName: t.name
                     subtitle: sports
+                    logo: asString(t.logo)
                     message: "No game in 24 hours"
                 })
             end if

@@ -9,6 +9,7 @@ sub initTeams()
     m.guidePending = 0
     m.teamsScreen = invalid
     m.teamEditScreen = invalid
+    m.logoPending = {}          ' team ID -> true while its logo is being looked up
     m.marketScreen = invalid
     m.gameDialog = invalid
     ' Refresh every 30 minutes while Home is showing (requirements).
@@ -54,6 +55,7 @@ sub requestGames()
         refreshHome()
         return
     end if
+    lookupTeamLogos()
     searchSend("gamesRequest", { id: "home", teams: teams, withGuide: m.guideReady, market: m.store.callFunc("getMarket").key })
 end sub
 
@@ -262,7 +264,15 @@ sub openTeamEdit(team as Dynamic)
     m.teamEditScreen = CreateObject("roSGNode", "TeamEditScreen")
     m.teamEditScreen.ObserveField("save", "onTeamSave")
     m.teamEditScreen.ObserveField("remove", "onTeamRemove")
+    m.teamEditScreen.ObserveField("lookupLogo", "onTeamLogoAgain")
     if team <> invalid then m.teamEditScreen.team = team
+    if team <> invalid
+        if m.logoPending.DoesExist(team.id)
+            m.teamEditScreen.logoStatus = "looking"
+        else if asString(team.logoFor) = team.name
+            m.teamEditScreen.logoStatus = logoStatusFor(asString(team.logo))
+        end if
+    end if
     pushOverlay(m.teamEditScreen)
 end sub
 
@@ -300,4 +310,98 @@ sub closeTeamEdit()
     end if
     if m.teamsScreen <> invalid then m.teamsScreen.teams = m.store.callFunc("getTeams")
     requestGames()
+end sub
+
+' ---------------------------------------------------------------------------
+' Team logos (TheSportsDB, rules in data/guide-rules.json "myTeams.logos").
+' Looked up once per team name: by the name, then each alias, keeping the
+' first result in one of the team's sports. The card's Poster loads the
+' image itself.
+
+' Teams never looked up, or renamed since.
+sub lookupTeamLogos()
+    for each t in m.store.callFunc("getTeams")
+        if asString(t.logoFor) <> t.name and not m.logoPending.DoesExist(t.id) then lookupTeamLogo(t)
+    end for
+end sub
+
+sub lookupTeamLogo(team as Object)
+    cfg = logoRules()
+    if cfg = invalid then return
+    names = [team.name]
+    for each alias in team.aliases
+        names.Push(alias)
+    end for
+    m.logoPending[team.id] = true
+    if m.teamEditScreen <> invalid then m.teamEditScreen.logoStatus = "looking"
+    requestTeamLogo({ teamId: team.id, teamName: team.name, sports: team.sports, names: names, index: 0 })
+end sub
+
+sub requestTeamLogo(ctx as Object)
+    sendRequest({
+        id: "teamLogo"
+        url: logoRules().searchUrl + urlEncode(ctx.names[ctx.index])
+        context: ctx
+        timeoutMs: 15000
+    })
+end sub
+
+function logoRules() as Dynamic
+    cfg = guideRules().myTeams
+    if type(cfg) <> "roAssociativeArray" or type(cfg.logos) <> "roAssociativeArray" or asString(cfg.logos.searchUrl) = "" then return invalid
+    return cfg.logos
+end function
+
+sub onTeamLogo(res as Object)
+    ctx = res.context
+    if not res.ok
+        ' Offline or the service is down: try again next time games refresh.
+        print "[main] couldn't look up a logo for "; ctx.teamName; ": "; res.error
+        m.logoPending.Delete(ctx.teamId)
+        if m.teamEditScreen <> invalid then m.teamEditScreen.logoStatus = "failed"
+        return
+    end if
+    logo = pickTeamLogo(res.data, ctx.sports)
+    if logo = "" and ctx.index + 1 < ctx.names.Count()
+        ctx.index = ctx.index + 1
+        requestTeamLogo(ctx)
+        return
+    end if
+    m.logoPending.Delete(ctx.teamId)
+    if logo = "" then print "[main] no logo found for "; ctx.teamName else print "[main] logo found for "; ctx.teamName
+    m.store.callFunc("setTeamLogo", ctx.teamId, logo, ctx.teamName)
+    if m.teamEditScreen <> invalid then m.teamEditScreen.logoStatus = logoStatusFor(logo)
+    refreshHome()
+end sub
+
+' searchteams.php -> { teams: [{ strTeam, strSport, strBadge }] } or teams null.
+' The first team in one of the team's sports (any sport if none set).
+function pickTeamLogo(data as Dynamic, sports as Object) as String
+    if type(data) <> "roAssociativeArray" or type(data.teams) <> "roArray" then return ""
+    cfg = logoRules()
+    wanted = {}
+    for each s in sports
+        name = cfg.sports[s]
+        if name <> invalid then wanted[LCase(name)] = true
+    end for
+    for each team in data.teams
+        if type(team) = "roAssociativeArray"
+            badge = asString(team.strBadge)
+            if badge <> "" and (wanted.Count() = 0 or wanted.DoesExist(LCase(asString(team.strSport)))) then return badge + asString(cfg.imageSuffix)
+        end if
+    end for
+    return ""
+end function
+
+function logoStatusFor(logo as String) as String
+    if logo = "" then return "none"
+    return "found"
+end function
+
+' Settings -> My Teams -> a team -> Logo: look it up again.
+sub onTeamLogoAgain(event as Object)
+    teamId = event.GetData()
+    for each t in m.store.callFunc("getTeams")
+        if t.id = teamId and not m.logoPending.DoesExist(t.id) then lookupTeamLogo(t)
+    end for
 end sub

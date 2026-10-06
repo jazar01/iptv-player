@@ -60,7 +60,9 @@ end function
 sub refresh()
     if m.values.id = "" then m.title.text = "Add a team" else m.title.text = "Edit " + m.values.name
 
-    m.actions = ["name", "sports", "aliases", "exclusions", "save"]
+    m.actions = ["name", "sports", "aliases", "exclusions"]
+    if m.values.id <> "" then m.actions.Push("logo")
+    m.actions.Push("save")
     if m.values.id <> "" then m.actions.Push("delete")
     content = CreateObject("roSGNode", "ContentNode")
     for each action in m.actions
@@ -78,8 +80,18 @@ function actionTitle(action as String) as String
     if action = "sports" then return "Sports:   " + orNotSet(sportsText())
     if action = "aliases" then return "Also called:   " + orNotSet(listText(m.values.aliases))
     if action = "exclusions" then return "Not when it says:   " + orNotSet(listText(m.values.exclusions))
+    if action = "logo" then return "Logo:   " + logoText()
     if action = "save" then return "Save"
     return "Delete this team"
+end function
+
+function logoText() as String
+    s = m.top.logoStatus
+    if s = "looking" then return "Looking it up ..."
+    if s = "found" then return "Found"
+    if s = "none" then return "None found (cards show initials)"
+    if s = "failed" then return "Couldn't look it up; OK to try again"
+    return "Not looked up yet"
 end function
 
 function orNotSet(text as String) as String
@@ -119,6 +131,8 @@ sub onFocused()
         m.hint.text = "Only games in these sports are shown. This keeps out other teams with the same name (minor-league Eagles, for example)."
     else if action = "aliases"
         m.hint.text = "Other names to look for, separated by commas: a mascot or short form, e.g. Crimson Tide, Bama."
+    else if action = "logo"
+        m.hint.text = "From TheSportsDB, by team name, then each also-called name, in the team's sports. OK looks it up again (after a rename it's looked up on its own)."
     else if action = "exclusions"
         m.hint.text = "Names that contain your team's name but aren't your team, separated by commas, e.g. North Alabama, Alabama State."
     else
@@ -145,6 +159,8 @@ sub onSelected()
         else
             m.top.save = m.values
         end if
+    else if action = "logo"
+        m.top.lookupLogo = m.values.id
     else if action = "delete"
         m.top.remove = m.values.id
     end if

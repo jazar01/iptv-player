@@ -196,6 +196,21 @@ function deleteTeam(id as String) as Boolean
     return persist()
 end function
 
+' Team logo (My Teams cards): logo is an image URL, or "" when none was
+' found; logoFor is the team name it was looked up for, so renaming the
+' team looks it up again. Neither field is set until the first lookup.
+function setTeamLogo(id as String, logo as String, logoFor as String) as Boolean
+    for each t in m.doc.teams
+        if t.id = id
+            t.logo = Left(logo, 200)
+            t.logoFor = logoFor
+            t.updatedAt = nowSeconds()
+            return persist()
+        end if
+    end for
+    return true
+end function
+
 function capitalizedList(items as Object) as Object
     out = []
     for each item in items
