@@ -338,6 +338,18 @@ function findGameGroup(groups as Object, team as Object, info as Object, strict 
     return best
 end function
 
+' Live channels sharing a guide ID (HD, SD and backup copies of one feed),
+' or invalid. The lookup is built once per index.
+function epgGroup(epgChannelId as String) as Dynamic
+    if m.epgGroups = invalid
+        m.epgGroups = {}
+        for each e in m.index.live
+            if e.epgChannelId <> "" then addToGroup(m.epgGroups, LCase(e.epgChannelId), e)
+        end for
+    end if
+    return m.epgGroups[LCase(epgChannelId)]
+end function
+
 ' ---------------------------------------------------------------------------
 ' Network broadcasts
 
@@ -346,16 +358,10 @@ end function
 ' the guide ID, the first whose name doesn't match networkAvoid.
 function resolveNetworks(market as Dynamic) as Object
     rules = teamRules()
-    if m.epgGroups = invalid
-        m.epgGroups = {}
-        for each e in m.index.live
-            if e.epgChannelId <> "" then addToGroup(m.epgGroups, LCase(e.epgChannelId), e)
-        end for
-    end if
     list = []
     seen = {}
     for each n in rules.networks
-        group = m.epgGroups[LCase(n.epg)]
+        group = epgGroup(n.epg)
         if group <> invalid
             chosen = preferredCopy(group, rules)
             seen[LCase(chosen.epgChannelId)] = true

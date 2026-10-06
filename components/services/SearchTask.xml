@@ -38,6 +38,9 @@
        their guideFile (saved to cachefs: by ApiTask for MainScene).
   In:  localsRequest { id, market }
   Out: localsResult  { id, market, ready, items: [get_live_streams-shaped items] } (ABC, CBS, NBC, FOX)
+  In:  infoRequest   { id, streamId, market }   channel info
+  Out: infoResult    { id, streamId, found, name, icon, epgChannelId, archiveDays, category, local,
+                       copies: [{ streamId, name, epgChannelId, archiveDays }] }  (other copies: same guide ID, up to 15)
   In:  marketsRequest { id }
   Out: marketsResult  { id, ready, markets: [{ key: "GA|Atlanta", label: "Atlanta, GA", stations: "ABC, CBS, NBC, FOX" }] }
 -->
@@ -59,6 +62,8 @@
     <field id="marketsResult" type="assocarray" alwaysNotify="true" />
     <field id="localsRequest" type="assocarray" alwaysNotify="true" />
     <field id="localsResult" type="assocarray" alwaysNotify="true" />
+    <field id="infoRequest" type="assocarray" alwaysNotify="true" />
+    <field id="infoResult" type="assocarray" alwaysNotify="true" />
   </interface>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />

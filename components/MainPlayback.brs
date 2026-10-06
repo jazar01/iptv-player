@@ -208,6 +208,8 @@ sub startPlayer(play as Object, position as Integer)
         m.player.ObserveField("liveWatched", "onLiveWatched")
         m.player.channelViewSeconds = m.store.callFunc("getChannelViewSeconds")
         m.player.ObserveField("toggleFavorite", "onPlayerToggleFavorite")
+        m.player.ObserveField("infoRequested", "onPlayerInfoRequested")
+        m.player.ObserveField("copyChosen", "onInfoCopyChosen")
         m.player.ObserveField("closed", "onPlayerClosed")
         pushOverlay(m.player)
     end if
@@ -227,6 +229,7 @@ sub onPlayerClosed()
     player = m.player
     m.player = invalid
     m.playing = invalid
+    if m.infoFor <> invalid and m.infoFor.source = "player" then m.infoFor = invalid
     removeOverlay(player)
     refreshHome()
     updateCatalogTags()

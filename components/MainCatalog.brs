@@ -81,7 +81,7 @@ function createCatalogScreen(kind as String) as Object
     screen.kind = kind
     screen.ObserveField("wantCategory", "onWantCategory")
     screen.ObserveField("selected", "onItemSelected")
-    screen.ObserveField("options", "onToggleFavorite")
+    screen.ObserveField("options", "onCatalogOptions")      ' live only: favorite or channel info
     return screen
 end function
 

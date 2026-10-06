@@ -81,7 +81,7 @@ The top bar holds Home, Live TV, Movies, Series, Search and Settings, plus a clo
 **Navigation behavior**
 
 - Returning from playback puts focus back on the same card in the same row.
-- The `*` options button adds or removes a favorite from any channel list, and for the channel being watched in the player.
+- The `*` options button adds or removes a favorite from any channel list, and for the channel being watched in the player. In Live TV it opens a short menu instead: Add to / Remove from Favorites, or Channel info.
 - While a live channel plays, channel up/down moves through favorites.
 
 **Speed**
@@ -122,6 +122,7 @@ Playback uses Roku's `Video` node, with HLS for live channels and the file's own
 - Live channels request HLS (`.m3u8`), not raw `.ts`.
 - Some VOD files will not play on Roku because of codec or container. The player catches the `Video` node's error state and shows a readable message, never a black screen.
 - A small overlay on live playback shows the channel and current program, and handles channel up/down through favorites.
+- **Channel info:** OK with the overlay up (OK twice), or `*` -> Channel info in Live TV, opens a side panel: the provider's logo, category, guide ID, rewind days, a resolution guessed from the name (HD, 1080p), Favorite / Local station, the next 6 programs (`get_simple_data_table`), and Other copies (channels sharing the guide ID, up to 15; OK watches one, handy when a copy stalls). While watching it adds the live stream's resolution and bit rate, codecs, measured connection speed, and loading pauses and reconnects on this channel, refreshed every 2 s. Back closes it.
 - **Stalls:** a live stream that has played and then sits in "Loading" for 12 seconds is reloaded at the live point, with a short note on the overlay. After 4 reloads in 3 minutes the player stops and says the channel keeps stalling. (Seen Oct 2026 during an NLDS game: the feed froze at "loading 33%" at commercial breaks, likely a format change the relay doesn't mark.) Every buffering spell and every change in the stream's resolution or bit rate is logged to the console (`[player] buffered …`, `[player] stream format: …`).
 
 **Pause, rewind and fast-forward**

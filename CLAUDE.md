@@ -27,7 +27,8 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   overlays (Setup, "See all" grids, series pages, player) and services; relays
   between screens and services and routes ApiTask responses by `id`. Split by
   area: `MainScene.brs` (core, focus, keys), `MainLogin.brs`, `MainHome.brs`,
-  `MainCatalog.brs`, `MainPlayback.brs`, `MainSearch.brs`. All share one
+  `MainCatalog.brs`, `MainPlayback.brs`, `MainSearch.brs`, `MainTeams.brs`,
+  `MainChannelInfo.brs`. All share one
   `m`, so `init*()` in each file sets up its own state.
 - `components/services/SearchTask.*`: search index on its own thread. ApiTask
   downloads the full lists to `cachefs:/catalog/all_*.json` (`saveOnly`,
@@ -51,7 +52,8 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   and Series (`kind`); categories plus a paged item list.
 - `components/series/`: SeriesScreen (seasons, episodes with watched / in
   progress / new; * toggles watched).
-- `components/player/`: PlayerScreen (Video node, live overlay, readable
+- `components/player/`: ChannelInfoPanel (channel info side panel; filled by
+  `MainChannelInfo.brs`), PlayerScreen (Video node, live overlay, readable
   errors, progress reports every 30 s and on stop, live pause/rewind via the
   provider's timeshift `.m3u8` archive, kept `archiveLagSeconds` behind live).
 - `components/search/`: SearchScreen (MiniKeyboard plus results list).

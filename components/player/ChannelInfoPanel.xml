@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Channel info: a side panel with the channel's logo, details, what's coming
+  up and its other copies (same guide ID). Shown over the player (OK twice)
+  and over Live TV (* -> Channel info). Content comes from MainScene.
+
+  In:  info      { name, logo, facts: [line], programs: [line], programsNote,
+                   copies: [{ streamId, name, epgChannelId, archiveDays }] }
+       playback  { lines: [line] }  live stream details, while watching
+       dim       true to darken the screen behind (over Live TV)
+  Out: chosen    the copy picked from Other copies
+-->
+<component name="ChannelInfoPanel" extends="Group">
+  <interface>
+    <field id="info" type="assocarray" onChange="draw" />
+    <field id="playback" type="assocarray" onChange="draw" />
+    <field id="dim" type="boolean" value="false" onChange="onDim" />
+    <field id="chosen" type="assocarray" alwaysNotify="true" />
+  </interface>
+
+  <children>
+    <Rectangle id="shade" width="1920" height="1080" color="0x000000A0" visible="false" />
+    <Poster translation="[1120,40]" width="760" height="1000" uri="pkg:/images/ui/rounded.9.png" blendColor="0x161D25F4" />
+    <Poster id="logo" translation="[1160,76]" width="150" height="100" loadDisplayMode="scaleToFit" />
+    <Label id="name" translation="[1330,76]" width="510" height="100" wrap="true" maxLines="2" vertAlign="center"
+      font="font:MediumBoldSystemFont" color="0xFFFFFFFF" />
+
+    <!-- Stacked top to bottom by draw(); empty ones are hidden. -->
+    <Label id="facts" width="680" wrap="true" font="font:SmallSystemFont" color="0xD0D6DCFF" lineSpacing="2" />
+    <Label id="playbackHead" width="680" font="font:SmallBoldSystemFont" color="0x4DA3FFFF" text="Playing now" />
+    <Label id="playbackLines" width="680" wrap="true" font="font:SmallSystemFont" color="0xD0D6DCFF" lineSpacing="2" />
+    <Label id="programsHead" width="680" font="font:SmallBoldSystemFont" color="0x4DA3FFFF" text="Coming up" />
+    <Label id="programs" width="680" wrap="true" maxLines="4" font="font:SmallSystemFont" color="0xD0D6DCFF" lineSpacing="2" />
+    <Label id="copiesHead" width="680" font="font:SmallBoldSystemFont" color="0x4DA3FFFF" text="Other copies   (OK to watch)" />
+    <LabelList id="copies" itemSize="[680,44]" numRows="4"
+      font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont"
+      color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png"
+      vertFocusAnimationStyle="floatingFocus" />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/player/ChannelInfoPanel.brs" />
+</component>

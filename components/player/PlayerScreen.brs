@@ -20,6 +20,11 @@ sub init()
     m.liveTick.ObserveField("fire", "onLiveTick")
     m.stallTimer = m.top.FindNode("stallTimer")
     m.stallTimer.ObserveField("fire", "onStall")
+    m.infoPanel = m.top.FindNode("infoPanel")
+    m.infoPanel.ObserveField("chosen", "onInfoCopyChosen")
+    m.statsTimer = m.top.FindNode("statsTimer")
+    m.statsTimer.ObserveField("fire", "updatePlaybackInfo")
+    m.bufferCount = 0       ' buffering spells on this channel after it played
     m.clock = CreateObject("roTimespan")
     m.bufferingSince = -1   ' clock ms when buffering began, -1 when not buffering
     m.livePlayed = false    ' this live stream has played (so buffering now is a stall)
@@ -58,6 +63,8 @@ sub onContent()
     m.stallTimer.control = "stop"
     m.bufferingSince = -1
     m.livePlayed = false
+    m.bufferCount = 0
+    hideInfo()
     m.stallReloads = []
     m.lastFormat = ""
     m.liveTick.control = "stop"
@@ -149,6 +156,7 @@ sub watchStall(state as String)
     m.stallTimer.control = "stop"
     if m.bufferingSince >= 0
         waited = (m.clock.TotalMilliseconds() - m.bufferingSince) / 1000
+        if waited >= 1 and m.livePlayed then m.bufferCount = m.bufferCount + 1
         if waited >= 1 and m.livePlayed then print "[player] buffered "; Int(waited); " s ("; m.mode; ", ended "; state; ")"
         m.bufferingSince = -1
     end if
@@ -183,12 +191,88 @@ end sub
 ' what happens at the breaks. Never the segment URL: it holds the password.
 sub onStreamingSegment()
     seg = m.video.streamingSegment
-    if type(seg) <> "roAssociativeArray" or toInt(seg.width) <= 0 then return
-    format = toInt(seg.width).ToStr() + "x" + toInt(seg.height).ToStr() + ", " + Int(toInt(seg.segBitrateBps) / 1000).ToStr() + " kbps"
+    if type(seg) <> "roAssociativeArray" then return
+    ' segType 1 is audio and 3 captions: their bit rate isn't the picture's.
+    if toInt(seg.segType) = 1 or toInt(seg.segType) = 3 then return
+    ' Some streams report only the bit rate, not the size.
+    format = ""
+    if toInt(seg.width) > 0 then format = toInt(seg.width).ToStr() + "x" + toInt(seg.height).ToStr() + ", "
+    if toInt(seg.segBitrateBps) > 0 then format = format + Int(toInt(seg.segBitrateBps) / 1000).ToStr() + " kbps"
+    if format = "" then return
     if format = m.lastFormat then return
     if m.lastFormat = "" then print "[player] stream format: "; format else print "[player] stream format: "; format; " (was "; m.lastFormat; ")"
     m.lastFormat = format
 end sub
+
+' ---------------------------------------------------------------------------
+' Channel info panel (OK twice while watching live). MainScene fills in the
+' channel's details and guide; this adds what only the player knows.
+
+sub showInfo()
+    if m.play = invalid or m.play.kind <> "live" then return
+    m.liveOverlay.visible = false
+    m.overlayTimer.control = "stop"
+    m.infoPanel.info = { name: m.play.name, facts: [], programsNote: "Loading ..." }
+    updatePlaybackInfo()
+    m.infoPanel.visible = true
+    m.infoPanel.SetFocus(true)
+    m.statsTimer.control = "start"
+    m.top.infoRequested = { streamId: m.play.id, name: m.play.name, epgChannelId: asString(m.play.epgChannelId) }
+end sub
+
+sub hideInfo()
+    if m.infoPanel = invalid or not m.infoPanel.visible then return
+    m.statsTimer.control = "stop"
+    m.infoPanel.visible = false
+    m.video.SetFocus(true)
+end sub
+
+sub onChannelInfo()
+    if m.infoPanel.visible then m.infoPanel.info = m.top.channelInfo
+end sub
+
+sub onInfoCopyChosen()
+    m.top.copyChosen = m.infoPanel.chosen
+end sub
+
+' Live stream details, refreshed every 2 s while the panel is open. Read
+' from the Video node; its stream and segment URLs hold the password and are
+' never shown or printed.
+sub updatePlaybackInfo()
+    ' Three lines: picture, connection and state, trouble so far.
+    lines = []
+    video = m.lastFormat
+    codecs = codecName(m.video.videoFormat) + " / " + codecName(m.video.audioFormat)
+    if codecs <> " / "
+        if video <> "" then video = video + "   -   "
+        video = video + codecs
+    end if
+    if video <> "" then lines.Push(video)
+    state = "Live"
+    if m.mode = "paused" then state = "Paused"
+    if m.mode = "timeshift" then state = "Rewound (archive)"
+    if m.video.state = "buffering" then state = state + ", loading"
+    info = m.video.streamInfo
+    if type(info) = "roAssociativeArray" and toInt(info.measuredBitrate) > 0 then state = state + "   -   connection " + formatMbps(toInt(info.measuredBitrate))
+    lines.Push(state)
+    stalls = m.bufferCount.ToStr() + " loading pauses on this channel"
+    if m.stallReloads.Count() > 0 then stalls = stalls + ", " + m.stallReloads.Count().ToStr() + " reconnects"
+    lines.Push(stalls)
+    m.infoPanel.playback = { lines: lines }
+end sub
+
+' The Video node's format names, as people know them.
+function codecName(value as Dynamic) as String
+    v = UCase(asString(value))
+    names = { "MPEG4_10B": "H.264", "AVC": "H.264", "HEVC": "H.265", "MPEG4_15": "H.265", "MPEG2": "MPEG-2", "AAC_ADTS": "AAC", "AAC_LC": "AAC", "AC3": "Dolby Digital", "EAC3": "Dolby Digital Plus", "MP3": "MP3" }
+    if names.DoesExist(v) then return names[v]
+    return v
+end function
+
+function formatMbps(bps as Integer) as String
+    tenths = Int(bps / 100000 + 0.5)
+    return Int(tenths / 10).ToStr() + "." + (tenths mod 10).ToStr() + " Mbps"
+end function
 
 sub onErrorText()
     m.errorMessage.text = m.top.errorText
@@ -261,6 +345,7 @@ end sub
 
 sub close()
     m.saveTimer.control = "stop"
+    hideInfo()
     m.stallTimer.control = "stop"
     m.overlayTimer.control = "stop"
     m.liveTick.control = "stop"
@@ -471,6 +556,12 @@ end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
+    ' Channel info open: Back closes it; nothing else reaches the player
+    ' (Up/Down at the end of its list mustn't change channel).
+    if m.infoPanel.visible
+        if key = "back" then hideInfo()
+        return true
+    end if
     if key = "back"
         if m.mode = "timeshift" or m.mode = "paused"
             startLive()
@@ -506,7 +597,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         showOverlay()
         return true
     else if key = "OK" or key = "info"
-        showOverlay()
+        ' First press shows the strip; a second, while it's up, channel info.
+        if m.liveOverlay.visible then showInfo() else showOverlay()
         return true
     end if
     return false

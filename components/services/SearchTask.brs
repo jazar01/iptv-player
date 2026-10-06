@@ -16,6 +16,7 @@ sub runLoop()
     m.top.ObserveField("gamesRequest", port)
     m.top.ObserveField("marketsRequest", port)
     m.top.ObserveField("localsRequest", port)
+    m.top.ObserveField("infoRequest", port)
     m.top.ready = true
 
     while true
@@ -27,6 +28,8 @@ sub runLoop()
                 m.top.matchResult = matchSaved(msg.GetData())
             else if msg.GetField() = "gamesRequest"
                 m.top.gamesResult = findGames(msg.GetData())
+            else if msg.GetField() = "infoRequest"
+                m.top.infoResult = channelDetails(msg.GetData())
             else if msg.GetField() = "localsRequest"
                 m.top.localsResult = listLocalStations(msg.GetData())
             else if msg.GetField() = "marketsRequest"
@@ -121,7 +124,51 @@ sub resetCategoryLookups()
     m.eventCategories = invalid
     m.epgGroups = invalid
     m.localStations = invalid
+    m.categoryNames = invalid
 end sub
+
+' Channel info: one live channel's details and its other copies (same
+' guide ID), from the index. req: { id, streamId, market }
+function channelDetails(req as Object) as Object
+    result = { id: req.id, streamId: toInt(req.streamId), found: false, copies: [] }
+    e = m.byId.live[toInt(req.streamId).ToStr()]
+    if e = invalid then return result
+    result.found = true
+    result.name = e.name
+    result.icon = asString(e.icon)
+    result.epgChannelId = e.epgChannelId
+    result.archiveDays = e.archiveDays
+    result.category = liveCategoryName(e.categoryId)
+    result.local = false
+    stations = localStations()[asString(req.market)]
+    if stations <> invalid
+        for each s in stations
+            if s.entry.itemId = e.itemId then result.local = true
+        end for
+    end if
+    if e.epgChannelId <> ""
+        group = epgGroup(e.epgChannelId)
+        if group <> invalid
+            for each c in group
+                if c.itemId <> e.itemId and result.copies.Count() < 15 then result.copies.Push({ streamId: c.itemId, name: c.name, epgChannelId: c.epgChannelId, archiveDays: c.archiveDays })
+            end for
+        end if
+    end if
+    return result
+end function
+
+' Live category ID -> name, from the cached category list.
+function liveCategoryName(id as String) as String
+    if m.categoryNames = invalid
+        cats = liveCategories()
+        if cats = invalid then return ""
+        m.categoryNames = {}
+        for each c in cats
+            m.categoryNames[asString(c.category_id)] = asString(c.category_name)
+        end for
+    end if
+    return asString(m.categoryNames[id])
+end function
 
 ' ---------------------------------------------------------------------------
 ' Channel matching (rules in ChannelMatch.brs). Only saved items whose IDs
@@ -275,6 +322,7 @@ function indexEntry(kind as String, item as Object) as Object
         e.itemId = toInt(item.stream_id)
         e.epgChannelId = asString(item.epg_channel_id)
         e.categoryId = asString(item.category_id)
+        e.icon = asString(item.stream_icon)     ' logo URL, for channel info
         if toInt(item.tv_archive) = 1 then e.archiveDays = toInt(item.tv_archive_duration)
         if toInt(item.tv_archive) = 1 and e.archiveDays <= 0 then e.archiveDays = 1
     else
