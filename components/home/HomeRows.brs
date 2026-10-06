@@ -108,6 +108,8 @@ function channelItems(services as Object, channels as Object) as Object
             name: asString(c.name)
             epgChannelId: asString(c.epgChannelId)
         }
+        ' Logo from the provider's channel list (MainHome asks SearchTask).
+        if type(services.icons) = "roAssociativeArray" then item.logo = asString(services.icons[id.ToStr()])
         entry = programs[id.ToStr()]
         if entry <> invalid
             item.Append(programFields(entry))

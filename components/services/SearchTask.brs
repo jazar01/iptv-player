@@ -17,6 +17,7 @@ sub runLoop()
     m.top.ObserveField("marketsRequest", port)
     m.top.ObserveField("localsRequest", port)
     m.top.ObserveField("infoRequest", port)
+    m.top.ObserveField("iconsRequest", port)
     m.top.ready = true
 
     while true
@@ -28,6 +29,8 @@ sub runLoop()
                 m.top.matchResult = matchSaved(msg.GetData())
             else if msg.GetField() = "gamesRequest"
                 m.top.gamesResult = findGames(msg.GetData())
+            else if msg.GetField() = "iconsRequest"
+                m.top.iconsResult = channelIcons(msg.GetData())
             else if msg.GetField() = "infoRequest"
                 m.top.infoResult = channelDetails(msg.GetData())
             else if msg.GetField() = "localsRequest"
@@ -126,6 +129,21 @@ sub resetCategoryLookups()
     m.localStations = invalid
     m.categoryNames = invalid
 end sub
+
+' Home channel cards: logo URLs for these stream IDs ("" when the channel
+' has none or isn't in the list). req: { id, streamIds: [] }
+function channelIcons(req as Object) as Object
+    result = { id: req.id, ready: m.index.live.Count() > 0, icons: {} }
+    if not result.ready or type(req.streamIds) <> "roArray" then return result
+    for each id in req.streamIds
+        key = toInt(id).ToStr()
+        e = m.byId.live[key]
+        icon = ""
+        if e <> invalid then icon = asString(e.icon)
+        result.icons[key] = icon
+    end for
+    return result
+end function
 
 ' Channel info: one live channel's details and its other copies (same
 ' guide ID), from the index. req: { id, streamId, market }

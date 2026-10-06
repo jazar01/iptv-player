@@ -33,6 +33,7 @@ sub initSearch()
     m.searchTask.ObserveField("gamesResult", "onGamesResult")
     m.searchTask.ObserveField("marketsResult", "onMarketsResult")
     m.searchTask.ObserveField("localsResult", "onLocalsResult")
+    m.searchTask.ObserveField("iconsResult", "onIconsResult")
     ' match_selftest=1 in the manifest runs the channel-matching self-test.
     m.searchTask.selfTest = (CreateObject("roAppInfo").GetValue("match_selftest") = "1")
     m.searchTask.control = "RUN"

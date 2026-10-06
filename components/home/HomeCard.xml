@@ -10,6 +10,9 @@
 
     <Group id="channel">
       <Label id="name" translation="[20,14]" width="360" font="font:MediumBoldSystemFont" color="0xFFFFFFFF" />
+      <!-- Channel logo, top right, when there is one and the name is short.
+           Kept to the name line (bottom at 46), clear of the program title. -->
+      <Poster id="channelLogo" translation="[270,12]" width="110" height="34" loadDisplayMode="scaleToFit" visible="false" />
       <Label id="nowTitle" translation="[20,58]" width="360" height="72" wrap="true" maxLines="2"
         font="font:SmallSystemFont" color="0xD0D6DCFF" />
       <Label id="tags" translation="[20,128]" width="360" font="font:SmallestBoldSystemFont" color="0xFF7A6BFF" />

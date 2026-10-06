@@ -26,6 +26,9 @@ sub init()
     m.initials = m.top.FindNode("initials")
     m.logo = m.top.FindNode("logo")
     m.logo.ObserveField("loadStatus", "onLogoStatus")
+    m.channelLogo = m.top.FindNode("channelLogo")
+    m.channelLogo.ObserveField("loadStatus", "onChannelLogoStatus")
+    m.logoName = ""
 
     m.tick = m.top.FindNode("tick")
     m.tick.ObserveField("fire", "redraw")
@@ -55,6 +58,32 @@ sub redraw()
     else
         m.tick.control = "stop"
         drawInfo(c)
+    end if
+    ' Last, so it can narrow the name drawn above (or reset a recycled card).
+    drawChannelLogo(c, localizeName(asString(c.name)))
+end sub
+
+' Channel cards: the provider's logo at the top right, with the name beside
+' it, but only for names short enough to fit there (about 15 characters);
+' long event names, and cards whose logo is missing or fails to load, keep
+' the full width.
+sub drawChannelLogo(c as Object, name as String)
+    logo = ""
+    if c.kind = "channel" and name.Len() <= 15 then logo = c.logo
+    m.logoName = name
+    if m.channelLogo.uri <> logo then m.channelLogo.uri = logo
+    onChannelLogoStatus()
+end sub
+
+sub onChannelLogoStatus()
+    shown = (m.channelLogo.uri <> "" and m.channelLogo.loadStatus = "ready")
+    m.channelLogo.visible = shown
+    if shown
+        m.name.width = 240
+        ' Beside the logo the big font fits about 11 characters.
+        if asString(m.logoName).Len() > 11 then m.name.font = m.titleFontSmall
+    else
+        m.name.width = 360
     end if
 end sub
 
