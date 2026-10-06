@@ -17,15 +17,73 @@ sub init()
 
     m.backend = RegistryBackend("iptv_state")
     m.doc = m.backend.read()
+    restored = false
     if m.doc = invalid
-        print "[state] no saved state; starting fresh"
-        m.doc = newDocument()
-    else
-        normalizeDocument(m.doc)
+        ' Nothing saved (fresh install, or wiped): use the restore bundle that
+        ' deploy.ps1 packaged from backups\, if there is one for this Roku.
+        m.doc = restoredDocument()
+        restored = (m.doc <> invalid)
+        if not restored
+            print "[state] no saved state; starting fresh"
+            m.doc = newDocument()
+        end if
     end if
+    normalizeDocument(m.doc)
     ' The last saved state: a failed save puts m.doc back to it (persist()).
     m.committed = copyDocument(m.doc)
+    if restored and not persist() then print "[state] WARNING: restored state couldn't be saved yet; it will be on the next change"
 end sub
+
+' ---------------------------------------------------------------------------
+' Manual backup and restore (until the V2 backup service).
+
+' Settings -> Back up to computer: the whole saved document as JSON, which
+' MainScene prints to the console for scripts\backup-roku.ps1.
+function exportDocument() as String
+    return FormatJson(m.doc)
+end function
+
+' pkg:/data/restore.json (deploy.ps1): { devices: [{ ip, name, document? }],
+' household? }. This Roku's own backup if one matches its IP address, else
+' the household copy (with this Roku's name from the deploy list, a new
+' device ID and no per-device history). Only used when nothing is saved, so
+' a Roku that has its own state never loses it to an old backup.
+function restoredDocument() as Dynamic
+    ' ReadAsciiFile, not roFileSystem: StateStore runs on the render thread,
+    ' where roFileSystem can't be created. A missing file reads as "".
+    text = ReadAsciiFile("pkg:/data/restore.json")
+    if text = "" then return invalid
+    bundle = ParseJson(text, "i")     ' "i": see copyDocument
+    if type(bundle) <> "roAssociativeArray" then return invalid
+
+    ips = {}
+    addresses = CreateObject("roDeviceInfo").GetIPAddrs()
+    for each iface in addresses
+        ips[asString(addresses[iface])] = true
+    end for
+
+    name = ""
+    if type(bundle.devices) = "roArray"
+        for each d in bundle.devices
+            if type(d) = "roAssociativeArray" and ips.DoesExist(asString(d.ip))
+                name = asString(d.name)
+                if type(d.document) = "roAssociativeArray"
+                    print "[state] restored from the backup of '"; name; "'"
+                    return d.document
+                end if
+            end if
+        end for
+    end if
+
+    doc = bundle.household
+    if type(doc) <> "roAssociativeArray" then return invalid
+    doc.deviceId = CreateObject("roDeviceInfo").GetRandomUUID()
+    doc.deviceName = name
+    doc.recent = []
+    doc.seenGames = []
+    print "[state] restored from the household backup as '"; name; "'"
+    return doc
+end function
 
 ' ---------------------------------------------------------------------------
 ' Account and device

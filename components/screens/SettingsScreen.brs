@@ -1,7 +1,7 @@
 sub init()
     m.menu = m.top.FindNode("menu")
     m.details = m.top.FindNode("details")
-    m.actions = ["teams", "teamsRow", "teamsPosition", "noGameTeams", "market", "recentFavorites", "account"]
+    m.actions = ["teams", "teamsRow", "teamsPosition", "noGameTeams", "market", "recentFavorites", "account", "backup"]
     buildMenu({})
 
     m.menu.ObserveField("itemSelected", "onSelected")
@@ -24,6 +24,7 @@ sub buildMenu(info as Object)
         "Local stations:   " + marketLabel
         "Favorites in Recently Viewed:   " + onOff(isTrue(info.showFavoritesInRecent))
         "Account and device name"
+        "Back up to computer"
     ]
     focus = m.menu.itemFocused
     content = CreateObject("roSGNode", "ContentNode")

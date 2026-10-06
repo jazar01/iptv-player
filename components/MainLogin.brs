@@ -206,5 +206,26 @@ sub onSettingsChosen(event as Object)
         toggleFavoritesInRecent()
     else if choice = "teamsPosition"
         toggleMyTeamsFirst()
+    else if choice = "backup"
+        backupToConsole()
     end if
+end sub
+
+' Settings -> Back up to computer: the saved document, base64-encoded, on
+' the debug console between markers, for scripts\backup-roku.ps1 to save.
+' Short prefixed lines survive the console's line wrapping. It includes the
+' provider password, so it's only ever printed here, on request.
+sub backupToConsole()
+    bytes = CreateObject("roByteArray")
+    bytes.FromAsciiString(m.store.callFunc("exportDocument"))
+    data = bytes.ToBase64String()
+    name = m.store.callFunc("getDevice").deviceName
+    print "[backup] BEGIN "; data.Len(); " "; name
+    i = 1
+    while i <= data.Len()
+        print "[backup] "; Mid(data, i, 96)
+        i = i + 96
+    end while
+    print "[backup] END"
+    showToast("Backup sent to the computer (scripts\backup-roku.ps1 saves it).")
 end sub

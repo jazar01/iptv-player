@@ -1,0 +1,103 @@
+<#
+.SYNOPSIS
+    Saves a Roku's IPTV Player state (account, favorites, teams, progress,
+    settings) to backups\ on this PC.
+
+.DESCRIPTION
+    Connects to the Roku's debug console (port 8085) and waits for the app's
+    backup, which it prints when you choose Settings -> Back up to computer on
+    the TV. The backup is saved as backups\<Name>.json (the latest, which
+    deploy.ps1 bundles for restoring) and backups\<Name>-<date>.json (a dated
+    copy).
+
+    The Roku is named as in $LocalRokus in scripts\deploy.local.ps1, or given
+    by -RokuIp (then -Name sets the file name).
+
+    The backup includes the provider password. backups\ is git-ignored; keep
+    it private. Nothing from the backup is printed here.
+
+.EXAMPLE
+    .\scripts\backup-roku.ps1 -Roku Basement
+
+.EXAMPLE
+    .\scripts\backup-roku.ps1 -RokuIp 192.168.1.50 -Name 'Living room'
+#>
+[CmdletBinding()]
+param(
+    [string]$Roku,
+    [string]$RokuIp,
+    [string]$Name,
+    [int]$TimeoutSeconds = 300
+)
+
+$ErrorActionPreference = 'Stop'
+$root = Split-Path -Parent $PSScriptRoot
+
+if (-not $RokuIp) {
+    $localConfig = Join-Path $PSScriptRoot 'deploy.local.ps1'
+    if (Test-Path $localConfig) { . $localConfig }
+    if (-not $Roku) { throw 'Pass -Roku <name from $LocalRokus> or -RokuIp <address>.' }
+    $match = @($LocalRokus) | Where-Object { $_ -and $_.Name -eq $Roku } | Select-Object -First 1
+    if (-not $match) { throw "No Roku named '$Roku' in `$LocalRokus (scripts\deploy.local.ps1)." }
+    $RokuIp = $match.Ip
+    $Name = $match.Name
+}
+if (-not $Name) { $Name = $RokuIp }
+
+Write-Host "Listening to $Name ($RokuIp). On that TV choose Settings -> Back up to computer ..."
+$client = New-Object System.Net.Sockets.TcpClient($RokuIp, 8085)
+$stream = $client.GetStream()
+$stream.ReadTimeout = 2000
+$buffer = New-Object byte[] 65536
+$text = ''
+$deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+try {
+    while ((Get-Date) -lt $deadline -and $text -notmatch '\[backup\] END') {
+        try {
+            $n = $stream.Read($buffer, 0, $buffer.Length)
+            if ($n -gt 0) { $text += [Text.Encoding]::UTF8.GetString($buffer, 0, $n) }
+        }
+        catch [System.IO.IOException] { }   # read timeout: keep waiting
+    }
+}
+finally {
+    $client.Close()
+}
+if ($text -notmatch '\[backup\] END') { throw "No backup arrived within $TimeoutSeconds s. Is IPTV Player open on that TV?" }
+
+# The last BEGIN..END block: the "[backup] " lines between them, joined.
+$lines = $text -split "`r?`n"
+$begin = -1
+for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match '\[backup\] BEGIN\s+(\d+)') { $begin = $i; $expected = [int]$Matches[1] } }
+$data = ''
+for ($i = $begin + 1; $i -lt $lines.Count; $i++) {
+    if ($lines[$i] -match '\[backup\] END') { break }
+    if ($lines[$i] -match '\[backup\] (\S+)') { $data += $Matches[1] }
+}
+if ($data.Length -ne $expected) { throw "The backup arrived incomplete ($($data.Length) of $expected characters). Try again." }
+
+$json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($data))
+# -AsHashtable: Roku documents can hold the same key in two casings
+# ("seenGames" / "seengames"), which plain ConvertFrom-Json rejects.
+$doc = $json | ConvertFrom-Json -AsHashtable     # throws if it isn't valid JSON
+$dupes = @($doc.Keys | Group-Object { $_.ToLower() } | Where-Object Count -gt 1 | ForEach-Object { ($_.Group -join ' / ') })
+if ($dupes) { Write-Host "  note: keys in two casings: $($dupes -join ', ')" }
+$backupDir = Join-Path $root 'backups'
+New-Item -ItemType Directory -Force $backupDir | Out-Null
+$latest = Join-Path $backupDir "$Name.json"
+$dated = Join-Path $backupDir ("$Name-" + (Get-Date -Format 'yyyy-MM-dd-HHmm') + '.json')
+[IO.File]::WriteAllText($latest, $json, (New-Object System.Text.UTF8Encoding($false)))
+Copy-Item $latest $dated
+
+# Keys may be in either casing (deviceName / devicename): look up ignoring it.
+function Get-Field($table, [string]$key) {
+    foreach ($k in $table.Keys) { if ($k -ieq $key) { return $table[$k] } }
+    return $null
+}
+function Count-Live($items) { @($items | Where-Object { $_ -and -not (Get-Field $_ 'deleted') }).Count }
+Write-Host "Saved $latest"
+Write-Host "  (and $(Split-Path -Leaf $dated))"
+Write-Host ("  device '{0}': {1} favorites, {2} teams, {3} series, {4} resume entries" -f `
+    (Get-Field $doc 'deviceName'), (Count-Live (Get-Field $doc 'favorites')), (Count-Live (Get-Field $doc 'teams')), `
+    (Count-Live (Get-Field $doc 'series')), @(Get-Field $doc 'resume').Count)
+Write-Host 'deploy.ps1 will bundle it, and the app restores it if this TV ever starts with no saved state.'

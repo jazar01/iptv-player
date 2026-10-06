@@ -54,6 +54,7 @@
     <function name="remapSeries" />
     <function name="remapEpisodes" />
     <function name="getSavedSeries" />
+    <function name="exportDocument" />
     <function name="setSeriesFavorite" />
     <function name="isSeriesFavorite" />
     <function name="getFavoriteSeries" />

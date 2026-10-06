@@ -3,3 +3,6 @@ out/
 
 # Per-machine deploy settings (Roku IP and developer password)
 scripts/deploy.local.ps1
+
+# Roku backups (scripts/backup-roku.ps1): saved state including the provider password
+backups/

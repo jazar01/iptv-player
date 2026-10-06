@@ -57,6 +57,10 @@ $include = @('manifest', 'source', 'components', 'data', 'images')
 
 if (-not (Test-Path (Join-Path $root 'manifest'))) { throw "No manifest found in $root" }
 
+# Local settings (Roku list, passwords): needed for the restore bundle below.
+$localConfig = Join-Path $PSScriptRoot 'deploy.local.ps1'
+if (Test-Path $localConfig) { . $localConfig }
+
 # --- Check -------------------------------------------------------------------
 
 if (-not $SkipCheck) {
@@ -108,8 +112,49 @@ if (-not $SkipCheck) {
 New-Item -ItemType Directory -Force $outDir | Out-Null
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 
+# Restore bundle (data/restore.json in the package): each Roku's latest backup
+# from backups\ (scripts\backup-roku.ps1), matched by the IPs in $LocalRokus,
+# plus backups\household.json for any Roku without one. A Roku with no saved
+# state at launch restores from it; one that has state ignores it. Contains
+# the provider password, like the backups themselves; out\ and backups\ are
+# git-ignored.
+function Get-RestoreBundle {
+    $backupDir = Join-Path $root 'backups'
+    if (-not (Test-Path $backupDir)) { return $null }
+    # Backups are embedded as their own text, not re-parsed: a Roku document
+    # can hold one key in two casings, which ConvertFrom-Json rejects.
+    function Read-Backup([string]$path) {
+        $text = (Get-Content $path -Raw).Trim()
+        if (-not ($text.StartsWith('{') -and $text.EndsWith('}'))) { throw "$path doesn't look like a backup." }
+        return $text
+    }
+    $devices = @()
+    $withDocs = 0
+    foreach ($roku in @($LocalRokus)) {
+        if (-not $roku) { continue }
+        $entry = '{"ip":' + ($roku.Ip | ConvertTo-Json) + ',"name":' + ($roku.Name | ConvertTo-Json)
+        $file = Join-Path $backupDir "$($roku.Name).json"
+        if (Test-Path $file) { $entry += ',"document":' + (Read-Backup $file); $withDocs++ }
+        $devices += $entry + '}'
+    }
+    $bundle = '{"devices":[' + ($devices -join ',') + ']'
+    $household = Join-Path $backupDir 'household.json'
+    $hasHousehold = Test-Path $household
+    if ($hasHousehold) { $bundle += ',"household":' + (Read-Backup $household) }
+    $bundle += '}'
+    if ($withDocs -eq 0 -and -not $hasHousehold) { return $null }
+    Write-Host "Restore bundle: $withDocs Roku backup(s)$(if ($hasHousehold) { ' + household' })"
+    return $bundle
+}
+
 $zip = [System.IO.Compression.ZipFile]::Open($zipPath, 'Create')
 try {
+    $restoreJson = Get-RestoreBundle
+    if ($restoreJson) {
+        $entry = $zip.CreateEntry('data/restore.json', 'Optimal')
+        $writer = New-Object System.IO.StreamWriter($entry.Open(), (New-Object System.Text.UTF8Encoding($false)))
+        try { $writer.Write($restoreJson) } finally { $writer.Dispose() }
+    }
     foreach ($name in $include) {
         $path = Join-Path $root $name
         if (-not (Test-Path $path)) { continue }
@@ -160,8 +205,6 @@ function Install-Roku([string]$Ip, [string]$DevPassword) {
     return 'installed'
 }
 
-$localConfig = Join-Path $PSScriptRoot 'deploy.local.ps1'
-if (Test-Path $localConfig) { . $localConfig }
 
 # --- Every Roku in deploy.local.ps1 ($LocalRokus) ---------------------------
 
