@@ -16,10 +16,8 @@ sub init()
     m.saveTimer = m.top.FindNode("saveTimer")
     m.timeshiftTimeout = m.top.FindNode("timeshiftTimeout")
     m.timeshiftTimeout.ObserveField("fire", "onTimeshiftTimeout")
-    m.viewedTimer = m.top.FindNode("viewedTimer")
-    m.viewedTimer.ObserveField("fire", "onViewed")
-    m.watchedTimer = m.top.FindNode("watchedTimer")
-    m.watchedTimer.ObserveField("fire", "onWatched")
+    m.liveTick = m.top.FindNode("liveTick")
+    m.liveTick.ObserveField("fire", "onLiveTick")
 
     m.play = invalid
     m.programs = invalid
@@ -49,13 +47,13 @@ sub onContent()
 
     ' Never print play.url: it contains the password.
     print "[player] "; play.kind; " "; play.id; " '"; play.name; "' from "; toInt(play.startPosition); " s"
-    m.viewedTimer.control = "stop"
-    m.watchedTimer.control = "stop"
+    m.liveTick.control = "stop"
+    m.liveSeconds = 0           ' playing time on this channel; restarts on every change
+    m.viewedSent = false
+    m.watchedSent = false
     if play.kind = "live"
         m.saveTimer.control = "stop"
-        m.viewedTimer.control = "start"     ' restarts on every channel change
-        m.watchedTimer.duration = m.top.channelViewSeconds
-        m.watchedTimer.control = "start"
+        m.liveTick.control = "start"
         startLive()
     else
         m.mode = "vod"
@@ -170,21 +168,30 @@ sub reportProgress()
     m.top.progress = { play: m.play, position: position, duration: duration, finished: m.finished }
 end sub
 
-sub onViewed()
+' Every 5 s on a live channel: count the time only while video is actually
+' playing (live or rewound), so a stream that never starts, an error panel
+' or a pause doesn't count as viewing. Each threshold reports once per
+' channel.
+sub onLiveTick()
     if m.play = invalid or m.play.kind <> "live" then return
-    m.top.liveViewed = { streamId: m.play.id, name: m.play.name, epgChannelId: asString(m.play.epgChannelId) }
-end sub
-
-sub onWatched()
-    if m.play = invalid or m.play.kind <> "live" then return
-    m.top.liveWatched = { streamId: m.play.id, name: m.play.name, epgChannelId: asString(m.play.epgChannelId) }
+    if m.video.state <> "playing" then return
+    m.liveSeconds = m.liveSeconds + m.liveTick.duration
+    channel = { streamId: m.play.id, name: m.play.name, epgChannelId: asString(m.play.epgChannelId) }
+    if not m.viewedSent and m.liveSeconds >= 60
+        m.viewedSent = true
+        m.top.liveViewed = channel
+    end if
+    if not m.watchedSent and m.liveSeconds >= m.top.channelViewSeconds
+        m.watchedSent = true
+        m.top.liveWatched = channel
+    end if
+    if m.viewedSent and m.watchedSent then m.liveTick.control = "stop"
 end sub
 
 sub close()
     m.saveTimer.control = "stop"
     m.overlayTimer.control = "stop"
-    m.viewedTimer.control = "stop"
-    m.watchedTimer.control = "stop"
+    m.liveTick.control = "stop"
     reportProgress()
     m.video.control = "stop"
     m.play = invalid

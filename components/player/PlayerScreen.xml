@@ -15,8 +15,8 @@
        failed        { play, code, message } when the Video node errors
        channelStep   +1 / -1 when Up / Down is pressed during live playback
        toggleFavorite { streamId, name, epgChannelId } when * is pressed during live playback
-       liveViewed    { streamId, name, epgChannelId } after a minute on a live channel
-       liveWatched   same, after channelViewSeconds (usage scores; surfing doesn't count)
+       liveViewed    { streamId, name, epgChannelId } after a minute of a live channel playing
+       liveWatched   same, after channelViewSeconds playing (usage scores; surfing doesn't count)
        closed        true when the user leaves the player
 
   Live modes: "live" -> Play/Pause pauses ("paused") -> Play continues from the
@@ -77,9 +77,9 @@
          the provider's archive segments are a full minute each. -->
     <Timer id="timeshiftTimeout" duration="30" />
     <Timer id="saveTimer" duration="30" repeat="true" />
-    <!-- A live channel counts as viewed (Recently Viewed) after a minute. -->
-    <Timer id="viewedTimer" duration="60" />
-    <Timer id="watchedTimer" duration="180" />
+    <!-- Counts seconds of live video actually playing (not paused, buffering
+         or failed): viewed after a minute, watched after channelViewSeconds. -->
+    <Timer id="liveTick" duration="5" repeat="true" />
   </children>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
