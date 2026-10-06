@@ -118,7 +118,22 @@ sub refreshSearchIndex()
             timeoutMs: 120000
         })
     end for
+    ' Live TV's category list: My Teams (event categories) and local
+    ' stations need it even if Live TV hasn't been opened.
+    sendRequest({
+        id: "catalogAll"
+        action: catalogActions("live").categories
+        context: { kind: "categories" }
+        cacheFile: liveCategoriesFile()
+        maxAgeSeconds: 86400
+        saveOnly: true
+        timeoutMs: 30000
+    })
 end sub
+
+function liveCategoriesFile() as String
+    return "cachefs:/catalog/live_categories.json"
+end function
 
 sub onCatalogAll(res as Object)
     kind = asString(res.context.kind)
@@ -127,6 +142,8 @@ sub onCatalogAll(res as Object)
         m.searchIndexRequested = false
         m.searchRetryTimer.control = "stop"
         m.searchRetryTimer.control = "start"
+    else if not res.fromCache and kind = "categories"
+        searchSend("load", { kind: "categories" })
     else if not res.fromCache
         searchSend("load", { kind: kind, file: searchFile(kind) })
     end if

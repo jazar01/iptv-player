@@ -106,7 +106,7 @@ sub onVideoState()
     if state = "error"
         code = m.video.errorCode
         detail = asString(m.video.errorStr)
-        print "[player] error "; code; " "; asString(m.video.errorMsg); " / "; detail
+        print "[player] error "; code; " "; redact(m.video.errorMsg); " / "; redact(detail)
         message = friendlyError(code, httpStatus(detail))
         m.errorMessage.text = message
         m.errorPanel.visible = true
@@ -293,7 +293,7 @@ end sub
 ' The archive didn't play: say why and rejoin live.
 sub timeshiftFailed(reason as String)
     m.timeshiftTimeout.control = "stop"
-    print "[player] timeshift failed: "; reason
+    print "[player] timeshift failed: "; redact(reason)
     if Instr(1, reason, "larger than the entire buffer") > 0
         ' The provider's archive segments are a full minute each; for HD
         ' channels that's more than this Roku's video buffer holds.

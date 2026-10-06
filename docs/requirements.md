@@ -163,6 +163,7 @@ Favorites and watch progress must never be lost. All saved state goes through on
 | Changes lost to a crash or power loss | `Flush()` after every change; every write's return value is checked. |
 | A failed save looks like it worked until restart | A failed save undoes the change in memory, trimming included, so the screen shows only what's saved and a later save can't carry a change reported as failed. Setup saves the account and device name together. A finished movie or episode counts as watched only once that's saved; until then, playback keeps retrying. |
 | Saved data corrupted | Two alternating copies with version numbers; if the newest fails to parse, load the previous one. |
+| A cut-off or unwritable download treated as good | Cache files are written to a temporary file and renamed into place, and stamped fresh only after that succeeds. A catalog list missing its closing bracket is rejected; one that won't parse loses its stamp, so the next refresh downloads it again. |
 
 - Screens and player code never touch the registry directly; they call `StateStore` methods such as `getFavorites()`, `markWatched()` and `savePosition()`.
 - An off-device backend can be added behind the same interface later (see Later features).

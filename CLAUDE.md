@@ -15,7 +15,9 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
 - Only the registry holds permanent state. `cachefs:` is for re-downloadable
   data only; never use `tmp:` for state.
 - Never print URLs from `xtreamUrl()`, `streamUrl()` or anything else
-  containing the password.
+  containing the password. Text from the platform or provider (Video
+  `errorMsg`/`errorStr`, transfer failure reasons) goes through `redact()`
+  before printing; it may quote the URL.
 
 ## Layout
 

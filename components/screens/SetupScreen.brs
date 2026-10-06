@@ -2,7 +2,7 @@ sub init()
     m.fields = ["server", "username", "password", "deviceName"]
     m.labels = { server: "Server URL", username: "Username", password: "Password", deviceName: "Device name" }
     m.hints = {
-        server: "For example http://example.com:8080"
+        server: "For example https://example.com:8080. Use https:// if your provider supports it: with http:// the password is sent unencrypted."
         username: ""
         password: ""
         deviceName: "A name for this Roku, such as Living room"
@@ -38,6 +38,7 @@ sub refreshMenu()
         shown = m.values[f]
         if f = "password" and shown <> "" then shown = String(shown.Len(), "*")
         if shown = "" then shown = "(not set)"
+        if f = "server" and m.values.server <> "" and not isEncryptedServer(m.values.server) then shown = shown + "   (not encrypted)"
         item = content.CreateChild("ContentNode")
         item.title = m.labels[f] + ":   " + shown
     end for
@@ -79,8 +80,18 @@ end sub
 
 sub onKeyboardButton()
     if m.dialog.buttonSelected = 0
-        m.values[m.editing] = m.dialog.text.Trim()
-        if m.editing = "server" then m.values.server = normalizeServer(m.values.server)
+        typed = m.dialog.text.Trim()
+        m.values[m.editing] = typed
+        if m.editing = "server"
+            m.values.server = normalizeServer(typed)
+            if typed <> "" and m.values.server = ""
+                m.top.status = "Use an address starting with https:// or http://."
+            else if m.values.server <> "" and not isEncryptedServer(m.values.server)
+                m.top.status = "This connection isn't encrypted (http://). It works, but use https:// if your provider supports it."
+            else
+                m.top.status = ""
+            end if
+        end if
         refreshMenu()
     end if
     m.dialog.close = true

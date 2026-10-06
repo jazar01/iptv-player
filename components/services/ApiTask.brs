@@ -38,6 +38,13 @@ sub accept(req as Object)
         return
     end if
 
+    if not safeCachePath(asString(req.cacheFile))
+        res = newResponse(req)
+        res.error = "Bad cache path"
+        m.top.response = res
+        return
+    end if
+
     url = asString(req.url)
     if url = "" then url = xtreamUrl(m.top.credentials, asString(req.action), req.params)
     if url = ""
@@ -155,7 +162,7 @@ sub onUrlEvent(msg as Object)
         return
     end if
     ' Negative codes are network/curl failures; the failure reason says which.
-    err = msg.GetFailureReason()
+    err = redact(msg.GetFailureReason())     ' may quote the URL, which holds the password
     if code > 0 then err = "HTTP " + code.ToStr()
     finishJob(job, { ok: false, code: code, body: "", error: err, retryable: (code <= 0 or code >= 500) })
 end sub
@@ -186,14 +193,19 @@ sub finishJob(job as Object, http as Object)
 
     if http.ok and isTrue(job.req.saveOnly)
         ' Large lists (the search catalog): write to disk, don't parse here or
-        ' send the data across threads. A JSON array or object is all we check.
-        first = Left(http.body.Trim(), 1)
-        if (first = "[" or first = "{") and asString(job.req.cacheFile) <> ""
-            writeCacheText(job.req.cacheFile, http.body)
+        ' send the data across threads. A whole JSON array or object (both
+        ' ends present, so a cut-off download is caught) is all we check;
+        ' SearchTask parses it and drops the file if it doesn't parse.
+        body = http.body.Trim()
+        first = Left(body, 1)
+        last = Right(body, 1)
+        if not ((first = "[" and last = "]") or (first = "{" and last = "}"))
+            res.error = "Server returned incomplete or non-JSON data"
+        else if asString(job.req.cacheFile) = "" or not writeCacheText(job.req.cacheFile, http.body)
+            res.error = "Couldn't save the download (storage full?)"
+        else
             res.ok = true
             res.error = ""
-        else
-            res.error = "Server returned something other than JSON"
         end if
     else if http.ok
         if job.cachedText <> "" and http.body = job.cachedText
@@ -257,7 +269,10 @@ function readCacheText(path as String) as String
     return ReadAsciiFile(path)
 end function
 
-sub writeCacheText(path as String, text as String)
+' Written to a temporary file and then renamed, so a reader never sees half
+' a file; the age stamp is written last, so a failed write never looks
+' fresh. Returns false if it couldn't be saved.
+function writeCacheText(path as String, text as String) as Boolean
     slash = 0
     p = Instr(1, path, "/")
     while p > 0
@@ -265,13 +280,29 @@ sub writeCacheText(path as String, text as String)
         p = Instr(p + 1, path, "/")
     end while
     if slash > 0 then CreateDirectory(Left(path, slash - 1))
-    if not WriteAsciiFile(path, text)
+    fs = CreateObject("roFileSystem")
+    if fs.Exists(path + ".time") then fs.Delete(path + ".time")
+    temp = path + ".part"
+    ok = WriteAsciiFile(temp, text)
+    if ok
+        if fs.Exists(path) then fs.Delete(path)
+        ok = fs.Rename(temp, path)
+    end if
+    if not ok
+        if fs.Exists(temp) then fs.Delete(temp)
         print "[api] could not write cache "; path
-        return
+        return false
     end if
     ' Sidecar with the write time, for maxAgeSeconds.
     WriteAsciiFile(path + ".time", nowSeconds().ToStr())
-end sub
+    return true
+end function
+
+' Cache files live under cachefs:/ only, with no ".." in the path.
+function safeCachePath(path as String) as Boolean
+    if path = "" then return true
+    return Left(path, 9) = "cachefs:/" and Instr(1, path, "..") = 0
+end function
 
 ' Seconds since the cache file was written, or -1 if unknown.
 function cacheAgeSeconds(path as String) as Integer

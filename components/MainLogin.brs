@@ -9,14 +9,14 @@ end sub
 
 sub login()
     creds = m.api.credentials
-    print "[main] logging in to "; creds.server; " as "; creds.username
+    print "[main] logging in to "; redact(creds.server)
     sendRequest({ id: "login", action: "" })
 end sub
 
 sub onLogin(res as Object)
     result = evaluateLogin(res)
     if not result.ok
-        print "[main] login failed: "; result.message
+        print "[main] login failed: "; redact(result.message)
         if m.pendingSetup <> invalid
             ' Still on Setup: say why, and keep the saved (working) account active.
             m.pendingSetup = invalid
@@ -156,6 +156,7 @@ function settingsInfo() as Object
     server = ""
     creds = m.store.callFunc("getCredentials")
     if creds <> invalid then server = creds.server
+    if server <> "" and not isEncryptedServer(server) then server = server + "   (not encrypted)"
     return {
         deviceName: device.deviceName
         deviceId: device.deviceId

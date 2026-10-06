@@ -233,15 +233,47 @@ function formatDayTime(utc as Integer) as String
 end function
 
 ' "example.com:8080/" -> "http://example.com:8080". Also drops a pasted
-' "/player_api.php..." suffix.
+' "/player_api.php..." suffix, a query or fragment, and any "user:pass@"
+' (the account goes in its own fields). No scheme means http: many Xtream
+' servers have no https, so guessing it would just fail; Setup says when the
+' connection isn't encrypted. Returns "" for anything but http or https.
 function normalizeServer(server as String) as String
     s = server.Trim()
     if s = "" then return ""
     p = Instr(1, LCase(s), "/player_api.php")
     if p > 0 then s = Left(s, p - 1)
+    for each mark in ["?", "#"]
+        p = Instr(1, s, mark)
+        if p > 0 then s = Left(s, p - 1)
+    end for
     if Instr(1, s, "://") = 0 then s = "http://" + s
+    scheme = LCase(Left(s, Instr(1, s, "://") - 1))
+    if scheme <> "http" and scheme <> "https" then return ""
+    rest = Mid(s, scheme.Len() + 4)
+    hostEnd = Instr(1, rest + "/", "/")
+    at = Instr(1, Left(rest, hostEnd - 1), "@")
+    if at > 0 then rest = Mid(rest, at + 1)
+    s = scheme + "://" + rest
     while Right(s, 1) = "/"
         s = Left(s, s.Len() - 1)
     end while
+    if s.Len() <= scheme.Len() + 3 then return ""
     return s
+end function
+
+function isEncryptedServer(server as String) as Boolean
+    return LCase(Left(server, 8)) = "https://"
+end function
+
+' For log lines that may carry text from the platform or the provider:
+' every URL is cut to its scheme and host, so stream and API URLs (which
+' hold the username and password) never reach the console.
+function redact(text as Dynamic) as String
+    re = CreateObject("roRegex", "([a-z][a-z0-9+.-]*://)(?:[^/@\s]*@)?([^/\s?#]*)[^\s""'<>]*", "i")
+    return re.ReplaceAll(asString(text), "\1\2/...")
+end function
+
+' A provider ID made safe for a cache file name (digits, letters, - and _).
+function safeKey(id as Dynamic) as String
+    return CreateObject("roRegex", "[^A-Za-z0-9_-]", "").ReplaceAll(asString(id), "_")
 end function

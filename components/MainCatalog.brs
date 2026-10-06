@@ -117,6 +117,8 @@ sub onCatalogCategories(res as Object)
         if not res.fromCache then print "[main] "; res.data.Count(); " "; kind; " categories"
         state.categoriesShown = true
         if kind = "live"
+            ' Same file My Teams reads (liveCategoriesFile): tell it when fresh.
+            if not res.fromCache then searchSend("load", { kind: "categories" })
             m.liveCategories = res.data
             screen.categories = liveCategoriesWithLocal(res.data)
         else
@@ -140,7 +142,7 @@ sub onWantCategory(event as Object)
         action: catalogActions(kind).items
         params: { category_id: id }
         context: { kind: kind, categoryId: id }
-        cacheFile: "cachefs:/catalog/" + kind + "_" + id + ".json"
+        cacheFile: "cachefs:/catalog/" + kind + "_" + safeKey(id) + ".json"
         cacheFirst: true
         timeoutMs: 30000
     })

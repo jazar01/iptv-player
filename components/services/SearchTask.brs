@@ -51,12 +51,21 @@ end sub
 sub loadKind(req as Object)
     kind = asString(req.kind)
     file = asString(req.file)
+    if kind = "categories"
+        ' The live category list changed: My Teams and local stations re-read it.
+        resetCategoryLookups()
+        m.top.indexVersion = m.top.indexVersion + 1
+        return
+    end if
     if m.index[kind] = invalid or not CreateObject("roFileSystem").Exists(file) then return
 
     timer = CreateObject("roTimespan")
     raw = ParseJson(ReadAsciiFile(file))
     if type(raw) <> "roArray"
         print "[search] "; kind; " list unreadable; keeping the previous index"
+        ' Drop its age stamp so the next refresh downloads it again.
+        fs = CreateObject("roFileSystem")
+        if fs.Exists(file + ".time") then fs.Delete(file + ".time")
         return
     end if
 
@@ -88,17 +97,19 @@ sub loadKind(req as Object)
     else
         print "[search] "; kind; ": "; entries.Count(); " indexed ("; timer.TotalMilliseconds(); " ms)"
     end if
-    if kind = "live"
-        ' My Teams re-reads category names, guide-ID groups and local stations.
-        m.eventCategories = invalid
-        m.epgGroups = invalid
-        m.localStations = invalid
-    end if
+    if kind = "live" then resetCategoryLookups()
     m.top.indexVersion = m.top.indexVersion + 1
     if m.top.selfTest and not m.selfTested and m.index.live.Count() > 0 and m.index.series.Count() > 0
         m.selfTested = true
         matchSelfTest()
     end if
+end sub
+
+' My Teams' lookups built from the live index and category list.
+sub resetCategoryLookups()
+    m.eventCategories = invalid
+    m.epgGroups = invalid
+    m.localStations = invalid
 end sub
 
 ' ---------------------------------------------------------------------------

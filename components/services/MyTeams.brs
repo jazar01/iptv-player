@@ -130,18 +130,27 @@ function wordRegex(phrase as String) as Object
     return CreateObject("roRegex", "\b" + escapeRegex(phrase.Trim()) + "\b", "i")
 end function
 
+' The cached live category list (Live TV's, also fetched with the search
+' catalog), or invalid if it isn't on disk or doesn't parse.
+function liveCategories() as Dynamic
+    path = "cachefs:/catalog/live_categories.json"
+    if not CreateObject("roFileSystem").Exists(path) then return invalid
+    cats = ParseJson(ReadAsciiFile(path))
+    if type(cats) <> "roArray" then return invalid
+    return cats
+end function
+
 ' Category ID -> name, for event categories only (from the cached list).
 function eventCategoryNames() as Object
     if m.eventCategories <> invalid then return m.eventCategories
     names = {}
     rules = teamRules()
-    cats = ParseJson(ReadAsciiFile("cachefs:/catalog/live_categories.json"))
-    if type(cats) = "roArray"
-        for each c in cats
-            name = asString(c.category_name)
-            if anyMatch(rules.eventCategories, name) and not anyMatch(rules.skipCategories, name) then names[asString(c.category_id)] = name
-        end for
-    end if
+    cats = liveCategories()
+    if cats = invalid then return names     ' not downloaded yet: not remembered
+    for each c in cats
+        name = asString(c.category_name)
+        if anyMatch(rules.eventCategories, name) and not anyMatch(rules.skipCategories, name) then names[asString(c.category_id)] = name
+    end for
     m.eventCategories = names
     return names
 end function
@@ -353,17 +362,17 @@ end function
 function localStations() as Object
     if m.localStations <> invalid then return m.localStations
     rules = teamRules()
+    if rules.localCategories = invalid or rules.localName = invalid then return {}
+    ' Not remembered until both lists are in, so a later download is used.
+    cats = liveCategories()
+    if cats = invalid or m.index.live.Count() = 0 then return {}
     m.localStations = {}
-    if rules.localCategories = invalid or rules.localName = invalid then return m.localStations
 
     networkOf = {}      ' category ID -> "ABC"
-    cats = ParseJson(ReadAsciiFile("cachefs:/catalog/live_categories.json"))
-    if type(cats) = "roArray"
-        for each c in cats
-            found = rules.localCategories.Match(asString(c.category_name))
-            if found.Count() > 1 then networkOf[asString(c.category_id)] = UCase(found[1])
-        end for
-    end if
+    for each c in cats
+        found = rules.localCategories.Match(asString(c.category_name))
+        if found.Count() > 1 then networkOf[asString(c.category_id)] = UCase(found[1])
+    end for
 
     byEpg = {}          ' one channel per station feed, per market
     for each e in m.index.live
