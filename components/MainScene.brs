@@ -168,7 +168,7 @@ sub removeOverlay(node as Object)
         if m.overlays[i].IsSameNode(node) then m.overlays.Delete(i)
     end for
     m.overlayHost.RemoveChild(node)
-    if m.favoritesScreen <> invalid and m.favoritesScreen.IsSameNode(node) then m.favoritesScreen = invalid
+    if m.rowGrid <> invalid and m.rowGrid.IsSameNode(node) then m.rowGrid = invalid
     if m.seriesScreen <> invalid and m.seriesScreen.IsSameNode(node) then m.seriesScreen = invalid
     if m.teamsScreen <> invalid and m.teamsScreen.IsSameNode(node) then m.teamsScreen = invalid
     if m.teamEditScreen <> invalid and m.teamEditScreen.IsSameNode(node) then m.teamEditScreen = invalid

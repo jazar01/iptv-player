@@ -76,7 +76,7 @@ The top bar holds Home, Live TV, Movies, Series, Search and Settings, plus a clo
 
 - Rows scroll sideways (`RowList`). The last visible card is cut off at the screen edge to show there is more.
 - The focused row's title shows a counter, such as "3 of 9".
-- Each row shows about 15 items, then a "See all" tile that opens a full-screen grid. The Favorites grid is also where favorites are managed.
+- Each row shows about 15 items, then a "See all" tile that opens a full-screen grid of the whole row, for every row. `*` works there as on Home; the Favorites grid is also where favorites are managed (pin, unpin, remove).
 
 **Navigation behavior**
 

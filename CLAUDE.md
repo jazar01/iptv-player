@@ -21,7 +21,7 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
 
 - `manifest`, `source/main.brs`: entry point; only creates MainScene.
 - `components/MainScene.*`: owns section screens (`screenHost`), the top bar,
-  overlays (Setup, Favorites grid, series pages, player) and services; relays
+  overlays (Setup, "See all" grids, series pages, player) and services; relays
   between screens and services and routes ApiTask responses by `id`. Split by
   area: `MainScene.brs` (core, focus, keys), `MainLogin.brs`, `MainHome.brs`,
   `MainCatalog.brs`, `MainPlayback.brs`, `MainSearch.brs`. All share one
@@ -41,7 +41,7 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
 - `components/services/EpgService.*`: now/next via `get_short_epg`, only for
   channels on screen; cached until the current program ends. Title cleanup
   rules come from `data/guide-rules.json`.
-- `components/home/`: HomeScreen, FavoritesScreen, HomeCard and its HomeItem
+- `components/home/`: HomeScreen, RowGridScreen ("See all" for any row), HomeCard and its HomeItem
   content. Row modules live in `HomeRows.brs` (included by MainScene); a new
   home row is a new module there.
 - `components/catalog/`: CatalogScreen, one instance each for Live TV, Movies

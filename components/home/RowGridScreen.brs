@@ -13,16 +13,34 @@ sub onFocusedChild()
     if m.top.HasFocus() then m.grid.SetFocus(true)
 end sub
 
-sub onItems()
+' What * does in each row's grid (rows not listed: nothing).
+function rowHint(rowId as String) as String
+    if rowId = "favorites" then return "Press * to pin or remove a favorite."
+    if rowId = "recent" then return "Press * to add a channel to Favorites."
+    if rowId = "continue" then return "Press * to remove an item from Continue Watching."
+    return ""
+end function
+
+sub onRow()
+    row = m.top.row
+    rowId = asString(row.id)
+    m.top.FindNode("title").text = asString(row.title)
+    m.top.FindNode("hint").text = rowHint(rowId)
+    m.empty.text = asString(row.emptyText)
+
     focus = m.grid.itemFocused
     root = CreateObject("roSGNode", "ContentNode")
     m.byStream = {}
-    for each item in m.top.items
+    items = row.items
+    if type(items) <> "roArray" then items = []
+    for each item in items
         node = createHomeItem(root, item)
-        node.rowId = "favorites"
-        key = node.streamId.ToStr()
-        if m.byStream[key] = invalid then m.byStream[key] = []
-        m.byStream[key].Push(node)
+        node.rowId = rowId
+        if node.kind = "channel"
+            key = node.streamId.ToStr()
+            if m.byStream[key] = invalid then m.byStream[key] = []
+            m.byStream[key].Push(node)
+        end if
     end for
 
     m.grid.content = root
@@ -73,8 +91,10 @@ sub updateVisible()
     for i = start to start + 19
         if i < content.GetChildCount()
             node = content.GetChild(i)
-            ids.Push(node.streamId)
-            key += node.streamId.ToStr() + ","
+            if node.kind = "channel"
+                ids.Push(node.streamId)
+                key += node.streamId.ToStr() + ","
+            end if
         end if
     end for
     if key <> m.lastVisibleKey
@@ -86,7 +106,7 @@ end sub
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if press and key = "options"
         node = focusedNode()
-        if node <> invalid then m.top.options = itemSummary(node)
+        if node <> invalid and (node.kind = "channel" or node.kind = "resume") then m.top.options = itemSummary(node)
         return true
     end if
     return false

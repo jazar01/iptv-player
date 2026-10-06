@@ -1,8 +1,8 @@
-' Home rows, the Favorites grid, favorites toggling, now/next relays, and
+' Home rows, the "See all" grids, favorites toggling, now/next relays, and
 ' routing of selected cards and list items.
 
 sub initHome()
-    m.favoritesScreen = invalid
+    m.rowGrid = invalid          ' "See all" grid open on top of Home
     m.lastVisible = []
     ' Usage scores as they were at launch: rows are ordered by these all
     ' session, so nothing reshuffles (requirements: re-sort at launch only).
@@ -15,27 +15,42 @@ sub refreshHome()
     if home = invalid then return
     rows = buildHomeRows({ store: m.store, epg: m.epg, games: m.games, usage: m.usageScores, launchTime: m.launchTime })
     home.rows = rows
-    if m.favoritesScreen <> invalid
+    if m.rowGrid <> invalid
         for each row in rows
-            if row.id = "favorites" then m.favoritesScreen.items = row.items
+            if row.id = m.rowGridId then m.rowGrid.row = row
         end for
     end if
 end sub
 
-sub openFavorites()
-    m.favoritesScreen = CreateObject("roSGNode", "FavoritesScreen")
-    m.favoritesScreen.ObserveField("selected", "onItemSelected")
-    m.favoritesScreen.ObserveField("options", "onFavoriteOptions")
-    m.favoritesScreen.ObserveField("visibleChannels", "onVisibleChannels")
-    pushOverlay(m.favoritesScreen)
+' "See all" on any Home row: every item of that row in a full-screen grid,
+' kept up to date by refreshHome().
+sub openRowGrid(rowId as String)
+    m.rowGrid = CreateObject("roSGNode", "RowGridScreen")
+    m.rowGridId = rowId
+    m.rowGrid.ObserveField("selected", "onItemSelected")
+    m.rowGrid.ObserveField("options", "onRowGridOptions")
+    m.rowGrid.ObserveField("visibleChannels", "onVisibleChannels")
+    pushOverlay(m.rowGrid)
     refreshHome()
 end sub
 
-' A card or list item was chosen on Home, the Favorites grid or a catalog.
+' * in a "See all" grid: as on Home, except Favorites offers pin / remove.
+sub onRowGridOptions(event as Object)
+    item = event.GetData()
+    if item.kind = "resume"
+        removeContinue(item)
+    else if item.rowId = "favorites"
+        favoriteOptions(item)
+    else
+        toggleFavorite(item)
+    end if
+end sub
+
+' A card or list item was chosen on Home, a "See all" grid or a catalog.
 sub onItemSelected(event as Object)
     item = event.GetData()
-    if item.kind = "seeAll" and item.rowId = "favorites"
-        openFavorites()
+    if item.kind = "seeAll"
+        openRowGrid(item.rowId)
     else if item.kind = "channel"
         playLive(item)
     else if item.kind = "movie"
@@ -77,8 +92,7 @@ end sub
 
 ' * in the Favorites grid: pin to the front (or unpin), or remove. Pinned
 ' favorites stay first in the order they were pinned; the rest follow usage.
-sub onFavoriteOptions(event as Object)
-    item = event.GetData()
+sub favoriteOptions(item as Object)
     pinned = false
     for each f in m.store.callFunc("getFavorites")
         if toInt(f.streamId) = toInt(item.streamId) then pinned = isTrue(f.pinned)
@@ -114,7 +128,10 @@ end sub
 
 ' * on a Continue Watching card: take it off the row (watched history stays).
 sub onRemoveContinue(event as Object)
-    item = event.GetData()
+    removeContinue(event.GetData())
+end sub
+
+sub removeContinue(item as Object)
     if m.store.callFunc("removeFromContinue", item)
         showToast("Removed " + item.name + " from Continue Watching")
     else
@@ -141,6 +158,6 @@ sub onPrograms(event as Object)
     entry = event.GetData()
     home = m.sections.home
     if home <> invalid then home.programs = entry
-    if m.favoritesScreen <> invalid then m.favoritesScreen.programs = entry
+    if m.rowGrid <> invalid then m.rowGrid.programs = entry
     if m.player <> invalid then m.player.programs = entry
 end sub

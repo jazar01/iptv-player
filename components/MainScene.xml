@@ -5,7 +5,7 @@
   (StateStore).
 
   Layers, bottom to top: section screens (Home, Live TV, Movies, Series,
-  Settings), top bar, overlays (Setup, Favorites grid, series pages, player),
+  Settings), top bar, overlays (Setup, "See all" grids, series pages, player),
   toast. Dialogs (resume prompt, keyboards) use the Scene's `dialog` field.
 -->
 <component name="MainScene" extends="Scene">

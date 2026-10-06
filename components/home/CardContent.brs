@@ -1,5 +1,5 @@
 ' Shared by everything that shows HomeCards (MainScene's row modules,
-' HomeScreen, FavoritesScreen).
+' HomeScreen, RowGridScreen).
 
 ' EpgService entry { now, upcoming } -> HomeItem program fields.
 function programFields(entry as Object) as Object

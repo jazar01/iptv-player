@@ -1,15 +1,17 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-  Full-screen grid of all favorites ("See all" on the Favorites row). Also
-  where favorites are managed: * removes one.
+  Full-screen grid of every item in one Home row ("See all"). For Favorites
+  it's also where favorites are managed: * offers pin / unpin / remove.
 
-  In:  items     [HomeItem fields] (all favorites, untruncated)
+  In:  row       { id, title, emptyText, items: [HomeItem fields] } (untruncated)
        programs  EpgService update, applied in place
-  Out: selected, options, visibleChannels (same as HomeScreen)
+  Out: selected, visibleChannels (same as HomeScreen)
+       options   itemSummary when * is pressed on a channel or Continue
+                 Watching card (rowId says which row)
 -->
-<component name="FavoritesScreen" extends="Group">
+<component name="RowGridScreen" extends="Group">
   <interface>
-    <field id="items" type="array" onChange="onItems" />
+    <field id="row" type="assocarray" onChange="onRow" />
     <field id="programs" type="assocarray" onChange="onPrograms" alwaysNotify="true" />
     <field id="selected" type="assocarray" alwaysNotify="true" />
     <field id="options" type="assocarray" alwaysNotify="true" />
@@ -18,18 +20,17 @@
 
   <children>
     <Poster width="1920" height="1080" uri="pkg:/images/ui/background.jpg" />
-    <Label translation="[96,56]" width="1200" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" text="Favorites" />
-    <Label translation="[96,120]" width="1200" font="font:SmallSystemFont" color="0x8C96A0FF"
-      text="Press * to remove a favorite." />
+    <Label id="title" translation="[96,56]" width="1200" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" />
+    <Label id="hint" translation="[96,120]" width="1200" font="font:SmallSystemFont" color="0x8C96A0FF" />
     <MarkupGrid id="grid" translation="[96,190]" itemComponentName="HomeCard"
       numColumns="4" numRows="4" itemSize="[400,220]" itemSpacing="[30,36]"
       vertFocusAnimationStyle="floatingFocus"
       focusBitmapUri="pkg:/images/ui/card-focus.9.png" drawFocusFeedbackOnTop="true" />
     <Label id="empty" translation="[96,240]" width="1600" font="font:MediumSystemFont" color="0xA0A8B0FF"
-      visible="false" text="No favorites yet. Press * on a channel in Live TV to add one." />
+      visible="false" />
   </children>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
   <script type="text/brightscript" uri="pkg:/components/home/CardContent.brs" />
-  <script type="text/brightscript" uri="pkg:/components/home/FavoritesScreen.brs" />
+  <script type="text/brightscript" uri="pkg:/components/home/RowGridScreen.brs" />
 </component>
