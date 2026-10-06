@@ -192,3 +192,17 @@ sub onPrograms(event as Object)
     if m.rowGrid <> invalid then m.rowGrid.programs = entry
     if m.player <> invalid then m.player.programs = entry
 end sub
+
+' Settings -> Favorites in Recently Viewed: off (the default) leaves channels
+' already in Favorites out of the row.
+sub toggleFavoritesInRecent()
+    show = not m.store.callFunc("getSettings").showFavoritesInRecent
+    if m.store.callFunc("setSetting", "showFavoritesInRecent", show)
+        if show then showToast("Recently Viewed now includes favorites") else showToast("Recently Viewed now leaves out favorites")
+    else
+        showToast("Couldn't save the change. Storage may be full.")
+    end if
+    settings = m.sections.settings
+    if settings <> invalid then settings.info = settingsInfo()
+    refreshHome()
+end sub

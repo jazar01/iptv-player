@@ -178,6 +178,7 @@ function settingsInfo() as Object
         market: m.store.callFunc("getMarket").label
         showMyTeams: m.store.callFunc("getSettings").showMyTeams
         showNoGameTeams: m.store.callFunc("getSettings").showNoGameTeams
+        showFavoritesInRecent: m.store.callFunc("getSettings").showFavoritesInRecent
     }
 end function
 
@@ -193,5 +194,7 @@ sub onSettingsChosen(event as Object)
         toggleMyTeamsRow()
     else if choice = "noGameTeams"
         toggleNoGameTeams()
+    else if choice = "recentFavorites"
+        toggleFavoritesInRecent()
     end if
 end sub

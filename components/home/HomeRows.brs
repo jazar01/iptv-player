@@ -215,7 +215,8 @@ end function
 
 ' ---------------------------------------------------------------------------
 ' Recently Viewed: live channels watched for about a minute, newest first,
-' leaving out channels already in Favorites.
+' leaving out channels already in Favorites unless Settings says to include
+' them (showFavoritesInRecent).
 
 function recentRow() as Object
     return {
@@ -228,9 +229,11 @@ end function
 
 function recentRowItems(services as Object) as Object
     favoriteIds = {}
-    for each f in services.store.callFunc("getFavorites")
-        favoriteIds[toInt(f.streamId).ToStr()] = true
-    end for
+    if not services.store.callFunc("getSettings").showFavoritesInRecent
+        for each f in services.store.callFunc("getFavorites")
+            favoriteIds[toInt(f.streamId).ToStr()] = true
+        end for
+    end if
     channels = []
     for each r in services.store.callFunc("getRecent")
         if not favoriteIds.DoesExist(toInt(r.streamId).ToStr()) then channels.Push(r)

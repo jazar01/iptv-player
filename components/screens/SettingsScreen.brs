@@ -1,20 +1,25 @@
 sub init()
     m.menu = m.top.FindNode("menu")
     m.details = m.top.FindNode("details")
-    m.actions = ["teams", "teamsRow", "noGameTeams", "market", "account"]
-    buildMenu("", true, true)
+    m.actions = ["teams", "teamsRow", "noGameTeams", "market", "recentFavorites", "account"]
+    buildMenu({})
 
     m.menu.ObserveField("itemSelected", "onSelected")
     m.top.ObserveField("focusedChild", "onFocusedChild")
 end sub
 
-sub buildMenu(marketLabel as String, showMyTeams as Boolean, showNoGameTeams as Boolean)
+' info: as the `info` field (missing values show as their defaults).
+sub buildMenu(info as Object)
+    marketLabel = asString(info.market)
     if marketLabel = "" then marketLabel = "not set"
+    showMyTeams = (info.showMyTeams = invalid or isTrue(info.showMyTeams))
+    showNoGameTeams = (info.showNoGameTeams = invalid or isTrue(info.showNoGameTeams))
     titles = [
         "My Teams"
         "Show My Teams on Home:   " + onOff(showMyTeams)
         "Show teams with no game:   " + onOff(showNoGameTeams)
         "Local stations:   " + marketLabel
+        "Favorites in Recently Viewed:   " + onOff(isTrue(info.showFavoritesInRecent))
         "Account and device name"
     ]
     focus = m.menu.itemFocused
@@ -42,7 +47,7 @@ end sub
 
 sub onInfo()
     info = m.top.info
-    buildMenu(asString(info.market), isTrue(info.showMyTeams), isTrue(info.showNoGameTeams))
+    buildMenu(info)
     nl = Chr(10)
     connections = asString(info.connections)
     if connections = "" then connections = "checking ..."
