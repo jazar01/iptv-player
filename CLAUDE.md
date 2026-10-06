@@ -85,6 +85,11 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
 - `end`, `next`, `stop` and `step` are reserved in BrightScript, even as AA
   keys with dot access: programs use `start`/`ends`, EPG entries
   `now`/`upcoming`.
+- Parse saved state with `ParseJson(text, "i")`. Without "i" the objects are
+  case-sensitive, and a dot write (`doc.seenGames = x`) adds a second,
+  lower-case key instead of replacing the parsed "seenGames" (Oct 2026).
+- `roFileSystem` can't be created on the render thread (StateStore, screens);
+  use `ReadAsciiFile()`, which returns "" for a missing file.
 - `(expr).Method()` isn't valid BrightScript, and neither is a statement that
   starts with a call result (`f(x).y.Delete(k)`); assign to a variable first.
   BrighterScript misses it but the Roku won't compile it, and **a failed

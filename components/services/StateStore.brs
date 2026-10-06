@@ -907,9 +907,12 @@ function persist() as Boolean
     return true
 end function
 
-' Deep copy through JSON, the same form the backend saves.
+' Deep copy through JSON, the same form the backend saves. "i": parsed
+' objects must be case-insensitive like literals; by default a dot write
+' (doc.seenGames = x) adds a second, lower-case key next to the parsed
+' "seenGames" instead of replacing it (found Oct 2026).
 function copyDocument(doc as Object) as Object
-    return ParseJson(FormatJson(doc))
+    return ParseJson(FormatJson(doc), "i")
 end function
 
 sub maintain()

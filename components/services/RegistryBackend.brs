@@ -54,7 +54,11 @@ function registryParseCopy(section as Object, key as String) as Dynamic
     json = Mid(raw, p2 + 1)
     if json.Len() <> length then return invalid
 
-    doc = ParseJson(json)
+    ' "i": case-insensitive objects, so dot writes update keys instead of
+    ' adding lower-case duplicates. Where an older save holds both ("seenGames"
+    ' and "seengames"), the lower-case one comes later and wins: it's the
+    ' newer value. The next save writes one key.
+    doc = ParseJson(json, "i")
     if type(doc) <> "roAssociativeArray" then return invalid
     return { seq: seq, key: key, doc: doc }
 end function
