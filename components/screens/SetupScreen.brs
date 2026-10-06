@@ -65,10 +65,15 @@ sub openKeyboard(field as String)
     if m.hints[field] <> "" then dlg.message = [m.hints[field]]
     dlg.text = m.values[field]
     dlg.buttons = ["OK", "Cancel"]
+    ' Spoken names come in whole; server, username and password are spelled.
     if field = "password"
-        dlg.keyboardDomain = "password"
+        setKeyboardVoice(dlg, "password")
         editBox = dlg.textEditBox
         if editBox <> invalid then editBox.secureMode = true
+    else if field = "deviceName"
+        setKeyboardVoice(dlg, "generic")
+    else
+        setKeyboardVoice(dlg, "alphanumeric")
     end if
     dlg.ObserveField("buttonSelected", "onKeyboardButton")
     dlg.ObserveField("wasClosed", "onKeyboardClosed")
@@ -82,6 +87,8 @@ sub onKeyboardButton()
     if m.dialog.buttonSelected = 0
         typed = m.dialog.text.Trim()
         m.values[m.editing] = typed
+        ' Voice entry comes in lower case: "living room" -> "Living room".
+        if m.editing = "deviceName" then m.values.deviceName = UCase(Left(typed, 1)) + Mid(typed, 2)
         if m.editing = "server"
             m.values.server = normalizeServer(typed)
             if typed <> "" and m.values.server = ""

@@ -172,6 +172,7 @@ end sub
 sub openKeyboard(field as String, title as String, text as String)
     dlg = CreateObject("roSGNode", "StandardKeyboardDialog")
     dlg.title = title
+    setKeyboardVoice(dlg, "generic")     ' names: say them, don't spell them
     dlg.text = text
     dlg.buttons = ["OK", "Cancel"]
     dlg.ObserveField("buttonSelected", "onKeyboardButton")

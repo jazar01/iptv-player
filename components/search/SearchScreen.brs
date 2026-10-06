@@ -1,5 +1,7 @@
 sub init()
     m.keyboard = m.top.FindNode("keyboard")
+    ' Hold the remote's voice button and say "british bake off": whole words.
+    setKeyboardVoice(m.keyboard, "generic")
     m.resultList = m.top.FindNode("resultList")
     m.status = m.top.FindNode("status")
     m.delay = m.top.FindNode("typingDelay")

@@ -288,3 +288,14 @@ end function
 function safeKey(id as Dynamic) as String
     return CreateObject("roRegex", "[^A-Za-z0-9_-]", "").ReplaceAll(asString(id), "_")
 end function
+
+' Keyboard voice entry (a keyboard dialog, or a Dynamic keyboard): "generic"
+' takes whole spoken words (names, searches); "alphanumeric"
+' and "password" take letters spoken one at a time (addresses, usernames,
+' passwords). Set on both the dialog and its text box: Roku's defaults for the
+' text box spell letter by letter.
+sub setKeyboardVoice(dlg as Object, mode as String)
+    dlg.keyboardDomain = mode
+    editBox = dlg.textEditBox
+    if editBox <> invalid then editBox.voiceEntryType = mode
+end sub

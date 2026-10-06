@@ -23,7 +23,8 @@
   </interface>
 
   <children>
-    <MiniKeyboard id="keyboard" translation="[96,190]" />
+    <!-- DynamicMiniKeyboard: MiniKeyboard plus voice entry (set to whole words). -->
+    <DynamicMiniKeyboard id="keyboard" translation="[96,190]" />
     <MarkupList id="resultList" translation="[720,190]" itemComponentName="CatalogItem"
       itemSize="[1104,64]" itemSpacing="[0,4]" numRows="12" vertFocusAnimationStyle="floatingFocus"
       focusBitmapUri="pkg:/images/ui/row-focus.9.png" />
