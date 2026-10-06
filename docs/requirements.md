@@ -90,6 +90,7 @@ The top bar holds Home, Live TV, Movies, Series, Search and Settings, plus a clo
 - On launch, show the cached catalog from the last session immediately and refresh in the background.
 - Favorites carry their own names and IDs, so the home screen draws without waiting on the network.
 - Browse grids load in pages, so large catalogs never block the UI.
+- Channel rows in Live TV and in Search show the provider's logo (`stream_icon`) in a column left of the name; a channel without one (or whose logo fails to load) leaves the column empty so names stay aligned. Only rows on screen load logos.
 - A category that fails to load says so; choosing it again (OK) retries.
 
 **Live TV local stations**

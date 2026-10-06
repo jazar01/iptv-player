@@ -417,7 +417,7 @@ function listLocalStations(req as Object) as Object
                 e = s.entry
                 archive = 0
                 if e.archiveDays > 0 then archive = 1
-                result.items.Push({ stream_id: e.itemId, name: e.name, epg_channel_id: e.epgChannelId, tv_archive: archive, tv_archive_duration: e.archiveDays })
+                result.items.Push({ stream_id: e.itemId, name: e.name, epg_channel_id: e.epgChannelId, tv_archive: archive, tv_archive_duration: e.archiveDays, stream_icon: asString(e.icon) })
             end if
         end for
     end for
@@ -639,6 +639,7 @@ function resultItem(e as Object) as Object
         ext: e.ext
         year: e.year
         archiveDays: e.archiveDays
+        icon: asString(e.icon)      ' channels only
         local: false
     }
 end function

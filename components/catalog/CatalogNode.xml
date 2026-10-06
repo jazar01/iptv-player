@@ -19,5 +19,8 @@
     <field id="itemKind" type="string" />
     <!-- Search results: one of the device's local stations (Settings -> Local stations). -->
     <field id="isLocal" type="boolean" />
+    <!-- Channel rows: a logo column (logo "" leaves it empty, names stay aligned). -->
+    <field id="showLogo" type="boolean" />
+    <field id="logo" type="string" />
   </interface>
 </component>

@@ -9,6 +9,8 @@
   </interface>
 
   <children>
+    <!-- Channel rows: the logo column. -->
+    <Poster id="logo" translation="[16,8]" width="80" height="48" loadDisplayMode="scaleToFit" visible="false" />
     <Label id="num" translation="[20,0]" width="100" height="64" vertAlign="center"
       font="font:SmallSystemFont" color="0x8C96A0FF" />
     <Label id="name" translation="[130,0]" width="760" height="64" vertAlign="center"

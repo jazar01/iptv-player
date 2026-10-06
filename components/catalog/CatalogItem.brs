@@ -2,6 +2,8 @@ sub init()
     m.num = m.top.FindNode("num")
     m.name = m.top.FindNode("name")
     m.tag = m.top.FindNode("tag")
+    m.logo = m.top.FindNode("logo")
+    m.logo.ObserveField("loadStatus", "onLogoStatus")
     m.content = invalid
 end sub
 
@@ -22,16 +24,29 @@ sub onItemContent()
         name = name + " (" + year.ToStr() + ")"
     end if
     m.name.text = name
-    ' Channels have no first-column value: start the name at the left.
-    if m.content.num = ""
+    ' Channels: a logo column, then the name. Others: the year column (or
+    ' none), then the name.
+    if m.content.showLogo
+        m.name.translation = [112, 0]
+        m.name.width = 778
+    else if m.content.num = ""
         m.name.translation = [20, 0]
         m.name.width = 870
     else
         m.name.translation = [130, 0]
         m.name.width = 760
     end if
+    logo = ""
+    if m.content.showLogo then logo = m.content.logo
+    if m.logo.uri <> logo then m.logo.uri = logo
+    onLogoStatus()
     onTag()
     applyColors()
+end sub
+
+' Hidden until loaded, so a missing or broken logo leaves the column empty.
+sub onLogoStatus()
+    m.logo.visible = (m.logo.uri <> "" and m.logo.loadStatus = "ready")
 end sub
 
 sub onTag()

@@ -158,6 +158,8 @@ sub fillNode(node as Object, raw as Object)
         ' No channel number shown: the provider's `num` is internal ordering
         ' and means nothing to a viewer.
         node.epgChannelId = asString(raw.epg_channel_id)
+        node.showLogo = true
+        node.logo = asString(raw.stream_icon)
         if toInt(raw.tv_archive) = 1
             node.archiveDays = toInt(raw.tv_archive_duration)
             if node.archiveDays <= 0 then node.archiveDays = 1

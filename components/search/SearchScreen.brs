@@ -61,6 +61,8 @@ sub onResults()
         node.year = item.year
         node.archiveDays = item.archiveDays
         node.isLocal = isTrue(item.local)
+        node.showLogo = (item.kind = "channel")
+        node.logo = asString(item.icon)
         node.tag = resultTag(node)
     end for
     m.resultList.content = content
