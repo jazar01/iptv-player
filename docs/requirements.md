@@ -90,6 +90,12 @@ The top bar holds Home, Live TV, Movies, Series, Search and Settings, plus a clo
 - Favorites carry their own names and IDs, so the home screen draws without waiting on the network.
 - Browse grids load in pages, so large catalogs never block the UI.
 
+**Live TV local stations**
+
+- When a market is set (Settings → Local stations), Live TV's first category is "Local stations - <market>", listing that market's ABC, CBS, NBC and FOX stations. It opens automatically like any first category. With no market set, the category isn't shown.
+- In every Live TV list, those stations are tagged LOCAL. FAVORITE takes priority.
+- The list comes from the search index, so it shows "Loading local stations ..." until the index has loaded. Changing the market updates the category and the tags right away.
+
 ## Search
 
 Search finds live channels, movies and series by name. The Xtream API has no search, so the app searches its own copy of the full catalog.
@@ -97,6 +103,7 @@ Search finds live channels, movies and series by name. The Xtream API has no sea
 - **Entry:** Search in the top bar opens the on-screen keyboard. Results update as letters are typed, after a short pause.
 - **Results:** grouped as Channels, Movies and Series, each capped (about 50) with names starting with the search text first. Selecting a result does the same as selecting it in its browser: play a channel or movie, open a series. `*` on a channel adds or removes a favorite.
 - **Matching:** case-insensitive; every word typed must appear in the name, in any order. Provider prefixes such as `US |` are searchable like any other text.
+- **Local stations:** the device's market stations (Settings → Local stations) that match come first among channel results, tagged LOCAL, so a search like "abc" shows your affiliate before the ~200 others.
 - **Index:** built from the full lists (`get_live_streams`, `get_vod_streams` and `get_series` without a category), cached in `cachefs:` and refreshed in the background at most once a day. Only names, IDs and the fields needed to play are kept.
 - **Speed:** the index and matching live in a Task, not the render thread, and only the matches cross to the UI. The live list (about 16,000 channels) is the largest; if it proves too heavy on older models, live search can be limited to favorite categories (see Open questions).
 - Guide search (what's on, by program title) is not part of this; the full guide is too large for the Roku and waits for the off-device server (Later features).

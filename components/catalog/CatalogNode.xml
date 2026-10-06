@@ -16,5 +16,7 @@
     <field id="archiveDays" type="integer" />
     <!-- Search results mix kinds: "channel" | "movie" | "series". -->
     <field id="itemKind" type="string" />
+    <!-- Search results: one of the device's local stations (Settings -> Local stations). -->
+    <field id="isLocal" type="boolean" />
   </interface>
 </component>

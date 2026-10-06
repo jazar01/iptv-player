@@ -8,10 +8,11 @@
   As with ApiTask, wait for `ready` before setting `load` or `query`.
 
   In:  load     { kind: "live" | "movie" | "series", file }   (re)index one kind from a cache file
-       query    { id, text }       newest wins; older pending queries are skipped
+       query    { id, text, market }   newest wins; older pending queries are skipped
   Out: results  { id, text, items: [ { kind: "channel" | "movie" | "series", itemId, streamId,
-                  name, num, epgChannelId, ext, year, archiveDays } ] }
-                grouped channels, then movies, then series; each capped
+                  name, num, epgChannelId, ext, year, archiveDays, local } ] }
+                grouped channels (the market's local stations first, local: true),
+                then movies, then series; each capped
        archive  { "<streamId>": archiveDays } for live channels with a catch-up archive
        counts   { live, movie, series } items indexed per kind
        indexVersion  bumped after every (re)index, so saved items can be re-matched
@@ -32,6 +33,8 @@
                       networks: [{ label, streamId, name, epgChannelId, guideFile }] }
        withGuide also searches the network channels' short guides, read from
        their guideFile (saved to cachefs: by ApiTask for MainScene).
+  In:  localsRequest { id, market }
+  Out: localsResult  { id, market, ready, items: [get_live_streams-shaped items] } (ABC, CBS, NBC, FOX)
   In:  marketsRequest { id }
   Out: marketsResult  { id, ready, markets: [{ key: "GA|Atlanta", label: "Atlanta, GA", stations: "ABC, CBS, NBC, FOX" }] }
 -->
@@ -51,6 +54,8 @@
     <field id="gamesResult" type="assocarray" alwaysNotify="true" />
     <field id="marketsRequest" type="assocarray" alwaysNotify="true" />
     <field id="marketsResult" type="assocarray" alwaysNotify="true" />
+    <field id="localsRequest" type="assocarray" alwaysNotify="true" />
+    <field id="localsResult" type="assocarray" alwaysNotify="true" />
   </interface>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />

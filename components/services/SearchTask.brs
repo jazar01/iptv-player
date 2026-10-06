@@ -15,6 +15,7 @@ sub runLoop()
     m.top.ObserveField("matchRequest", port)
     m.top.ObserveField("gamesRequest", port)
     m.top.ObserveField("marketsRequest", port)
+    m.top.ObserveField("localsRequest", port)
     m.top.ready = true
 
     while true
@@ -26,6 +27,8 @@ sub runLoop()
                 m.top.matchResult = matchSaved(msg.GetData())
             else if msg.GetField() = "gamesRequest"
                 m.top.gamesResult = findGames(msg.GetData())
+            else if msg.GetField() = "localsRequest"
+                m.top.localsResult = listLocalStations(msg.GetData())
             else if msg.GetField() = "marketsRequest"
                 m.top.marketsResult = { id: msg.GetData().id, ready: m.index.live.Count() > 0, markets: listMarkets() }
             else
@@ -274,12 +277,59 @@ sub answer(q as Object)
         for each w in text.Split(" ")
             if w <> "" then words.Push(w)
         end for
-        for each kind in ["live", "movie", "series"]
+        ' The device's local stations that match come first among channels,
+        ' tagged local: among ~200 affiliates for "abc", yours would otherwise
+        ' be lost past the result cap.
+        localIds = {}
+        locals = []
+        stations = localStations()[asString(q.market)]
+        if stations <> invalid
+            for each s in stations
+                if wordsMatch(s.entry.key, words)
+                    item = resultItem(s.entry)
+                    item.local = true
+                    locals.Push(item)
+                    localIds[s.entry.itemId.ToStr()] = true
+                end if
+            end for
+        end if
+        items.Append(locals)
+        for each item in matchKind(m.index.live, text, words)
+            if not localIds.DoesExist(item.itemId.ToStr()) then items.Push(item)
+        end for
+        for each kind in ["movie", "series"]
             items.Append(matchKind(m.index[kind], text, words))
         end for
     end if
     m.top.results = { id: q.id, text: asString(q.text), items: items }
 end sub
+
+' A market's stations for Live TV's "Local stations" category, ABC, CBS, NBC,
+' FOX order, in the shape of get_live_streams items so the catalog screen can
+' show them like any other category.
+function listLocalStations(req as Object) as Object
+    result = { id: req.id, market: asString(req.market), ready: m.index.live.Count() > 0, items: [] }
+    stations = localStations()[result.market]
+    if stations = invalid then return result
+    for each network in ["ABC", "CBS", "NBC", "FOX"]
+        for each s in stations
+            if s.network = network
+                e = s.entry
+                archive = 0
+                if e.archiveDays > 0 then archive = 1
+                result.items.Push({ stream_id: e.itemId, name: e.name, epg_channel_id: e.epgChannelId, tv_archive: archive, tv_archive_duration: e.archiveDays })
+            end if
+        end for
+    end for
+    return result
+end function
+
+function wordsMatch(key as String, words as Object) as Boolean
+    for each w in words
+        if Instr(1, key, w) = 0 then return false
+    end for
+    return true
+end function
 
 function matchKind(entries as Object, text as String, words as Object) as Object
     starts = []
@@ -324,5 +374,6 @@ function resultItem(e as Object) as Object
         ext: e.ext
         year: e.year
         archiveDays: e.archiveDays
+        local: false
     }
 end function

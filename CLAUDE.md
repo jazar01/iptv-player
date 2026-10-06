@@ -193,4 +193,7 @@ is the final check.
   (`m.usageScores`), applied in HomeRows (favorites, Continue Watching, My
   Teams tie-break); pin / unpin in the Favorites grid. Scores only build up
   with real viewing, so the ordering effect isn't verified yet.
+- Local stations also in Search (first, tagged LOCAL) and Live TV (a
+  "Local stations" first category answered by SearchTask localsRequest,
+  LOCAL tags). Not yet checked on a Roku.
 - Not yet built: off-device backup and sync.

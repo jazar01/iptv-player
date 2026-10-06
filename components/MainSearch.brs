@@ -17,6 +17,7 @@ sub initSearch()
     m.searchTask.ObserveField("matchResult", "onMatchResult")
     m.searchTask.ObserveField("gamesResult", "onGamesResult")
     m.searchTask.ObserveField("marketsResult", "onMarketsResult")
+    m.searchTask.ObserveField("localsResult", "onLocalsResult")
     ' match_selftest=1 in the manifest runs the channel-matching self-test.
     m.searchTask.selfTest = (CreateObject("roAppInfo").GetValue("match_selftest") = "1")
     m.searchTask.control = "RUN"
@@ -41,6 +42,7 @@ sub onIndexChanged()
     searchSend("matchRequest", { id: "saved", channels: channels, series: m.store.callFunc("getSavedSeries") })
     ' The catalog changed: My Teams games may have too.
     requestGames()
+    if m.localsWaiting then requestLocalStations("live")
 end sub
 
 sub onMatchResult(event as Object)
@@ -141,7 +143,7 @@ sub onSearchQuery(event as Object)
         return
     end if
     m.searchQueryId = m.searchQueryId + 1
-    searchSend("query", { id: m.searchQueryId, text: event.GetData() })
+    searchSend("query", { id: m.searchQueryId, text: event.GetData(), market: m.store.callFunc("getMarket").key })
 end sub
 
 sub onSearchResults(event as Object)

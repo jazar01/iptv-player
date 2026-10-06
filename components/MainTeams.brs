@@ -86,6 +86,7 @@ sub onMarketChosen(event as Object)
     end if
     settings = m.sections.settings
     if settings <> invalid then settings.info = settingsInfo()
+    onMarketChangedForCatalog()
     ' Different stations: fetch their guides afresh.
     m.guideFetchedAt = 0
     m.guideReady = false

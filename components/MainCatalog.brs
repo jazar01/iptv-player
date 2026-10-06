@@ -8,6 +8,57 @@ sub initCatalog()
     m.seriesScreenId = 0
     m.seriesInfo = {}           ' seriesId -> normalized info (see normalizeSeriesInfo)
     m.continueAfterInfo = invalid   ' Continue Watching card waiting for series info
+    m.liveCategories = invalid  ' last live category list from the provider
+    m.localIds = {}             ' stream IDs of the market's local stations
+    m.localsWaiting = false     ' "Local stations" asked for before the index was ready
+end sub
+
+' ---------------------------------------------------------------------------
+' Live TV "Local stations": a category at the top with the device's market
+' stations (Settings -> Local stations), answered from SearchTask's index.
+
+function liveCategoriesWithLocal(categories as Object) as Object
+    market = m.store.callFunc("getMarket")
+    if market.key = "" then return categories
+    list = [{ category_id: "__local", category_name: "Local stations - " + market.label }]
+    list.Append(categories)
+    return list
+end function
+
+sub requestLocalStations(id as String)
+    market = m.store.callFunc("getMarket").key
+    if market = "" then return
+    searchSend("localsRequest", { id: id, market: market })
+end sub
+
+sub onLocalsResult(event as Object)
+    result = event.GetData()
+    m.localIds = {}
+    for each item in result.items
+        m.localIds[toInt(item.stream_id).ToStr()] = true
+    end for
+    updateCatalogTags()
+
+    screen = catalogScreen("live")
+    if screen = invalid or result.id <> "live" then return
+    if not result.ready
+        m.localsWaiting = true     ' asked again when the index is loaded
+        screen.items = { categoryId: "__local", items: [] }
+        screen.status = "Loading local stations ..."
+    else
+        m.localsWaiting = false
+        screen.items = { categoryId: "__local", items: result.items }
+        if result.items.Count() = 0 then screen.status = "No local stations found for this market."
+    end if
+end sub
+
+' Settings -> Local stations changed: refresh the Live TV entry and tags.
+sub onMarketChangedForCatalog()
+    m.localIds = {}
+    screen = catalogScreen("live")
+    if screen <> invalid and m.liveCategories <> invalid then screen.categories = liveCategoriesWithLocal(m.liveCategories)
+    requestLocalStations("live")
+    updateCatalogTags()
 end sub
 
 function catalogState(kind as String) as Object
@@ -43,6 +94,7 @@ end function
 
 sub onCatalogShown(screen as Object)
     kind = screen.kind
+    if kind = "live" then requestLocalStations("tags")
     screen.tags = catalogTags(kind)
     state = catalogState(kind)
     if state.requested then return
@@ -64,7 +116,12 @@ sub onCatalogCategories(res as Object)
     if res.ok and type(res.data) = "roArray"
         if not res.fromCache then print "[main] "; res.data.Count(); " "; kind; " categories"
         state.categoriesShown = true
-        screen.categories = res.data
+        if kind = "live"
+            m.liveCategories = res.data
+            screen.categories = liveCategoriesWithLocal(res.data)
+        else
+            screen.categories = res.data
+        end if
     else if not state.categoriesShown
         state.requested = false     ' try again next visit
         screen.status = "Couldn't load categories: " + res.error
@@ -74,6 +131,10 @@ end sub
 sub onWantCategory(event as Object)
     kind = event.GetRoSGNode().kind
     id = event.GetData()
+    if id = "__local"
+        requestLocalStations("live")
+        return
+    end if
     sendRequest({
         id: "catalogItems"
         action: catalogActions(kind).items
@@ -100,11 +161,14 @@ sub onCatalogItems(res as Object)
     end if
 end sub
 
-' Right-hand tags in each catalog: favorites, movies in progress, series
-' being watched.
+' Right-hand tags in each catalog: favorites (over local stations), movies in
+' progress, series being watched.
 function catalogTags(kind as String) as Object
     tags = {}
     if kind = "live"
+        for each id in m.localIds
+            tags[id] = "LOCAL"
+        end for
         for each f in m.store.callFunc("getFavorites")
             tags[toInt(f.streamId).ToStr()] = "FAVORITE"
         end for
@@ -138,6 +202,7 @@ sub resetCatalogs()
     end for
     m.catalogState = {}
     m.seriesInfo = {}
+    m.liveCategories = invalid
 end sub
 
 ' ---------------------------------------------------------------------------

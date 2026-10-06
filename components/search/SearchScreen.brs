@@ -58,6 +58,7 @@ sub onResults()
         node.ext = item.ext
         node.year = item.year
         node.archiveDays = item.archiveDays
+        node.isLocal = isTrue(item.local)
         node.tag = resultTag(node)
     end for
     m.resultList.content = content
@@ -72,6 +73,7 @@ end sub
 function resultTag(node as Object) as String
     if node.itemKind = "channel"
         if m.favoriteIds.DoesExist(node.itemId.ToStr()) then return "FAVORITE"
+        if node.isLocal then return "LOCAL"
         if node.archiveDays > 0 then return "REWIND"
         return "CHANNEL"
     end if
