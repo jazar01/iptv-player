@@ -183,6 +183,9 @@ sub onStall()
         m.errorMessage.text = "This channel keeps stalling. Try it again in a minute, or another copy of the channel."
         m.errorPanel.visible = true
         m.liveOverlay.visible = false
+        ' The same path as a playback error, so other copies are offered.
+        ' Code -100: the app's own "kept stalling" (not the Video node's).
+        m.top.failed = { play: m.play, code: -100, message: m.errorMessage.text }
         return
     end if
     m.stallReloads.Push(now)
@@ -510,8 +513,12 @@ end sub
 
 sub startTimeshift(startUtc as Integer, playStart as Integer)
     m.mode = "timeshift"
-    m.tsStart = startUtc
-    m.tsPlayStart = playStart
+    ' The URL names a whole minute (serverTimeString), and the provider starts
+    ' there: use that minute as the base and play the leftover seconds in, so
+    ' "behind live", resume and continuation stay exact (review R11).
+    extra = startUtc mod 60
+    m.tsStart = startUtc - extra
+    m.tsPlayStart = playStart + extra
     if m.tsPlayStart < 0 then m.tsPlayStart = 0
     m.tsConfirmed = false
 
@@ -680,6 +687,10 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     end if
     ' Error panel with other copies: Up/Down stay in its list.
     if m.errorPanel.visible and m.errorCopyList.visible and (key = "up" or key = "down") then return true
+    ' Everything below is live-only (channel step, favorite, pause, rewind,
+    ' start over, channel info). Movies and episodes use the Video node's own
+    ' controls, and * there must not save the movie ID as a favorite channel.
+    if m.play = invalid or m.play.kind <> "live" then return false
 
     if key = "up"
         m.top.channelStep = 1

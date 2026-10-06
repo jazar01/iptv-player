@@ -35,16 +35,21 @@ sub onLogin(res as Object)
     print "[main] login ok. max_connections="; result.maxConnections; " active="; result.activeConnections; " expires="; result.expires; " server tz="; result.timezone
     print "[main] allowed_output_formats: "; joinStrings(result.formats, ", ")
     if not result.hls then print "[main] WARNING: provider does not list m3u8; live HLS playback may not work"
-    m.serverTimezone = result.timezone
-    m.connections = { active: result.activeConnections, max: result.maxConnections }
-
     ' Save (and, for a new account, clear the old one's data) before the
-    ' catalog refresh, so the refresh is for this account.
+    ' catalog refresh, so the refresh is for this account. If the save fails,
+    ' nothing changes: the saved account stays active and Setup stays open.
     newSetup = m.pendingSetup
     if newSetup <> invalid
-        saveSetup(newSetup)
         m.pendingSetup = invalid
+        if not saveSetup(newSetup)
+            restoreSavedCredentials()
+            m.setup.status = "Connected, but the setup couldn't be saved (storage may be full). Nothing was changed."
+            m.setup.busy = false
+            return
+        end if
     end if
+    m.serverTimezone = result.timezone
+    m.connections = { active: result.activeConnections, max: result.maxConnections }
     refreshSearchIndex()
 
     if newSetup <> invalid
@@ -137,12 +142,13 @@ sub restoreSavedCredentials()
     if m.store.callFunc("isConfigured") then m.api.credentials = m.store.callFunc("getCredentials")
 end sub
 
-sub saveSetup(values as Object)
+' Saves the account and device name; on success, a new account's cached
+' data is cleared. Returns false (and changes nothing) if it couldn't be saved.
+function saveSetup(values as Object) as Boolean
     old = m.store.callFunc("getCredentials")
     accountChanged = (old <> invalid and (old.server <> values.server or old.username <> values.username))
 
-    saved = m.store.callFunc("setAccount", { server: values.server, username: values.username, password: values.password, deviceName: values.deviceName })
-    if not saved then showToast("Couldn't save the setup. It will be asked again next time.")
+    if not m.store.callFunc("setAccount", { server: values.server, username: values.username, password: values.password, deviceName: values.deviceName }) then return false
 
     if accountChanged
         ' Different provider account: cached catalog and guide no longer apply.
@@ -158,7 +164,8 @@ sub saveSetup(values as Object)
         m.guideFetchedAt = 0
         m.localIds = {}
     end if
-end sub
+    return true
+end function
 
 ' ---------------------------------------------------------------------------
 ' Settings

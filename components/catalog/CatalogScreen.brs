@@ -54,9 +54,13 @@ sub onCategories()
     content = CreateObject("roSGNode", "ContentNode")
     m.categoryIds = []
     focus = 0
+    found = false
     for each c in m.top.categories
         id = asString(c.category_id)
-        if id = m.currentCategory then focus = m.categoryIds.Count()
+        if id = m.currentCategory
+            focus = m.categoryIds.Count()
+            found = true
+        end if
         m.categoryIds.Push(id)
         item = content.CreateChild("ContentNode")
         item.title = asString(c.category_name)
@@ -66,6 +70,9 @@ sub onCategories()
         m.top.status = "This account has no " + kindNoun() + " categories."
         return
     end if
+    ' The open category is gone (e.g. "Favorite series" after removing the
+    ' last one): open the first one instead.
+    if not found then m.currentCategory = ""
     m.categoryList.jumpToItem = focus
     if m.currentCategory = "" then requestCategory(m.categoryIds[focus])
 end sub

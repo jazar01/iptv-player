@@ -36,7 +36,7 @@ sub runLoop()
             else if msg.GetField() = "localsRequest"
                 m.top.localsResult = listLocalStations(msg.GetData())
             else if msg.GetField() = "marketsRequest"
-                m.top.marketsResult = { id: msg.GetData().id, ready: m.index.live.Count() > 0, markets: listMarkets() }
+                m.top.marketsResult = { id: msg.GetData().id, ready: m.index.live.Count() > 0 and liveCategories() <> invalid, markets: listMarkets() }
             else
                 ' Typing sends a query per pause; answer only the newest.
                 latest = msg.GetData()
@@ -465,7 +465,10 @@ end function
 ' FOX order, in the shape of get_live_streams items so the catalog screen can
 ' show them like any other category.
 function listLocalStations(req as Object) as Object
-    result = { id: req.id, market: asString(req.market), ready: m.index.live.Count() > 0, items: [] }
+    ' Ready only once both lists are in: stations are found from channel
+    ' names within the live categories (an empty answer before then would be
+    ' taken as final).
+    result = { id: req.id, market: asString(req.market), ready: m.index.live.Count() > 0 and liveCategories() <> invalid, items: [] }
     stations = localStations()[result.market]
     if stations = invalid then return result
     for each network in ["ABC", "CBS", "NBC", "FOX"]

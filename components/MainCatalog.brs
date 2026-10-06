@@ -3,7 +3,7 @@
 ' refreshed.
 
 sub initCatalog()
-    m.catalogState = {}         ' kind -> { requested, categoriesShown, itemsShown }
+    m.catalogState = {}         ' kind -> { requested, categoriesShown, itemsShown (this request) }
     m.seriesScreen = invalid
     m.seriesScreenId = 0
     m.seriesInfo = {}           ' seriesId -> normalized info (see normalizeSeriesInfo)
@@ -198,6 +198,10 @@ sub onWantCategory(event as Object)
         showFavoriteSeriesCategory()
         return
     end if
+    ' Shown-for-this-request: a cached copy delivered now counts; an earlier
+    ' visit's success doesn't (a failed reload must show its error to retry).
+    state = catalogState(kind)
+    state.itemsShown.Delete(id)
     sendRequest({
         id: "catalogItems"
         action: catalogActions(kind).items
