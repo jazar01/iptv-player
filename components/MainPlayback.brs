@@ -263,11 +263,14 @@ sub onPlayerProgress(event as Object)
 
     saved = true
     if isTrue(p.finished) or (p.duration > 0 and p.position >= p.duration * 0.9)
-        m.watchedKey = key
         entry.fromPlayback = true
         if play.kind = "episode" then entry.nextEpisode = nextEpisodeAfter(play.seriesId, play.id)
         saved = m.store.callFunc("markWatched", entry)
-        print "[main] watched "; key
+        ' Only once it's saved; otherwise the next progress report tries again.
+        if saved
+            m.watchedKey = key
+            print "[main] watched "; key
+        end if
     else if p.position >= 30
         saved = m.store.callFunc("savePosition", entry)
     end if

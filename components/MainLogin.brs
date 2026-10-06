@@ -134,8 +134,7 @@ sub saveSetup(values as Object)
     old = m.store.callFunc("getCredentials")
     accountChanged = (old <> invalid and (old.server <> values.server or old.username <> values.username))
 
-    saved = m.store.callFunc("setCredentials", { server: values.server, username: values.username, password: values.password })
-    saved = m.store.callFunc("setDeviceName", values.deviceName) and saved
+    saved = m.store.callFunc("setAccount", { server: values.server, username: values.username, password: values.password, deviceName: values.deviceName })
     if not saved then showToast("Couldn't save the setup. It will be asked again next time.")
 
     if accountChanged

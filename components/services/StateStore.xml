@@ -5,15 +5,15 @@
   behind read()/write() so a remote backend can be added later.
 
   Every mutating function saves immediately and returns true only if the
-  write reached the registry.
+  write reached the registry. A failed write undoes the change, so the state
+  callers read back is always what's saved.
 -->
 <component name="StateStore" extends="Node">
   <interface>
     <function name="isConfigured" />
     <function name="getCredentials" />
-    <function name="setCredentials" />
+    <function name="setAccount" />
     <function name="getDevice" />
-    <function name="setDeviceName" />
     <function name="getMarket" />
     <function name="setMarket" />
     <function name="getSettings" />

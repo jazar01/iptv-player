@@ -160,6 +160,7 @@ Favorites and watch progress must never be lost. All saved state goes through on
 | State kept in cache files the system can clear | Only the registry (`roRegistrySection`) holds permanent state. `cachefs:` holds only re-downloadable data such as the catalog. `tmp:` is never used for state. |
 | Registry full (about 16 KB per app), writes fail silently | Compact encoding, free-space check before each save, and trimming of old resume entries and stale series. Favorites are never trimmed automatically. |
 | Changes lost to a crash or power loss | `Flush()` after every change; every write's return value is checked. |
+| A failed save looks like it worked until restart | A failed save undoes the change in memory, trimming included, so the screen shows only what's saved and a later save can't carry a change reported as failed. Setup saves the account and device name together. A finished movie or episode counts as watched only once that's saved; until then, playback keeps retrying. |
 | Saved data corrupted | Two alternating copies with version numbers; if the newest fails to parse, load the previous one. |
 
 - Screens and player code never touch the registry directly; they call `StateStore` methods such as `getFavorites()`, `markWatched()` and `savePosition()`.

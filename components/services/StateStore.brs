@@ -23,6 +23,8 @@ sub init()
     else
         normalizeDocument(m.doc)
     end if
+    ' The last saved state: a failed save puts m.doc back to it (persist()).
+    m.committed = copyDocument(m.doc)
 end sub
 
 ' ---------------------------------------------------------------------------
@@ -37,12 +39,15 @@ function getCredentials() as Dynamic
     return m.doc.credentials
 end function
 
-function setCredentials(creds as Object) as Boolean
+' Setup: account and device name saved together, so neither is saved alone.
+' values: { server, username, password, deviceName }
+function setAccount(values as Object) as Boolean
     m.doc.credentials = {
-        server: asString(creds.server)
-        username: asString(creds.username)
-        password: asString(creds.password)
+        server: asString(values.server)
+        username: asString(values.username)
+        password: asString(values.password)
     }
+    m.doc.deviceName = asString(values.deviceName)
     return persist()
 end function
 
@@ -73,11 +78,6 @@ end function
 
 function setSetting(name as String, value as Dynamic) as Boolean
     m.doc.settings[name] = value
-    return persist()
-end function
-
-function setDeviceName(name as String) as Boolean
-    m.doc.deviceName = name
     return persist()
 end function
 
@@ -787,15 +787,26 @@ end sub
 ' Save after every change. On a full registry, trim what can be re-created
 ' (tombstones, old resume entries, stale series) and retry. Favorites are
 ' never trimmed.
+'
+' A failed save undoes the change in memory too (trimming included): the app
+' never shows a change that wasn't saved, and a later save can't quietly
+' include one that was reported as failed.
 function persist() as Boolean
     maintain()
     result = m.backend.write(m.doc)
     if result = "nospace" then result = writeWithTrimming()
     if result <> "ok"
-        print "[state] SAVE FAILED ("; result; ")"
+        print "[state] SAVE FAILED ("; result; "); change undone"
+        m.doc = copyDocument(m.committed)
         return false
     end if
+    m.committed = copyDocument(m.doc)
     return true
+end function
+
+' Deep copy through JSON, the same form the backend saves.
+function copyDocument(doc as Object) as Object
+    return ParseJson(FormatJson(doc))
 end function
 
 sub maintain()
