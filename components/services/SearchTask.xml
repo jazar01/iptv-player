@@ -10,6 +10,7 @@
   In:  load     { kind: "live" | "movie" | "series", file }   (re)index one kind from a cache file
                 { kind: "categories" }  the live category list (cachefs:/catalog/live_categories.json)
                 changed: My Teams and local stations re-read it
+                { kind: "reset" }  empty every index (account changed)
        query    { id, text, market }   newest wins; older pending queries are skipped
   Out: results  { id, text, items: [ { kind: "channel" | "movie" | "series", itemId, streamId,
                   name, num, epgChannelId, ext, year, archiveDays, local } ] }

@@ -219,7 +219,7 @@ function findGames(req as Object) as Object
 
     ' Weak listings only add channels to games already found.
     for each w in weak
-        if findGameGroup(groups, w.team, w.info.start) <> invalid then mergeGame(groups, w.team, w.info, w.channel, now, rules)
+        if findGameGroup(groups, w.team, w.info, true) <> invalid then mergeGame(groups, w.team, w.info, w.channel, now, rules)
     end for
 
     live = []
@@ -257,15 +257,16 @@ end function
 
 ' info: { start, ends (0 if unknown), title, sport, replay }
 ' channel: { streamId, name, epgChannelId, network, later }
-' A team's listings starting within 90 minutes of each other are one game
-' (one may include the pregame); it keeps the earliest start. A network
+' A team's listings of the same sport starting within 90 minutes of each
+' other are one game (one may include the pregame); it keeps the earliest
+' start. A listing whose sport isn't known joins the nearest such game. A network
 ' listing's title and end time win, since guides are more exact than
 ' channel names.
 sub mergeGame(groups as Object, team as Object, info as Object, channel as Object, now as Integer, rules as Object)
-    g = findGameGroup(groups, team, info.start)
+    g = findGameGroup(groups, team, info, false)
     if g = invalid
         g = {
-            key: team.id + "|" + info.start.ToStr()
+            key: team.id + "|" + info.start.ToStr() + "|" + info.sport     ' two sports can start together
             teamId: team.id
             teamName: team.name
             title: info.title
@@ -291,20 +292,30 @@ sub mergeGame(groups as Object, team as Object, info as Object, channel as Objec
     ends = g.ends
     if ends <= 0 then ends = g.start + rules.liveSeconds
     g.live = (now >= g.start and now < ends)
-    if info.replay then g.replayChannels = g.replayChannels + 1
     for each c in g.channels
-        if c.streamId = channel.streamId then return
+        if c.streamId = channel.streamId then return     ' listed twice: count it once
     end for
+    if info.replay then g.replayChannels = g.replayChannels + 1
     g.channels.Push(channel)
 end sub
 
-' The team's game starting within 90 minutes of start, or invalid.
-function findGameGroup(groups as Object, team as Object, start as Integer) as Dynamic
+' The team's game starting within 90 minutes of info.start whose sport fits
+' (same sport, or either one unknown), the nearest if several; invalid if
+' none. strict: also invalid when several fit (a weak listing must not
+' guess between, say, a football and a volleyball game).
+function findGameGroup(groups as Object, team as Object, info as Object, strict as Boolean) as Dynamic
+    best = invalid
+    fits = 0
     for each key in groups
         g = groups[key]
-        if g.teamId = team.id and Abs(g.start - start) <= 5400 then return g
+        gap = Abs(g.start - info.start)
+        if g.teamId = team.id and gap <= 5400 and (g.sport = "" or info.sport = "" or g.sport = info.sport)
+            fits = fits + 1
+            if best = invalid or gap < Abs(best.start - info.start) then best = g
+        end if
     end for
-    return invalid
+    if strict and fits > 1 then return invalid
+    return best
 end function
 
 ' ---------------------------------------------------------------------------

@@ -315,10 +315,13 @@ end function
 
 sub clearCache()
     fs = CreateObject("roFileSystem")
-    dir = "cachefs:/catalog"
-    if not fs.Exists(dir) then return
-    for each name in fs.GetDirectoryListing(dir)
-        fs.Delete(dir + "/" + name)
+    ' The catalog and My Teams' network guides.
+    for each dir in ["cachefs:/catalog", "cachefs:/teams"]
+        if fs.Exists(dir)
+            for each name in fs.GetDirectoryListing(dir)
+                fs.Delete(dir + "/" + name)
+            end for
+        end if
     end for
-    print "[api] catalog cache cleared"
+    print "[api] catalog and guide caches cleared"
 end sub

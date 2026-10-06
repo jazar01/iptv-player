@@ -51,6 +51,17 @@ end sub
 sub loadKind(req as Object)
     kind = asString(req.kind)
     file = asString(req.file)
+    if kind = "reset"
+        ' Account changed: drop the old account's lists until the new ones load.
+        m.index = { live: [], movie: [], series: [] }
+        m.byId = { live: {}, movie: {}, series: {} }
+        m.matchLookup = {}
+        resetCategoryLookups()
+        m.top.counts = { live: 0, movie: 0, series: 0 }
+        m.top.archive = {}
+        print "[search] index cleared"
+        return
+    end if
     if kind = "categories"
         ' The live category list changed: My Teams and local stations re-read it.
         resetCategoryLookups()

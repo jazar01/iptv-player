@@ -36,11 +36,17 @@ sub onLogin(res as Object)
     print "[main] allowed_output_formats: "; joinStrings(result.formats, ", ")
     if not result.hls then print "[main] WARNING: provider does not list m3u8; live HLS playback may not work"
     m.serverTimezone = result.timezone
+
+    ' Save (and, for a new account, clear the old one's data) before the
+    ' catalog refresh, so the refresh is for this account.
+    newSetup = m.pendingSetup
+    if newSetup <> invalid
+        saveSetup(newSetup)
+        m.pendingSetup = invalid
+    end if
     refreshSearchIndex()
 
-    if m.pendingSetup <> invalid
-        saveSetup(m.pendingSetup)
-        m.pendingSetup = invalid
+    if newSetup <> invalid
         closeSetup()
         if m.section = ""
             showSection("home")
@@ -145,6 +151,11 @@ sub saveSetup(values as Object)
         resetCatalogs()
         m.searchIndexRequested = false
         m.archiveDays = {}
+        searchSend("load", { kind: "reset" })     ' old account's search results
+        m.games = []                              ' and its My Teams guides
+        m.guideReady = false
+        m.guideFetchedAt = 0
+        m.localIds = {}
     end if
 end sub
 
