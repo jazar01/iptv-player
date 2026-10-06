@@ -41,6 +41,17 @@ function capitalizeWords(text as String) as String
     return out
 end function
 
+' For display beside a year column: "Show (2019)", "Show - 2019" or
+' "Show [2019]" -> "Show". Only that year is removed.
+function nameWithoutYear(name as String, year as Integer) as String
+    if year <= 0 then return name
+    y = year.ToStr()
+    re = CreateObject("roRegex", "\s*(\(" + y + "\)|\[" + y + "\]|-\s*" + y + "$)\s*", "")
+    stripped = re.ReplaceAll(name, " ").Trim()
+    if stripped = "" then return name
+    return stripped
+end function
+
 ' Xtream puts the year in different fields depending on panel and kind.
 function itemYear(item as Object) as Integer
     for each field in ["year", "releaseDate", "release_date", "releasedate"]

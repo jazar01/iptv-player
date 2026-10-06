@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
   Content for one CatalogItem. itemId is the stream ID (live, movie) or series
-  ID. num is the year for movies and series (empty for channels).
+  ID. num is the year for movies (empty for channels and series, which
+  carry the year in the name).
   tag is shown at the right, e.g. FAVORITE or IN PROGRESS.
 -->
 <component name="CatalogNode" extends="ContentNode">

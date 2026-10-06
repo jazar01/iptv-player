@@ -165,7 +165,8 @@ sub fillNode(node as Object, raw as Object)
     else
         node.ext = asString(raw.container_extension)
         node.year = itemYear(raw)
-        if node.year > 0 then node.num = node.year.ToStr()
+        ' Movies show the year in a column; series keep it in the name.
+        if node.year > 0 and kind = "movie" then node.num = node.year.ToStr()
     end if
     node.tag = itemTag(node)
 end sub

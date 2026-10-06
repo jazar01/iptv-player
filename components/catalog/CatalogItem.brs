@@ -12,7 +12,16 @@ sub onItemContent()
     if m.content = invalid then return
     m.content.ObserveFieldScoped("tag", "onTag")
     m.num.text = m.content.num
-    m.name.text = localizeName(m.content.name)
+    name = localizeName(m.content.name)
+    year = m.content.year
+    if m.content.num <> ""
+        ' Movies: the year is in the first column, not again in the name.
+        name = nameWithoutYear(name, year)
+    else if year > 0 and Instr(1, name, year.ToStr()) = 0
+        ' Series: the year stays in the name; added if the provider left it out.
+        name = name + " (" + year.ToStr() + ")"
+    end if
+    m.name.text = name
     ' Channels have no first-column value: start the name at the left.
     if m.content.num = ""
         m.name.translation = [20, 0]

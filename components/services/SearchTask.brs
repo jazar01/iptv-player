@@ -282,7 +282,8 @@ function indexEntry(kind as String, item as Object) as Object
         if kind = "series" then e.itemId = toInt(item.series_id) else e.itemId = toInt(item.stream_id)
         e.ext = asString(item.container_extension)
         e.year = itemYear(item)
-        if e.year > 0 then e.num = e.year.ToStr()
+        ' Movies show the year in a column; series keep it in the name.
+        if e.year > 0 and kind = "movie" then e.num = e.year.ToStr()
     end if
     return e
 end function
