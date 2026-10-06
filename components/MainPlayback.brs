@@ -115,6 +115,9 @@ sub playEpisode(ep as Object, askResume as Boolean)
         url: streamUrl("series", id, ext)
         streamFormat: streamFormatFor(ext)
     }
+    ' A position saved under the episode's old ID (provider renumbering)
+    ' moves to this one first.
+    m.store.callFunc("remapEpisodes", play.seriesId, [{ id: id, season: play.season, episode: play.episode }])
     position = m.store.callFunc("getPosition", "episode", id)
     if askResume
         askToResume(play, position)

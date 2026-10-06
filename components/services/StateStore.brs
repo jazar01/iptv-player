@@ -404,8 +404,8 @@ end function
 
 ' map: { "<old seriesId>": { seriesId, name, year } }. The series record and
 ' its episodes' resume entries move to the new ID. Episode IDs inside may
-' have changed too; Continue Watching finds the episode again by season and
-' episode number.
+' have changed too; remapEpisodes() moves them by season and episode number
+' once the series info is loaded.
 function remapSeries(map as Object) as Boolean
     if map.Count() = 0 then return true
     for each s in m.doc.series
@@ -423,6 +423,54 @@ function remapSeries(map as Object) as Boolean
             if target <> invalid then r.seriesId = toInt(target.seriesId)
         end if
     end for
+    return persist()
+end function
+
+' Episode IDs can change in a renumbering too; season and episode number
+' identify them. episodes: [{ id, season, episode }] from fresh series info
+' (or just the one about to play). Saved positions and the current episode
+' move to the listed ID; if a position is saved under both, the newer wins.
+function remapEpisodes(seriesId as Dynamic, episodes as Object) as Boolean
+    sid = toInt(seriesId)
+    byNumber = {}
+    for each e in episodes
+        if toInt(e.season) > 0 or toInt(e.episode) > 0 then byNumber[toInt(e.season).ToStr() + ":" + toInt(e.episode).ToStr()] = toInt(e.id)
+    end for
+    changed = false
+
+    kept = []
+    byId = {}
+    for each r in getResume()     ' newest first, so the newer copy is kept
+        if r.kind = "episode" and toInt(r.seriesId) = sid
+            newId = byNumber[toInt(r.season).ToStr() + ":" + toInt(r.episode).ToStr()]
+            if newId <> invalid and newId <> toInt(r.id)
+                r.id = newId
+                changed = true
+            end if
+            key = toInt(r.id).ToStr()
+            if byId.DoesExist(key)
+                changed = true     ' an older duplicate: dropped
+            else
+                byId[key] = true
+                kept.Push(r)
+            end if
+        else
+            kept.Push(r)
+        end if
+    end for
+
+    s = findSeries(sid)
+    if s <> invalid and type(s.current) = "roAssociativeArray"
+        newId = byNumber[toInt(s.current.season).ToStr() + ":" + toInt(s.current.episode).ToStr()]
+        if newId <> invalid and newId <> toInt(s.current.episodeId)
+            s.current.episodeId = newId
+            changed = true
+        end if
+    end if
+
+    if not changed then return true
+    print "[state] re-found renumbered episodes of series "; sid
+    m.doc.resume = kept
     return persist()
 end function
 

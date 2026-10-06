@@ -51,6 +51,7 @@
 
     <function name="remapChannels" />
     <function name="remapSeries" />
+    <function name="remapEpisodes" />
     <function name="getSavedSeries" />
   </interface>
 

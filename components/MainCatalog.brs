@@ -246,6 +246,9 @@ sub onSeriesInfo(res as Object)
     if res.ok and type(res.data) = "roAssociativeArray"
         info = normalizeSeriesInfo(ctx, res.data)
         m.seriesInfo[key] = info
+        ' Fresh from the provider: move saved positions to any renumbered
+        ' episode IDs (a cached copy may still hold the old ones).
+        if not res.fromCache then reconcileEpisodes(info)
         if m.seriesScreen <> invalid and m.seriesScreenId = seriesId then m.seriesScreen.info = info
         if m.continueAfterInfo <> invalid and toInt(m.continueAfterInfo.seriesId) = seriesId
             item = m.continueAfterInfo
@@ -309,6 +312,16 @@ function normalizeSeason(season as Integer, list as Dynamic) as Object
     episodes.SortBy("episode")
     return { season: season, episodes: episodes }
 end function
+
+sub reconcileEpisodes(info as Object)
+    episodes = []
+    for each s in info.seasons
+        episodes.Append(s.episodes)
+    end for
+    if episodes.Count() = 0 then return
+    m.store.callFunc("remapEpisodes", info.seriesId, episodes)
+    refreshSeriesProgress()
+end sub
 
 ' Episode descriptor for the first episode after episodeId that isn't marked
 ' watched, or invalid if there's none (the series is finished) or the series
