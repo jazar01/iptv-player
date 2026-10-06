@@ -156,8 +156,8 @@ sub onCatalogItems(res as Object)
         state.itemsShown[id] = true
         screen.items = { categoryId: id, items: res.data }
     else if not state.itemsShown.DoesExist(id)
-        screen.items = { categoryId: id, items: [] }
-        screen.status = "Couldn't load this category: " + res.error
+        screen.items = { categoryId: id, items: [], failed: true }
+        screen.status = "Couldn't load this category: " + res.error + ". Press OK to try again."
     end if
 end sub
 

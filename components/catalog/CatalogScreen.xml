@@ -6,7 +6,8 @@
 
   In:  kind        "live" | "movie" | "series" (set once, before use)
        categories  raw get_*_categories array
-       items       { categoryId, items: raw get_live_streams / get_vod_streams / get_series array }
+       items       { categoryId, items: raw get_live_streams / get_vod_streams / get_series array,
+                     failed: true when it could not be loaded (choosing it again retries) }
        tags        { "<itemId>": "FAVORITE" | "IN PROGRESS" | ... }
        status      message shown where the item list goes
   Out: wantCategory category ID whose items should be loaded

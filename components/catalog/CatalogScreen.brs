@@ -7,6 +7,7 @@ sub init()
 
     m.categoryIds = []
     m.currentCategory = ""      ' requested
+    m.failedCategory = ""       ' requested, but couldn't be loaded
     m.shownCategory = ""        ' on screen
     m.allItems = []
     m.loaded = 0
@@ -87,8 +88,10 @@ sub onCategorySelected()
     end if
 end sub
 
+' A category that failed to load is asked for again when chosen again.
 sub requestCategory(id as String)
-    if id = m.currentCategory then return
+    if id = m.currentCategory and id <> m.failedCategory then return
+    m.failedCategory = ""
     m.currentCategory = id
     m.focusItemsWhenLoaded = false
     m.top.status = "Loading ..."
@@ -104,6 +107,7 @@ sub onItems()
     d = m.top.items
     id = asString(d.categoryId)
     if id <> m.currentCategory then return
+    if isTrue(d.failed) then m.failedCategory = id else m.failedCategory = ""
 
     ' A refresh of the list already on screen keeps the focused position.
     keep = 0

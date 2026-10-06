@@ -9,6 +9,21 @@ sub initSearch()
     m.searchQueryId = 0
     m.searchIndexRequested = false
     m.archiveDays = {}          ' streamId -> catch-up archive days, from the live index
+    m.searchIndexStarted = false    ' logged in and asked at least once
+
+    ' A failed download is tried again after 5 minutes; every 6 hours the
+    ' lists are checked, so a session left running still gets the daily
+    ' refresh (each list is only downloaded when it's over a day old).
+    m.searchRetryTimer = CreateObject("roSGNode", "Timer")
+    m.searchRetryTimer.duration = 300
+    m.searchRetryTimer.ObserveField("fire", "onSearchIndexTimer")
+    m.searchDailyTimer = CreateObject("roSGNode", "Timer")
+    m.searchDailyTimer.duration = 6 * 3600
+    m.searchDailyTimer.repeat = true
+    m.searchDailyTimer.ObserveField("fire", "onSearchIndexTimer")
+    m.top.AppendChild(m.searchRetryTimer)
+    m.top.AppendChild(m.searchDailyTimer)
+    m.searchDailyTimer.control = "start"
 
     m.searchTask.ObserveField("ready", "onSearchReady")
     m.searchTask.ObserveField("results", "onSearchResults")
@@ -91,6 +106,7 @@ end sub
 sub refreshSearchIndex()
     if m.searchIndexRequested then return
     m.searchIndexRequested = true
+    m.searchIndexStarted = true
     for each kind in ["live", "movie", "series"]
         sendRequest({
             id: "catalogAll"
@@ -107,11 +123,19 @@ end sub
 sub onCatalogAll(res as Object)
     kind = asString(res.context.kind)
     if not res.ok
-        print "[main] couldn't download the full "; kind; " list for search: "; res.error
+        print "[main] couldn't download the full "; kind; " list for search: "; res.error; "; trying again in 5 minutes"
         m.searchIndexRequested = false
+        m.searchRetryTimer.control = "stop"
+        m.searchRetryTimer.control = "start"
     else if not res.fromCache
         searchSend("load", { kind: kind, file: searchFile(kind) })
     end if
+end sub
+
+sub onSearchIndexTimer()
+    if not m.searchIndexStarted then return     ' not logged in yet
+    m.searchIndexRequested = false
+    refreshSearchIndex()
 end sub
 
 function searchIndexEmpty() as Boolean
