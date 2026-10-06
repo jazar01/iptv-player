@@ -122,6 +122,7 @@ Playback uses Roku's `Video` node, with HLS for live channels and the file's own
 - Live channels request HLS (`.m3u8`), not raw `.ts`.
 - Some VOD files will not play on Roku because of codec or container. The player catches the `Video` node's error state and shows a readable message, never a black screen.
 - A small overlay on live playback shows the channel and current program, and handles channel up/down through favorites.
+- **Stalls:** a live stream that has played and then sits in "Loading" for 12 seconds is reloaded at the live point, with a short note on the overlay. After 4 reloads in 3 minutes the player stops and says the channel keeps stalling. (Seen Oct 2026 during an NLDS game: the feed froze at "loading 33%" at commercial breaks, likely a format change the relay doesn't mark.) Every buffering spell and every change in the stream's resolution or bit rate is logged to the console (`[player] buffered …`, `[player] stream format: …`).
 
 **Pause, rewind and fast-forward**
 

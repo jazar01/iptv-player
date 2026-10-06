@@ -18,6 +18,13 @@ sub init()
     m.timeshiftTimeout.ObserveField("fire", "onTimeshiftTimeout")
     m.liveTick = m.top.FindNode("liveTick")
     m.liveTick.ObserveField("fire", "onLiveTick")
+    m.stallTimer = m.top.FindNode("stallTimer")
+    m.stallTimer.ObserveField("fire", "onStall")
+    m.clock = CreateObject("roTimespan")
+    m.bufferingSince = -1   ' clock ms when buffering began, -1 when not buffering
+    m.livePlayed = false    ' this live stream has played (so buffering now is a stall)
+    m.stallReloads = []     ' clock ms of recent watchdog reloads
+    m.lastFormat = ""       ' last logged stream format
 
     m.play = invalid
     m.programs = invalid
@@ -26,6 +33,7 @@ sub init()
     m.note = ""             ' one-off message on the live overlay
 
     m.video.ObserveField("state", "onVideoState")
+    m.video.ObserveField("streamingSegment", "onStreamingSegment")
     m.overlayTimer.ObserveField("fire", "hideOverlay")
     m.saveTimer.ObserveField("fire", "reportProgress")
     m.top.ObserveField("focusedChild", "onFocusedChild")
@@ -47,6 +55,11 @@ sub onContent()
 
     ' Never print play.url: it contains the password.
     print "[player] "; play.kind; " "; play.id; " '"; play.name; "' from "; toInt(play.startPosition); " s"
+    m.stallTimer.control = "stop"
+    m.bufferingSince = -1
+    m.livePlayed = false
+    m.stallReloads = []
+    m.lastFormat = ""
     m.liveTick.control = "stop"
     m.liveSeconds = 0           ' playing time on this channel; restarts on every change
     m.viewedSent = false
@@ -80,6 +93,7 @@ end sub
 sub onVideoState()
     state = m.video.state
     if m.play = invalid then return
+    watchStall(state)
 
     if m.mode = "timeshift"
         if state = "playing" and not m.tsConfirmed
@@ -117,6 +131,63 @@ sub onVideoState()
         m.finished = true
         close()
     end if
+end sub
+
+' ---------------------------------------------------------------------------
+' Stalls. Some relayed live channels change format at commercial breaks
+' without telling the player, and Roku's player can sit at "Loading" until
+' the stream is reopened. Every buffering spell is logged; on a live stream
+' that has already played, one lasting stallTimer's duration reloads the
+' stream at the live point (at most 4 times in 3 minutes, then an error).
+
+sub watchStall(state as String)
+    if state = "buffering"
+        if m.bufferingSince < 0 then m.bufferingSince = m.clock.TotalMilliseconds()
+        if m.mode = "live" and m.livePlayed then m.stallTimer.control = "start"
+        return
+    end if
+    m.stallTimer.control = "stop"
+    if m.bufferingSince >= 0
+        waited = (m.clock.TotalMilliseconds() - m.bufferingSince) / 1000
+        if waited >= 1 and m.livePlayed then print "[player] buffered "; Int(waited); " s ("; m.mode; ", ended "; state; ")"
+        m.bufferingSince = -1
+    end if
+    if state = "playing" and m.mode = "live" then m.livePlayed = true
+end sub
+
+sub onStall()
+    if m.play = invalid or m.mode <> "live" or m.video.state <> "buffering" then return
+    now = m.clock.TotalMilliseconds()
+    recent = []
+    for each t in m.stallReloads
+        if now - t < 180000 then recent.Push(t)
+    end for
+    m.stallReloads = recent
+    if recent.Count() >= 4
+        print "[player] still stalling after "; recent.Count(); " reloads in 3 minutes; giving up"
+        m.video.control = "stop"
+        m.errorMessage.text = "This channel keeps stalling. Try it again in a minute, or another copy of the channel."
+        m.errorPanel.visible = true
+        m.liveOverlay.visible = false
+        return
+    end if
+    m.stallReloads.Push(now)
+    print "[player] stalled "; Int(m.stallTimer.duration); " s; reloading the live stream ("; m.stallReloads.Count(); " in 3 min)"
+    m.bufferingSince = -1
+    m.lastFormat = ""
+    m.note = "The stream stalled, so it was reconnected."
+    startLive()
+end sub
+
+' Logs the stream's resolution and bit rate whenever they change, to see
+' what happens at the breaks. Never the segment URL: it holds the password.
+sub onStreamingSegment()
+    seg = m.video.streamingSegment
+    if type(seg) <> "roAssociativeArray" or toInt(seg.width) <= 0 then return
+    format = toInt(seg.width).ToStr() + "x" + toInt(seg.height).ToStr() + ", " + Int(toInt(seg.segBitrateBps) / 1000).ToStr() + " kbps"
+    if format = m.lastFormat then return
+    if m.lastFormat = "" then print "[player] stream format: "; format else print "[player] stream format: "; format; " (was "; m.lastFormat; ")"
+    m.lastFormat = format
 end sub
 
 sub onErrorText()
@@ -190,6 +261,7 @@ end sub
 
 sub close()
     m.saveTimer.control = "stop"
+    m.stallTimer.control = "stop"
     m.overlayTimer.control = "stop"
     m.liveTick.control = "stop"
     reportProgress()

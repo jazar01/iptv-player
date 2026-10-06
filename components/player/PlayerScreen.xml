@@ -80,6 +80,9 @@
     <!-- Counts seconds of live video actually playing (not paused, buffering
          or failed): viewed after a minute, watched after channelViewSeconds. -->
     <Timer id="liveTick" duration="5" repeat="true" />
+    <!-- Stall watchdog: a live stream that has played and then sits in
+         "buffering" this long is reloaded at the live point. -->
+    <Timer id="stallTimer" duration="12" />
   </children>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
