@@ -103,6 +103,7 @@ sub loadKind(req as Object)
     m.index[kind] = entries
     m.byId[kind] = byId
     m.matchLookup.Delete(kind)
+    m.vocabulary = invalid      ' fuzzy search's word list, rebuilt when next needed
 
     counts = m.top.counts
     if type(counts) <> "roAssociativeArray" then counts = {}
@@ -366,32 +367,42 @@ sub answer(q as Object)
         for each w in text.Split(" ")
             if w <> "" then words.Push(w)
         end for
-        ' The device's local stations that match come first among channels,
-        ' tagged local: among ~200 affiliates for "abc", yours would otherwise
-        ' be lost past the result cap.
-        localIds = {}
-        locals = []
-        stations = localStations()[asString(q.market)]
-        if stations <> invalid
-            for each s in stations
-                if wordsMatch(s.entry.key, words)
-                    item = resultItem(s.entry)
-                    item.local = true
-                    locals.Push(item)
-                    localIds[s.entry.itemId.ToStr()] = true
-                end if
-            end for
-        end if
-        items.Append(locals)
-        for each item in matchKind(m.index.live, text, words)
-            if not localIds.DoesExist(item.itemId.ToStr()) then items.Push(item)
-        end for
-        for each kind in ["movie", "series"]
-            items.Append(matchKind(m.index[kind], text, words))
-        end for
+        items = searchItems(q, text, searchTerms(words, false))
+        ' Nothing as typed or spoken: try close spellings ("bitish" -> british).
+        if items.Count() = 0 then items = searchItems(q, text, searchTerms(words, true))
+        ' Still nothing: names with all but one of the words, for a word voice
+        ' got wrong ("british break off" -> British Bake Off).
+        if items.Count() = 0 and words.Count() >= 2 then items = allButOneItems(q, text, searchTerms(words, true))
     end if
     m.top.results = { id: q.id, text: asString(q.text), items: items }
 end sub
+
+' Channels (the market's local stations first), then movies, then series.
+function searchItems(q as Object, text as String, terms as Object) as Object
+    ' The device's local stations that match come first among channels,
+    ' tagged local: among ~200 affiliates for "abc", yours would otherwise
+    ' be lost past the result cap.
+    localIds = {}
+    items = []
+    stations = localStations()[asString(q.market)]
+    if stations <> invalid
+        for each s in stations
+            if termsMatch(s.entry.key, terms)
+                item = resultItem(s.entry)
+                item.local = true
+                items.Push(item)
+                localIds[s.entry.itemId.ToStr()] = true
+            end if
+        end for
+    end if
+    for each item in matchKind(m.index.live, text, terms)
+        if not localIds.DoesExist(item.itemId.ToStr()) then items.Push(item)
+    end for
+    for each kind in ["movie", "series"]
+        items.Append(matchKind(m.index[kind], text, terms))
+    end for
+    return items
+end function
 
 ' A market's stations for Live TV's "Local stations" category, ABC, CBS, NBC,
 ' FOX order, in the shape of get_live_streams items so the catalog screen can
@@ -413,26 +424,191 @@ function listLocalStations(req as Object) as Object
     return result
 end function
 
-function wordsMatch(key as String, words as Object) as Boolean
-    for each w in words
-        if Instr(1, key, w) = 0 then return false
+' Every search word must be in the name, in some form: terms holds, per
+' word, the strings that count for it (its stem and synonyms).
+function termsMatch(key as String, terms as Object) as Boolean
+    for each alternatives in terms
+        found = false
+        for each a in alternatives
+            if Instr(1, key, a) > 0
+                found = true
+                exit for
+            end if
+        end for
+        if not found then return false
     end for
     return true
 end function
 
-function matchKind(entries as Object, text as String, words as Object) as Object
+' Search words -> [[strings that count for each word]]: the word's stem,
+' the stems of its synonyms (data/guide-rules.json "search"), and with fuzzy
+' also catalog words spelled almost the same.
+function searchTerms(words as Object, fuzzy as Boolean) as Object
+    synonyms = searchSynonyms()
+    terms = []
+    for each w in words
+        s = wordStem(w)
+        alternatives = [s]
+        group = synonyms[s]
+        if group <> invalid
+            for each other in group
+                if other <> s then alternatives.Push(other)
+            end for
+        end if
+        if fuzzy then alternatives.Append(closeWords(w))
+        terms.Push(alternatives)
+    end for
+    return terms
+end function
+
+' Word forms without a dictionary: common endings come off so "baking",
+' "baked", "bakes" and "bake" all become "bak" and match each other as
+' substrings. Stems keep at least 3 letters; short words (news, kids) stay.
+function wordStem(w as String) as String
+    if Right(w, 2) = "ss" or w.Len() < 4 then return w
+    for each suffix in ["ing", "ed", "es", "s"]
+        n = suffix.Len()
+        if Right(w, n) = suffix and w.Len() - n >= 3 and not (suffix = "s" and w.Len() <= 4) and not (suffix = "ed" and Right(w, 3) = "eed")
+            s = Left(w, w.Len() - n)
+            ' running -> runn -> run
+            if suffix <> "s" and suffix <> "es" and s.Len() >= 4 and Right(s, 1) = Mid(s, s.Len() - 1, 1) then s = Left(s, s.Len() - 1)
+            return s
+        end if
+    end for
+    if Right(w, 1) = "e" then return Left(w, w.Len() - 1)   ' bake -> bak
+    return w
+end function
+
+' Results for the search with each word left out in turn, merged without
+' repeats (channels first, then movies, then series, as usual).
+function allButOneItems(q as Object, text as String, terms as Object) as Object
+    seen = {}
+    byKind = { channel: [], movie: [], series: [] }
+    for skip = 0 to terms.Count() - 1
+        fewer = []
+        for i = 0 to terms.Count() - 1
+            if i <> skip then fewer.Push(terms[i])
+        end for
+        for each item in searchItems(q, text, fewer)
+            key = item.kind + ":" + item.itemId.ToStr()
+            if seen[key] = invalid and byKind[item.kind] <> invalid and byKind[item.kind].Count() < m.LIMIT
+                seen[key] = true
+                byKind[item.kind].Push(item)
+            end if
+        end for
+    end for
+    items = []
+    for each kind in ["channel", "movie", "series"]
+        items.Append(byKind[kind])
+    end for
+    return items
+end function
+
+' ---------------------------------------------------------------------------
+' Fuzzy search: catalog words spelled almost like a search word. Used only
+' when a search finds nothing as typed. Compares against catalog words with
+' the same first letter and about the same length: up to 1 letter off for
+' 4-6 letter words, 2 for longer ones (shorter words aren't guessed at).
+
+function closeWords(w as String) as Object
+    out = []
+    limit = 1
+    if w.Len() < 4 then return out
+    if w.Len() >= 7 then limit = 2
+    bucket = vocabulary()[Left(w, 1)]
+    if bucket = invalid then return out
+    for each candidate in bucket
+        if Abs(candidate.Len() - w.Len()) <= limit and candidate <> w
+            if editDistance(w, candidate, limit) <= limit and out.Count() < 10 then out.Push(candidate)
+        end if
+    end for
+    return out
+end function
+
+' First letter -> distinct words (4+ letters) in every indexed name. Built
+' when first needed (about a second), dropped when a list reloads.
+function vocabulary() as Object
+    if m.vocabulary <> invalid then return m.vocabulary
+    timer = CreateObject("roTimespan")
+    ' Keys here are catalog words, so no method calls on seen: a word like
+    ' "count" would shadow .Count() (it did). Brackets and a counter only.
+    seen = {}
+    total = 0
+    m.vocabulary = {}
+    splitter = CreateObject("roRegex", "[^a-z0-9]+", "")
+    for each kind in ["live", "movie", "series"]
+        for each e in m.index[kind]
+            for each word in splitter.Split(e.key)
+                if word.Len() >= 4 and seen[word] = invalid
+                    seen[word] = true
+                    total = total + 1
+                    first = Left(word, 1)
+                    if m.vocabulary[first] = invalid then m.vocabulary[first] = []
+                    m.vocabulary[first].Push(word)
+                end if
+            end for
+        end for
+    end for
+    print "[search] fuzzy word list: "; total; " words ("; timer.TotalMilliseconds(); " ms)"
+    return m.vocabulary
+end function
+
+' Levenshtein distance, giving up (returning limit + 1) once every path is
+' over limit.
+function editDistance(a as String, b as String, limit as Integer) as Integer
+    previous = []
+    for j = 0 to b.Len()
+        previous.Push(j)
+    end for
+    for i = 1 to a.Len()
+        current = [i]
+        best = i
+        ca = Mid(a, i, 1)
+        for j = 1 to b.Len()
+            cost = 1
+            if ca = Mid(b, j, 1) then cost = 0
+            v = previous[j - 1] + cost
+            if previous[j] + 1 < v then v = previous[j] + 1
+            if current[j - 1] + 1 < v then v = current[j - 1] + 1
+            current.Push(v)
+            if v < best then best = v
+        end for
+        if best > limit then return limit + 1
+        previous = current
+    end for
+    return previous[b.Len()]
+end function
+
+' Stem -> stems of its whole synonym group, loaded once.
+function searchSynonyms() as Object
+    if m.searchSynonyms <> invalid then return m.searchSynonyms
+    m.searchSynonyms = {}
+    json = ParseJson(ReadAsciiFile("pkg:/data/guide-rules.json"))
+    if type(json) <> "roAssociativeArray" or type(json.search) <> "roAssociativeArray" or type(json.search.synonyms) <> "roArray" then return m.searchSynonyms
+    for each group in json.search.synonyms
+        if type(group) = "roArray"
+            stems = []
+            for each word in group
+                text = LCase(asString(word)).Trim()
+                if text <> ""
+                    if Instr(1, text, " ") = 0 then text = wordStem(text)
+                    stems.Push(text)
+                end if
+            end for
+            for each s in stems
+                m.searchSynonyms[s] = stems
+            end for
+        end if
+    end for
+    return m.searchSynonyms
+end function
+
+function matchKind(entries as Object, text as String, terms as Object) as Object
     starts = []
     contains = []
     for each e in entries
         if starts.Count() >= m.LIMIT then exit for
-        matched = true
-        for each w in words
-            if Instr(1, e.key, w) = 0
-                matched = false
-                exit for
-            end if
-        end for
-        if matched
+        if termsMatch(e.key, terms)
             if Left(e.key, text.Len()) = text
                 starts.Push(e)
             else if contains.Count() < m.LIMIT

@@ -1,5 +1,18 @@
 {
   "comment": "Provider guide conventions. Edit here, not in code. See 'Provider guide findings' in docs/requirements.md.",
+  "search": {
+    "comment": "Search matches word forms on its own (baking/bake, movies/movie). Each synonyms group makes any of its words find the others; add groups freely (lower case; phrases allowed).",
+    "synonyms": [
+      ["football", "nfl"],
+      ["basketball", "nba"],
+      ["baseball", "mlb"],
+      ["hockey", "nhl"],
+      ["soccer", "futbol", "mls"],
+      ["film", "movie", "cinema"],
+      ["tv", "television"],
+      ["cartoon", "animated", "animation"]
+    ]
+  },
   "epg": {
     "base64Titles": true
   },
