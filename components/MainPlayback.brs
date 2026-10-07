@@ -11,6 +11,13 @@ sub initPlayback()
     m.guideRules = invalid
     m.connections = invalid     ' { active, max } from the provider, last checked
 
+    ' Live streams whose audio this Roku can't decode ("Unsupported AAC
+    ' stream"): streamId -> retry after (UTC seconds). Playing one goes to a
+    ' working copy instead; the provider changes sources, so after a few
+    ' hours it's tried again.
+    m.badStreams = {}
+    m.autoCopyFor = invalid     ' { streamId, name, item, afterFailure } waiting for its copies
+
     ' Up/Down while watching: the channel shows at once, but its stream
     ' loads only once the presses stop, so skipping through channels
     ' doesn't open (and leave counting against the account) a stream each.
@@ -21,10 +28,16 @@ sub initPlayback()
     m.top.AppendChild(m.stepTimer)
 end sub
 
-' item: { streamId, name, epgChannelId, archiveDays? }. Archive days come
-' from the catalog or search item, else from the live search index.
+' item: { streamId, name, epgChannelId, archiveDays?, note?, direct? }. Archive
+' days come from the catalog or search item, else from the live search index.
+' A stream known to have audio this Roku can't play goes to a working copy
+' instead (unless direct). note: shown on the live overlay once it starts.
 sub playLive(item as Object)
     id = toInt(item.streamId)
+    if isStreamBad(id) and not isTrue(item.direct)
+        findPlayableCopy(item, false)
+        return
+    end if
     archiveDays = toInt(item.archiveDays)
     if archiveDays = 0 then archiveDays = toInt(m.archiveDays[id.ToStr()])
     play = {
@@ -35,6 +48,8 @@ sub playLive(item as Object)
         url: streamUrl("live", id, "m3u8")
         streamFormat: "hls"
         archiveDays: archiveDays
+        note: asString(item.note)
+        stepFrom: toInt(item.stepFrom)     ' a copy played for this channel: Up/Down and the label go by it
     }
     if archiveDays > 0 then play.timeshift = timeshiftInfo(id)
     startPlayer(play, 0)
@@ -211,7 +226,11 @@ sub startPlayer(play as Object, position as Integer)
         m.player.ObserveField("closed", "onPlayerClosed")
         pushOverlay(m.player)
     end if
-    if play.kind = "live" then m.player.channelLabel = favoriteLabel(play.id)
+    if play.kind = "live"
+        labelId = play.id
+        if toInt(play.stepFrom) > 0 then labelId = play.stepFrom
+        m.player.channelLabel = favoriteLabel(labelId)
+    end if
     m.player.content = play
 
     if play.kind = "live"
@@ -291,10 +310,74 @@ end sub
 ' -6 protected): those streams did connect, and a full count then only
 ' reflects streams just left that the provider hasn't timed out yet.
 sub onPlayerFailed(event as Object)
-    m.failCode = toInt(event.GetData().code)
+    failure = event.GetData()
+    m.failCode = toInt(failure.code)
+    ' Audio this Roku can't decode: remember the stream and go straight to a
+    ' working copy (no connection check: the stream did connect).
+    if isTrue(failure.audioUnsupported) and m.playing <> invalid and m.playing.kind = "live"
+        markStreamBad(m.playing.id)
+        findPlayableCopy({ streamId: m.playing.id, name: m.playing.name, epgChannelId: m.playing.epgChannelId, archiveDays: m.playing.archiveDays, stepFrom: m.playing.stepFrom }, true)
+        return
+    end if
     checkConnections("failed")
     ' A live channel: offer its other copies on the error panel.
     if m.playing <> invalid and m.playing.kind = "live" then searchSend("infoRequest", { id: "failed", streamId: m.playing.id, market: m.store.callFunc("getMarket").key, similar: true })
+end sub
+
+' ---------------------------------------------------------------------------
+' Streams with audio this Roku can't decode
+
+sub markStreamBad(streamId as Dynamic)
+    key = toInt(streamId).ToStr()
+    m.badStreams[key] = nowSeconds() + 4 * 3600
+    print "[main] stream "; key; " has audio this Roku can't decode; skipping it for 4 hours"
+end sub
+
+function isStreamBad(streamId as Dynamic) as Boolean
+    until = m.badStreams[toInt(streamId).ToStr()]
+    return until <> invalid and nowSeconds() < until
+end function
+
+' Asks SearchTask for the channel's copies; onAutoCopies plays the first one
+' not known to be bad. afterFailure: the channel just failed in the player
+' (else it's about to be played and is already known to be bad).
+sub findPlayableCopy(item as Object, afterFailure as Boolean)
+    m.autoCopyFor = { streamId: toInt(item.streamId), name: asString(item.name), item: item, afterFailure: afterFailure }
+    searchSend("infoRequest", { id: "autocopy", streamId: toInt(item.streamId), market: m.store.callFunc("getMarket").key })
+end sub
+
+sub onAutoCopies(result as Object)
+    a = m.autoCopyFor
+    if a = invalid or toInt(result.streamId) <> a.streamId then return
+    m.autoCopyFor = invalid
+    if a.afterFailure and (m.player = invalid or m.playing = invalid or toInt(m.playing.id) <> a.streamId) then return
+    copy = invalid
+    if type(result.copies) = "roArray"
+        for each c in result.copies
+            if copy = invalid and not isStreamBad(c.streamId) then copy = c
+        end for
+    end if
+    if copy <> invalid
+        print "[main] playing copy "; copy.streamId; " instead of "; a.streamId
+        stepFrom = toInt(a.item.stepFrom)
+        if stepFrom = 0 then stepFrom = a.streamId
+        playLive({ streamId: copy.streamId, name: copy.name, epgChannelId: copy.epgChannelId, archiveDays: copy.archiveDays, direct: true, stepFrom: stepFrom, note: "Playing " + localizeName(asString(copy.name)) + ": another copy's audio doesn't play on Roku." })
+    else if not a.afterFailure
+        ' Known bad, but no other copy: try it anyway (the provider may have
+        ' changed it since).
+        item = a.item
+        item.direct = true
+        playLive(item)
+    else
+        ' No working copy: the error panel, with similar channels if any.
+        print "[main] no playable copy of "; a.streamId
+        m.player.errorText = "This channel sends audio your Roku can't decode, and no other copy of it plays. The provider sometimes changes this; try again later."
+        ' Similar channels by the name of the channel chosen, not of a copy
+        ' ("LBW: FOX News" would only find other LBW channels).
+        original = toInt(a.item.stepFrom)
+        if original = 0 then original = a.streamId
+        searchSend("infoRequest", { id: "failed", streamId: original, market: m.store.callFunc("getMarket").key, similar: true })
+    end if
 end sub
 
 ' How many of the account's connections are in use (player_api.php with no
@@ -360,6 +443,7 @@ sub onChannelStep(event as Object)
     count = favorites.Count()
     if count = 0 then return
     current = m.playing.id
+    if toInt(m.playing.stepFrom) > 0 then current = m.playing.stepFrom
     if m.stepTarget <> invalid then current = m.stepTarget.streamId
     index = favoriteIndex(favorites, current)
     if index < 0

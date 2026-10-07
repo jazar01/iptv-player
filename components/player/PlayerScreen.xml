@@ -46,7 +46,7 @@
     <field id="channelLabel" type="string" onChange="onChannelLabel" />
     <field id="preview" type="assocarray" onChange="onPreview" />
     <field id="toggleFavorite" type="assocarray" alwaysNotify="true" />
-    <field id="errorText" type="string" onChange="onErrorText" />
+    <field id="errorText" type="string" onChange="onErrorText" alwaysNotify="true" />
     <field id="progress" type="assocarray" alwaysNotify="true" />
     <field id="failed" type="assocarray" alwaysNotify="true" />
     <field id="channelStep" type="integer" alwaysNotify="true" />

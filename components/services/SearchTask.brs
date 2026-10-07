@@ -202,9 +202,11 @@ function channelDetails(req as Object) as Object
             end for
         end if
     end if
-    ' No copies and asked for (a failed channel): similar channels by name.
+    ' Asked for (a failed channel): similar channels by name. MainScene
+    ' offers them only when no copy is left to try (none, or all known not
+    ' to play on this Roku).
     result.similar = []
-    if result.copies.Count() = 0 and isTrue(req.similar) then result.similar = similarChannels(e)
+    if isTrue(req.similar) then result.similar = similarChannels(e)
     return result
 end function
 

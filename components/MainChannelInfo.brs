@@ -34,9 +34,17 @@ end sub
 
 sub onInfoResult(event as Object)
     result = event.GetData()
+    if result.id = "autocopy"
+        onAutoCopies(result)
+        return
+    end if
     if result.id = "failed"
         ' For the error panel (onPlayerFailed): only if that channel is still the one failing.
-        if m.player = invalid or m.playing = invalid or toInt(m.playing.id) <> result.streamId then return
+        if m.player = invalid or m.playing = invalid then return
+        if toInt(m.playing.id) <> result.streamId and toInt(m.playing.stepFrom) <> result.streamId then return
+        ' Copies known to have audio this Roku can't decode aren't offered.
+        result.copies = playableOnly(result.copies)
+        result.similar = playableOnly(result.similar)
         if type(result.copies) = "roArray" and result.copies.Count() > 0
             print "[main] offering "; result.copies.Count(); " other copies"
             m.player.errorCopiesLabel = "Try another copy of this channel   (OK to play)"
@@ -214,3 +222,13 @@ end sub
 sub onCatalogOptionsClosed()
     m.channelDialog = invalid
 end sub
+
+' Channels not known to have audio this Roku can't decode (isStreamBad).
+function playableOnly(channels as Dynamic) as Object
+    list = []
+    if type(channels) <> "roArray" then return list
+    for each c in channels
+        if not isStreamBad(c.streamId) then list.Push(c)
+    end for
+    return list
+end function

@@ -69,6 +69,7 @@ sub onContent()
     m.bufferingSince = -1
     m.livePlayed = false
     m.liveEndedAt = invalid     ' when this channel's stream last ended (liveStreamEnded)
+    m.errored = false          ' the Video node reported an error since the last load (loadVideo)
     m.bufferCount = 0
     hideInfo()
     m.stallReloads = []
@@ -81,6 +82,8 @@ sub onContent()
         m.saveTimer.control = "stop"
         m.liveTick.control = "start"
         startLive()
+        ' Set by MainScene (e.g. switched to another copy of the channel).
+        if asString(play.note) <> "" then showNote(asString(play.note))
     else
         m.mode = "vod"
         m.liveOverlay.visible = false
@@ -93,6 +96,7 @@ end sub
 
 sub loadVideo(url as String, streamFormat as String, live as Boolean, playStart as Integer)
     m.video.control = "stop"
+    m.errored = false
     c = CreateObject("roSGNode", "ContentNode")
     c.url = url
     c.title = asString(m.play.name)
@@ -131,17 +135,24 @@ sub onVideoState()
     end if
 
     if state = "error"
+        m.errored = true
         code = m.video.errorCode
         detail = asString(m.video.errorStr)
         print "[player] error "; code; " "; redact(m.video.errorMsg); " / "; redact(detail)
         logAudioTracks()
+        ' The decoder rejected the audio ("Unsupported AAC stream"): this
+        ' stream will never play on this Roku, however often it's retried.
+        audioUnsupported = (code = -5 and Instr(1, LCase(detail), "unsupported aac") > 0)
         message = friendlyError(code, httpStatus(detail))
+        if audioUnsupported and m.play.kind = "live" then message = "This copy of the channel sends audio your Roku can't decode. Looking for another copy ..."
         m.errorMessage.text = message
         m.errorPanel.visible = true
         m.liveOverlay.visible = false
         m.saveTimer.control = "stop"
-        m.top.failed = { play: m.play, code: code, message: message }
-    else if state = "finished" and m.play.kind = "live"
+        m.top.failed = { play: m.play, code: code, message: message, audioUnsupported: audioUnsupported }
+    else if state = "finished" and m.play.kind = "live" and not m.errored
+        ' (After an error the Video node also reports "finished"; reconnecting
+        ' then would only repeat the error and hold another connection.)
         liveStreamEnded()
     else if state = "finished" and m.play.kind <> "live"
         m.finished = true
