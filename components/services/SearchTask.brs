@@ -74,6 +74,13 @@ sub loadKind(req as Object)
     if kind = "categories"
         ' The live category list changed: My Teams and local stations re-read it.
         resetCategoryLookups()
+        if liveCategories() = invalid
+            print "[search] category list unreadable"
+            fs = CreateObject("roFileSystem")
+            if fs.Exists(liveCategoriesPath() + ".time") then fs.Delete(liveCategoriesPath() + ".time")
+            m.top.indexFailed = kind
+            return
+        end if
         m.top.indexVersion = m.top.indexVersion + 1
         return
     end if
@@ -86,6 +93,7 @@ sub loadKind(req as Object)
         ' Drop its age stamp so the next refresh downloads it again.
         fs = CreateObject("roFileSystem")
         if fs.Exists(file + ".time") then fs.Delete(file + ".time")
+        m.top.indexFailed = kind
         return
     end if
 

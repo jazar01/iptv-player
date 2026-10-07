@@ -36,8 +36,10 @@ Version 1 plays live TV, movies and series from a single Xtream account, with re
 - Browsing and playing past programs from a guide (catch-up beyond pausing and rewinding the channel being watched).
 - Multiple providers or accounts.
 - Per-person profiles.
-- Grid program guide (EPG grid).
-- My Teams, usage-based ordering and off-device backup (see Later features).
+- Off-device backup and sync (planned for V2; see Later features).
+
+The grid Guide, My Teams and usage-based ordering were first left out of
+version 1 and later built (see their sections).
 
 ## Distribution and setup
 

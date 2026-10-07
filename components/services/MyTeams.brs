@@ -132,8 +132,12 @@ end function
 
 ' The cached live category list (Live TV's, also fetched with the search
 ' catalog), or invalid if it isn't on disk or doesn't parse.
+function liveCategoriesPath() as String
+    return "cachefs:/catalog/live_categories.json"
+end function
+
 function liveCategories() as Dynamic
-    path = "cachefs:/catalog/live_categories.json"
+    path = liveCategoriesPath()
     if not CreateObject("roFileSystem").Exists(path) then return invalid
     cats = ParseJson(ReadAsciiFile(path))
     if type(cats) <> "roArray" then return invalid
@@ -148,8 +152,10 @@ function eventCategoryNames() as Object
     cats = liveCategories()
     if cats = invalid then return names     ' not downloaded yet: not remembered
     for each c in cats
-        name = asString(c.category_name)
-        if anyMatch(rules.eventCategories, name) and not anyMatch(rules.skipCategories, name) then names[asString(c.category_id)] = name
+        if type(c) = "roAssociativeArray"
+            name = asString(c.category_name)
+            if anyMatch(rules.eventCategories, name) and not anyMatch(rules.skipCategories, name) then names[asString(c.category_id)] = name
+        end if
     end for
     m.eventCategories = names
     return names
@@ -407,8 +413,10 @@ function localStations() as Object
 
     networkOf = {}      ' category ID -> "ABC"
     for each c in cats
-        found = rules.localCategories.Match(asString(c.category_name))
-        if found.Count() > 1 then networkOf[asString(c.category_id)] = UCase(found[1])
+        if type(c) = "roAssociativeArray"
+            found = rules.localCategories.Match(asString(c.category_name))
+            if found.Count() > 1 then networkOf[asString(c.category_id)] = UCase(found[1])
+        end if
     end for
 
     byEpg = {}          ' one channel per station feed, per market
@@ -474,8 +482,13 @@ sub addNetworkGames(groups as Object, teams as Object, networks as Object, now a
         json = ParseJson(ReadAsciiFile(n.guideFile))
         if type(json) = "roAssociativeArray" and type(json.epg_listings) = "roArray"
             for each listing in json.epg_listings
-                start = toInt(listing.start_timestamp)
-                ends = toInt(listing.stop_timestamp)
+                ' A non-object entry gets no times, so it's skipped below.
+                start = 0
+                ends = 0
+                if type(listing) = "roAssociativeArray"
+                    start = toInt(listing.start_timestamp)
+                    ends = toInt(listing.stop_timestamp)
+                end if
                 if start > 0 and ends > now and start <= now + rules.aheadSeconds
                     title = guideText(listing.title, rules)
                     description = guideText(listing.description, rules)

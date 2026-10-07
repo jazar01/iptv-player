@@ -1,13 +1,16 @@
 ' Guide (top bar): a channels-by-time grid. Channels come from Favorites,
 ' the market's local stations, or a Live TV category (SearchTask, from its
 ' index); each channel's schedule from get_simple_data_table, fetched only for
-' the rows on screen and kept for an hour.
+' the rows on screen while the Guide is showing, and kept for an hour. A
+' failed schedule waits before it's tried again (5 min, 15 min, then hourly).
 
 sub initGuide()
     m.guideChoice = "favorites"     ' "favorites" | "__local" | a category ID
     m.guideTables = {}              ' streamId -> { listings, at }
     m.guideWanted = []              ' stream IDs the grid is showing (latest)
     m.guideInflight = {}
+    m.guideFailed = {}              ' streamId -> { count, retryAt }
+    m.guideWaiting = false          ' showing "Still loading"; asked again after indexing
     m.guideCategories = []          ' [{ id, name }] from SearchTask
     m.searchTask.ObserveField("guideResult", "onGuideResult")
 end sub
@@ -24,6 +27,18 @@ sub onGuideShown(screen as Object)
     ' The category list (and, for a category, its channels) from SearchTask.
     searchSend("guideRequest", { id: "guide", categoryId: guideCategoryId() })
     if m.guideChoice = "favorites" or m.guideChoice = "__local" then showGuideChannels()
+    pumpGuide()
+end sub
+
+' After a (re)index: a Guide still waiting for the channel list asks again.
+sub refreshGuideIfWaiting()
+    if not m.guideWaiting or m.sections.guide = invalid then return
+    m.guideWaiting = false
+    if m.guideChoice = "__local"
+        requestLocalStations("guide")
+    else
+        searchSend("guideRequest", { id: "guide", categoryId: guideCategoryId() })
+    end if
 end sub
 
 ' The SearchTask category to load, or "" for Favorites / Local stations.
@@ -44,9 +59,11 @@ sub onGuideResult(event as Object)
     screen.categories = choices
     if result.categoryId <> "" and result.categoryId = m.guideChoice
         if not result.ready
-            screen.status = "Still loading the channel list. Try again in a minute."
+            screen.status = "Still loading the channel list ..."
+            m.guideWaiting = true
             return
         end if
+        m.guideWaiting = false
         screen.title = guideChoiceName()
         screen.channels = result.channels
     end if
@@ -79,7 +96,8 @@ sub showGuideLocals(result as Object)
     end for
     screen.title = guideChoiceName()
     screen.channels = channels
-    if not result.ready then screen.status = "Still loading the channel list. Try again in a minute."
+    m.guideWaiting = not result.ready
+    if not result.ready then screen.status = "Still loading the channel list ..."
 end sub
 
 function guideChoiceName() as String
@@ -93,6 +111,7 @@ end function
 
 sub onGuideCategory(event as Object)
     m.guideChoice = event.GetData()
+    m.guideWaiting = false
     screen = m.sections.guide
     if screen = invalid then return
     screen.status = "Loading ..."
@@ -111,7 +130,8 @@ end sub
 
 ' ---------------------------------------------------------------------------
 ' Schedules: cached ones go straight to the grid; the rest are fetched, at
-' most 4 at a time, always for rows still on screen.
+' most 4 at a time, always for rows still on screen, and only while the Guide
+' is the section showing with nothing over it.
 
 sub onGuideWant(event as Object)
     m.guideWanted = event.GetData()
@@ -126,12 +146,15 @@ sub onGuideWant(event as Object)
 end sub
 
 sub pumpGuide()
+    if m.section <> "guide" or m.overlays.Count() > 0 then return
     now = nowSeconds()
     for each id in m.guideWanted
         if m.guideInflight.Count() >= 4 then return
         key = toInt(id).ToStr()
         t = m.guideTables[key]
-        if not m.guideInflight.DoesExist(key) and (t = invalid or now - t.at >= 3600)
+        f = m.guideFailed[key]
+        waiting = f <> invalid and now < f.retryAt
+        if not m.guideInflight.DoesExist(key) and not waiting and (t = invalid or now - t.at >= 3600)
             m.guideInflight[key] = true
             sendRequest({
                 id: "guideTable"
@@ -149,10 +172,20 @@ sub onGuideTable(res as Object)
     m.guideInflight.Delete(key)
     screen = m.sections.guide
     if not res.ok
-        if screen <> invalid then screen.schedule = { streamId: key, failed: true }
+        ' Wait before trying this channel again; a schedule already shown stays.
+        f = m.guideFailed[key]
+        if f = invalid then f = { count: 0 }
+        f.count = f.count + 1
+        waits = [300, 900, 3600]
+        n = f.count
+        if n > waits.Count() then n = waits.Count()
+        f.retryAt = nowSeconds() + waits[n - 1]
+        m.guideFailed[key] = f
+        if screen <> invalid and m.guideTables[key] = invalid then screen.schedule = { streamId: key, failed: true }
         pumpGuide()
         return
     end if
+    m.guideFailed.Delete(key)
     ' Keep from 3 hours back to 30 ahead, decoded, in start order.
     now = nowSeconds()
     listings = []
@@ -169,6 +202,24 @@ sub onGuideTable(res as Object)
     end if
     listings.SortBy("start")
     m.guideTables[key] = { listings: listings, at: now }
+    trimGuideTables(now)
     if screen <> invalid then screen.schedule = { streamId: key, listings: listings }
     pumpGuide()
+end sub
+
+' At most 150 schedules are kept: past that, ones more than an hour old go,
+' then the oldest, so browsing many categories doesn't keep them all.
+sub trimGuideTables(now as Integer)
+    if m.guideTables.Count() <= 150 then return
+    entries = []
+    for each key in m.guideTables
+        entries.Push({ key: key, at: m.guideTables[key].at })
+    end for
+    entries.SortBy("at")
+    extra = entries.Count() - 150
+    for each e in entries
+        if extra <= 0 and now - e.at < 3600 then exit for
+        m.guideTables.Delete(e.key)
+        extra = extra - 1
+    end for
 end sub

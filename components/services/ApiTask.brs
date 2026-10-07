@@ -287,8 +287,9 @@ function readCacheText(path as String) as String
 end function
 
 ' Written to a temporary file and then renamed, so a reader never sees half
-' a file; the age stamp is written last, so a failed write never looks
-' fresh. Returns false if it couldn't be saved.
+' a file; the old file is kept aside until the new one is in place, and put
+' back if the rename fails. The age stamp is written last, so a failed write
+' never looks fresh. Returns false if it couldn't be saved.
 function writeCacheText(path as String, text as String) as Boolean
     slash = 0
     p = Instr(1, path, "/")
@@ -300,18 +301,30 @@ function writeCacheText(path as String, text as String) as Boolean
     fs = CreateObject("roFileSystem")
     if fs.Exists(path + ".time") then fs.Delete(path + ".time")
     temp = path + ".part"
+    old = path + ".old"
     ok = WriteAsciiFile(temp, text)
     if ok
-        if fs.Exists(path) then fs.Delete(path)
+        if fs.Exists(old) then fs.Delete(old)
+        hadOld = fs.Exists(path)
+        if hadOld then hadOld = fs.Rename(path, old)
         ok = fs.Rename(temp, path)
+        if ok
+            if hadOld then fs.Delete(old)
+        else if hadOld
+            fs.Rename(old, path)
+        end if
     end if
     if not ok
         if fs.Exists(temp) then fs.Delete(temp)
         print "[api] could not write cache "; path
         return false
     end if
-    ' Sidecar with the write time, for maxAgeSeconds.
-    WriteAsciiFile(path + ".time", nowSeconds().ToStr())
+    ' Sidecar with the write time, for maxAgeSeconds. Without it the file
+    ' counts as old and is fetched again.
+    if not WriteAsciiFile(path + ".time", nowSeconds().ToStr())
+        print "[api] could not write cache time "; path
+        return false
+    end if
     return true
 end function
 

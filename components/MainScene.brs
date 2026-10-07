@@ -201,6 +201,8 @@ sub removeOverlay(node as Object)
         m.infoPanel = invalid
         m.infoFor = invalid
     end if
+    ' Back on the Guide (after playing, say): fetch what it was waiting for.
+    if m.section = "guide" then pumpGuide()
     focusContent()
 end sub
 

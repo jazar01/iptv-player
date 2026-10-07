@@ -126,6 +126,16 @@ function Get-RestoreBundle {
     function Read-Backup([string]$path) {
         $text = (Get-Content $path -Raw).Trim()
         if (-not ($text.StartsWith('{') -and $text.EndsWith('}'))) { throw "$path doesn't look like a backup." }
+        # Must be complete JSON with the saved document's basics. -AsHashtable
+        # keeps keys case-sensitive, so a backup with "seenGames" and
+        # "seengames" both still reads. The raw text is what gets bundled.
+        try { $doc = $text | ConvertFrom-Json -AsHashtable -ErrorAction Stop }
+        # The parser's message can quote the file (and its password): not shown.
+        catch { throw "$path isn't valid JSON." }
+        $keys = @($doc.Keys | ForEach-Object { "$_".ToLower() })
+        foreach ($required in 'schema', 'credentials') {
+            if ($keys -notcontains $required) { throw "$path doesn't look like a backup (no `"$required`")." }
+        }
         return $text
     }
     $devices = @()

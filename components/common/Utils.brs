@@ -353,7 +353,9 @@ function friendlyRequestError(res as Object) as String
     if code = 404 then return "The provider doesn't have this right now."
     if code = 429 then return "The provider is limiting requests. Try again in a minute."
     if code >= 500 then return "The provider's server had a problem. Try again in a minute."
-    if code > 0 then return "The provider answered with an error (HTTP " + code.ToStr() + ")."
+    ' A 2xx code with an error means the download arrived but couldn't be
+    ' read or saved; the checks below say which.
+    if code > 0 and (code < 200 or code > 299) then return "The provider answered with an error (HTTP " + code.ToStr() + ")."
     if Instr(1, detail, "timed out") > 0 then return "The server didn't answer in time. Try again in a moment."
     if Instr(1, detail, "resolve") > 0 then return "Can't find the server. Check the TV's internet connection."
     if Instr(1, detail, "ssl") > 0 or Instr(1, detail, "certificate") > 0 then return "A secure connection to the server failed."

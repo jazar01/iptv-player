@@ -23,7 +23,7 @@
     <field id="categories" type="array" onChange="onCategories" />
     <field id="schedule" type="assocarray" onChange="onSchedule" alwaysNotify="true" />
     <field id="status" type="string" onChange="onStatus" alwaysNotify="true" />
-    <field id="wantSchedules" type="array" />
+    <field id="wantSchedules" type="array" alwaysNotify="true" />
     <field id="play" type="assocarray" alwaysNotify="true" />
     <field id="categoryChosen" type="string" alwaysNotify="true" />
   </interface>

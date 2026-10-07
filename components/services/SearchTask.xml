@@ -60,6 +60,7 @@
     <field id="archive" type="assocarray" />
     <field id="counts" type="assocarray" />
     <field id="indexVersion" type="integer" alwaysNotify="true" />
+    <field id="indexFailed" type="string" alwaysNotify="true" />
     <field id="matchRequest" type="assocarray" alwaysNotify="true" />
     <field id="matchResult" type="assocarray" alwaysNotify="true" />
     <field id="selfTest" type="boolean" value="false" />

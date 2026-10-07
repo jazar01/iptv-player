@@ -29,6 +29,7 @@ sub initSearch()
     m.searchTask.ObserveField("results", "onSearchResults")
     m.searchTask.ObserveField("archive", "onArchiveList")
     m.searchTask.ObserveField("indexVersion", "onIndexChanged")
+    m.searchTask.ObserveField("indexFailed", "onIndexFailed")
     m.searchTask.ObserveField("matchResult", "onMatchResult")
     m.searchTask.ObserveField("gamesResult", "onGamesResult")
     m.searchTask.ObserveField("marketsResult", "onMarketsResult")
@@ -59,6 +60,7 @@ sub onIndexChanged()
     ' The catalog changed: My Teams games may have too.
     requestGames()
     if m.localsWaiting then requestLocalStations("live")
+    refreshGuideIfWaiting()
     refreshMarketsScreen()
 end sub
 
@@ -151,6 +153,15 @@ sub onCatalogAll(res as Object)
     else if not res.fromCache
         searchSend("load", { kind: kind, file: searchFile(kind) })
     end if
+end sub
+
+' A downloaded list SearchTask couldn't read (its age stamp is gone, so it's
+' downloaded again): try in 5 minutes rather than at the 6-hour check.
+sub onIndexFailed(event as Object)
+    if not m.searchIndexStarted then return     ' before login; the login refresh gets it
+    print "[main] the "; event.GetData(); " list couldn't be read; downloading it again in 5 minutes"
+    m.searchRetryTimer.control = "stop"
+    m.searchRetryTimer.control = "start"
 end sub
 
 sub onSearchIndexTimer()

@@ -29,6 +29,7 @@ sub init()
     m.windowMin = halfHour(nowSeconds())
     m.windowStart = m.windowMin
     m.focusTime = nowSeconds()
+    m.minutes = 0
 
     ' Fixed row nodes, refilled on every redraw (only on-screen rows exist).
     m.rowNodes = []
@@ -75,6 +76,9 @@ end function
 sub onChannels()
     m.channels = m.top.channels
     if type(m.channels) <> "roArray" then m.channels = []
+    ' MainScene sends the new rows' schedules again (from its cache or fetched).
+    m.schedules = {}
+    m.failed = {}
     m.row = 0
     m.topRow = 0
     m.windowMin = halfHour(nowSeconds())
@@ -130,6 +134,10 @@ sub onMinute()
     if m.windowStart < m.windowMin then m.windowStart = m.windowMin
     if m.focusTime < nowSeconds() then m.focusTime = nowSeconds()
     redraw()
+    ' Every 10 minutes, ask again for the rows on screen; MainScene fetches
+    ' only schedules more than an hour old.
+    m.minutes = m.minutes + 1
+    if m.minutes mod 10 = 0 and m.channels.Count() > 0 then reportWanted()
 end sub
 
 ' ---------------------------------------------------------------------------
