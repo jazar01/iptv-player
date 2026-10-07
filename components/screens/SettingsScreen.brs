@@ -57,7 +57,9 @@ sub onInfo()
     nl = Chr(10)
     connections = asString(info.connections)
     if connections = "" then connections = "checking ..."
-    m.details.text = "Device name:  " + asString(info.deviceName) + nl + "Server:  " + asString(info.server) + nl + "Connections:  " + connections + "  (all devices on this account)" + nl + "Device ID:  " + asString(info.deviceId) + nl + "App version:  " + asString(info.version)
+    expires = asString(info.expires)
+    if expires = "" then expires = "no end date"
+    m.details.text = "Device name:  " + asString(info.deviceName) + nl + "Server:  " + asString(info.server) + nl + "Account expires:  " + expires + nl + "Connections:  " + connections + "  (all devices on this account)" + nl + "Device ID:  " + asString(info.deviceId) + nl + "App version:  " + asString(info.version)
 end sub
 
 ' ---------------------------------------------------------------------------

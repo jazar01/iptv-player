@@ -68,6 +68,7 @@ sub onContent()
     m.stallTimer.control = "stop"
     m.bufferingSince = -1
     m.livePlayed = false
+    m.liveEndedAt = invalid     ' when this channel's stream last ended (liveStreamEnded)
     m.bufferCount = 0
     hideInfo()
     m.stallReloads = []
@@ -140,10 +141,31 @@ sub onVideoState()
         m.liveOverlay.visible = false
         m.saveTimer.control = "stop"
         m.top.failed = { play: m.play, code: code, message: message }
+    else if state = "finished" and m.play.kind = "live"
+        liveStreamEnded()
     else if state = "finished" and m.play.kind <> "live"
         m.finished = true
         close()
     end if
+end sub
+
+' A live stream that ends (the provider stopped it: an event over, a server
+' restart) would otherwise leave a frozen picture. Reconnect once; if it ends
+' again within 2 minutes, stop and offer other copies (code -101).
+sub liveStreamEnded()
+    now = m.clock.TotalMilliseconds()
+    if m.liveEndedAt <> invalid and now - m.liveEndedAt < 120000
+        print "[player] live stream ended again; giving up"
+        m.errorMessage.text = "This channel stopped sending video. It may be off the air right now; try again later, or another copy of the channel."
+        m.errorPanel.visible = true
+        m.liveOverlay.visible = false
+        m.top.failed = { play: m.play, code: -101, message: m.errorMessage.text }
+        return
+    end if
+    m.liveEndedAt = now
+    print "[player] live stream ended; reconnecting"
+    m.note = "The stream ended, so it was reconnected."
+    startLive()
 end sub
 
 ' ---------------------------------------------------------------------------

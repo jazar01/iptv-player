@@ -31,6 +31,8 @@
       rowLabelFont="font:MediumBoldSystemFont" rowLabelColor="0xD0D6DCFF"
       focusBitmapUri="pkg:/images/ui/card-focus.9.png" drawFocusFeedbackOnTop="true"
       rowFocusAnimationStyle="floatingFocus" vertFocusAnimationStyle="floatingFocus" />
+    <!-- Report the channel cards on screen only once scrolling pauses. -->
+    <Timer id="visibleDelay" duration="0.3" />
   </children>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />

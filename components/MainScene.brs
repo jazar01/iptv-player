@@ -5,7 +5,9 @@
 '   MainCatalog.brs   Live TV / Movies / Series browsers, series pages
 '   MainPlayback.brs  player, resume, watched tracking, live pause/rewind
 '   MainSearch.brs    search index and queries, channel matching
-'   MainTeams.brs     My Teams games, replays, Settings -> My Teams
+'   MainTeams.brs     My Teams games, replays, logos, Settings -> My Teams
+'   MainChannelInfo.brs  channel info panel, * menu in Live TV
+'   MainMovies.brs    movie details page
 '
 ' Launch: with saved credentials, Home draws immediately from saved favorites
 ' and cached data while the login is re-validated in the background. Without
@@ -164,7 +166,8 @@ sub onTopBarChosen()
 end sub
 
 ' ---------------------------------------------------------------------------
-' Overlays (Setup, Favorites grid, series pages, player) and focus
+' Overlays (Setup, "See all" grids, series and movie pages, info panel,
+' player) and focus
 
 sub pushOverlay(node as Object)
     m.overlayHost.AppendChild(node)

@@ -6,8 +6,16 @@ sub init()
     m.lastVisibleKey = ""
 
     m.list.ObserveField("rowItemSelected", "onItemSelected")
-    m.list.ObserveField("rowItemFocused", "updateVisible")
+    m.list.ObserveField("rowItemFocused", "onFocusMoved")
+    m.visibleDelay = m.top.FindNode("visibleDelay")
+    m.visibleDelay.ObserveField("fire", "updateVisible")
     m.top.ObserveField("focusedChild", "onFocusedChild")
+end sub
+
+' Focus moves: report the cards on screen once it settles (EpgService).
+sub onFocusMoved()
+    m.visibleDelay.control = "stop"
+    m.visibleDelay.control = "start"
 end sub
 
 sub onFocusedChild()

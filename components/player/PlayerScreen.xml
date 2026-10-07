@@ -20,7 +20,8 @@
                      details are added here while it's open
   Out: progress      { play, position, duration, finished } every 30 s and on stop (not live)
        failed        { play, code, message } when the Video node errors, or code -100
-                     when a live channel keeps stalling after 4 reloads
+                     when a live channel keeps stalling after 4 reloads, -101 when its
+                     stream ends twice within 2 minutes
        channelStep   +1 / -1 when Up / Down is pressed during live playback
        toggleFavorite { streamId, name, epgChannelId } when * is pressed during live playback
        liveViewed    { streamId, name, epgChannelId } after a minute of a live channel playing

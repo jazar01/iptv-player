@@ -45,6 +45,8 @@
       font="font:MediumSystemFont" color="0xA0A8B0FF" text="Loading categories ..." />
     <!-- Load a category after focus rests on it briefly, not on every step. -->
     <Timer id="categoryDelay" duration="0.4" />
+    <!-- Report the rows on screen only once scrolling pauses (what's on now). -->
+    <Timer id="visibleDelay" duration="0.3" />
   </children>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />

@@ -183,7 +183,7 @@ sub onCatalogCategories(res as Object)
         end if
     else if not state.categoriesShown
         state.requested = false     ' try again next visit
-        screen.status = "Couldn't load categories: " + res.error
+        screen.status = "Couldn't load the categories. " + friendlyRequestError(res)
     end if
 end sub
 
@@ -224,7 +224,7 @@ sub onCatalogItems(res as Object)
         screen.items = { categoryId: id, items: res.data }
     else if not state.itemsShown.DoesExist(id)
         screen.items = { categoryId: id, items: [], failed: true }
-        screen.status = "Couldn't load this category: " + res.error + ". Press OK to try again."
+        screen.status = "Couldn't load this category. " + friendlyRequestError(res) + " Press OK to try again."
     end if
 end sub
 
@@ -329,10 +329,10 @@ sub onSeriesInfo(res as Object)
             continueSeries(item)
         end if
     else if not res.fromCache and m.seriesInfo[key] = invalid
-        if m.seriesScreen <> invalid and m.seriesScreenId = seriesId then m.seriesScreen.status = "Couldn't load episodes: " + res.error
+        if m.seriesScreen <> invalid and m.seriesScreenId = seriesId then m.seriesScreen.status = "Couldn't load the episodes. " + friendlyRequestError(res)
         if m.continueAfterInfo <> invalid and toInt(m.continueAfterInfo.seriesId) = seriesId
             m.continueAfterInfo = invalid
-            showToast("Couldn't load the series: " + res.error)
+            showToast("Couldn't load the series. " + friendlyRequestError(res))
         end if
     end if
 end sub
@@ -357,14 +357,14 @@ function normalizeSeriesInfo(ctx as Object, data as Object) as Object
     else if type(groups) = "roArray"
         ' Some panels send a list of season lists.
         for each group in groups
-            if type(group) = "roArray" and group.Count() > 0 then seasons.Push(normalizeSeason(toInt(group[0].season), group))
+            if type(group) = "roArray" and group.Count() > 0 and type(group[0]) = "roAssociativeArray" then seasons.Push(normalizeSeason(toInt(group[0].season), group))
         end for
     end if
     seasons.SortBy("season")
     if seasons.Count() > 1 and seasons[0].season = 0 then seasons.Push(seasons.Shift())
 
-    ' Artwork and details for the series page (field names vary by panel;
-    ' firstText is in MainMovies.brs). Anything missing is left out.
+    ' Artwork and details for the series page (field names vary by panel).
+    ' Anything missing is left out.
     details = { cover: "", backdrop: "", plot: "", genre: "", rating: "", cast: "", director: "" }
     info = data.info
     if type(info) = "roAssociativeArray"
@@ -373,11 +373,8 @@ function normalizeSeriesInfo(ctx as Object, data as Object) as Object
         details.genre = firstText(info, ["genre"])
         details.cast = firstText(info, ["cast", "actors"])
         details.director = firstText(info, ["director"])
-        backdrops = info.backdrop_path
-        if type(backdrops) = "roArray" and backdrops.Count() > 0 then details.backdrop = asString(backdrops[0])
-        if type(backdrops) = "roString" or type(backdrops) = "String" then details.backdrop = asString(backdrops)
-        rating = Val(asString(info.rating))
-        if rating > 0 then details.rating = Str(Int(rating * 10 + 0.5) / 10).Trim()
+        details.backdrop = firstBackdrop(info)
+        details.rating = ratingText(info.rating)
     end if
 
     return { seriesId: toInt(ctx.seriesId), name: name, year: year, seasons: seasons, details: details }

@@ -37,7 +37,7 @@ sub onMovieInfo(res as Object)
         if details.durationSecs > 0 then m.movieItem.duration = details.durationSecs
         m.movieScreen.status = ""
     else if not res.fromCache
-        m.movieScreen.status = "Couldn't load the details: " + res.error
+        m.movieScreen.status = "Couldn't load the details. " + friendlyRequestError(res)
     end if
 end sub
 
@@ -59,11 +59,8 @@ function movieDetails(data as Object) as Object
         year: 0
         durationSecs: toInt(info.duration_secs)
     }
-    backdrops = info.backdrop_path
-    if type(backdrops) = "roArray" and backdrops.Count() > 0 then d.backdrop = asString(backdrops[0])
-    if type(backdrops) = "roString" or type(backdrops) = "String" then d.backdrop = asString(backdrops)
-    rating = Val(asString(info.rating))
-    if rating > 0 then d.rating = Str(Int(rating * 10 + 0.5) / 10).Trim()
+    d.backdrop = firstBackdrop(info)
+    d.rating = ratingText(info.rating)
     if d.durationSecs > 0
         hours = d.durationSecs \ 3600
         minutes = (d.durationSecs mod 3600) \ 60
@@ -71,14 +68,6 @@ function movieDetails(data as Object) as Object
     end if
     d.year = Val(Left(firstText(info, ["releasedate", "release_date", "year"]), 4), 10)
     return d
-end function
-
-function firstText(aa as Object, keys as Object) as String
-    for each k in keys
-        text = asString(aa[k]).Trim()
-        if text <> "" then return text
-    end for
-    return ""
 end function
 
 ' Play / Resume / Start over: the page stays underneath, so Back from the

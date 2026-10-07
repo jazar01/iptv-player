@@ -11,6 +11,7 @@ sub runLoop()
     m.queue = []
     m.active = {}       ' transfer identity -> job
     m.maxActive = 4
+    m.maxLow = 2        ' background ("low") transfers at once
     m.top.ObserveField("request", m.port)
     ' Requests set before this point are lost, so callers wait for `ready`.
     m.top.ready = true
@@ -97,6 +98,9 @@ sub accept(req as Object)
         started: m.clock.TotalMilliseconds()
         cachedText: cachedText
         xfer: invalid
+        ' Background work (full catalogs, network schedules, logos): it waits
+        ' behind on-screen requests and uses at most m.maxLow of the slots.
+        low: (asString(req.priority) = "low")
     })
 end sub
 
@@ -115,19 +119,32 @@ function newResponse(req as Object) as Object
     }
 end function
 
+' On-screen requests first; background ("low") ones only in what's left,
+' and never more than m.maxLow at a time, so a slot is always free for
+' what the viewer is doing.
 sub startQueued()
     now = m.clock.TotalMilliseconds()
-    i = 0
-    while i < m.queue.Count() and m.active.Count() < m.maxActive
-        job = m.queue[i]
-        if job.notBefore <= now
-            m.queue.Delete(i)
-            startJob(job)
-        else
-            i = i + 1
-        end if
-    end while
+    for each pass in [false, true]
+        i = 0
+        while i < m.queue.Count() and m.active.Count() < m.maxActive
+            job = m.queue[i]
+            if job.low = pass and job.notBefore <= now and (not job.low or activeLow() < m.maxLow)
+                m.queue.Delete(i)
+                startJob(job)
+            else
+                i = i + 1
+            end if
+        end while
+    end for
 end sub
+
+function activeLow() as Integer
+    n = 0
+    for each key in m.active
+        if m.active[key].low then n = n + 1
+    end for
+    return n
+end function
 
 sub startJob(job as Object)
     xfer = CreateObject("roUrlTransfer")

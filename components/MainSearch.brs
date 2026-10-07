@@ -112,6 +112,7 @@ sub refreshSearchIndex()
     for each kind in ["live", "movie", "series"]
         sendRequest({
             id: "catalogAll"
+            priority: "low"
             action: catalogActions(kind).items
             context: { kind: kind }
             cacheFile: searchFile(kind)
@@ -124,6 +125,7 @@ sub refreshSearchIndex()
     ' stations need it even if Live TV hasn't been opened.
     sendRequest({
         id: "catalogAll"
+        priority: "low"
         action: catalogActions("live").categories
         context: { kind: "categories" }
         cacheFile: liveCategoriesFile()

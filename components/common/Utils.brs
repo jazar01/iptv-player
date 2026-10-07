@@ -313,3 +313,61 @@ function formatDuration(seconds as Integer) as String
     if ss < 10 then text = text + "0"
     return text + ss.ToStr()
 end function
+
+' ---------------------------------------------------------------------------
+' Provider details (get_vod_info, get_series_info): field names vary by panel.
+
+' The first non-empty text among keys ("plot", "description", ...), or "".
+function firstText(aa as Object, keys as Object) as String
+    for each k in keys
+        text = asString(aa[k]).Trim()
+        if text <> "" then return text
+    end for
+    return ""
+end function
+
+' backdrop_path as a list (first one) or a single URL, or "".
+function firstBackdrop(info as Object) as String
+    backdrops = info.backdrop_path
+    if type(backdrops) = "roArray"
+        if backdrops.Count() > 0 then return asString(backdrops[0])
+        return ""
+    end if
+    return asString(backdrops)
+end function
+
+' "7.25" -> "7.3"; nothing for a missing or zero rating.
+function ratingText(value as Dynamic) as String
+    rating = Val(asString(value))
+    if rating <= 0 then return ""
+    return Str(Int(rating * 10 + 0.5) / 10).Trim()
+end function
+
+' ---------------------------------------------------------------------------
+' Plain-language text for a failed ApiTask response (res.code, res.error), for
+' the screen; the technical detail stays in the console ([api] lines).
+function friendlyRequestError(res as Object) as String
+    code = toInt(res.code)
+    detail = LCase(asString(res.error))
+    if code = 401 or code = 403 then return "The provider refused the request (the account, or its connection limit)."
+    if code = 404 then return "The provider doesn't have this right now."
+    if code = 429 then return "The provider is limiting requests. Try again in a minute."
+    if code >= 500 then return "The provider's server had a problem. Try again in a minute."
+    if code > 0 then return "The provider answered with an error (HTTP " + code.ToStr() + ")."
+    if Instr(1, detail, "timed out") > 0 then return "The server didn't answer in time. Try again in a moment."
+    if Instr(1, detail, "resolve") > 0 then return "Can't find the server. Check the TV's internet connection."
+    if Instr(1, detail, "ssl") > 0 or Instr(1, detail, "certificate") > 0 then return "A secure connection to the server failed."
+    if Instr(1, detail, "json") > 0 or Instr(1, detail, "incomplete") > 0 then return "The provider sent data the app couldn't read. Try again later."
+    if Instr(1, detail, "storage") > 0 or Instr(1, detail, "save") > 0 then return "The TV couldn't save the download (its storage may be full)."
+    if Instr(1, detail, "no server") > 0 then return "No server is set up. Open Settings > Account and device name."
+    return "Can't reach the server. Check the TV's internet connection."
+end function
+
+' UTC seconds -> "Nov 2, 2026" in the Roku's local time.
+function formatDate(utc as Integer) as String
+    dt = CreateObject("roDateTime")
+    dt.FromSeconds(utc)
+    dt.ToLocalTime()
+    names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    return names[dt.GetMonth() - 1] + " " + dt.GetDayOfMonth().ToStr() + ", " + dt.GetYear().ToStr()
+end function

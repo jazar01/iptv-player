@@ -1,6 +1,8 @@
 sub init()
     m.cache = {}        ' streamId -> { now, upcoming, validUntil }
     m.inflight = {}
+    m.wanted = []           ' channels on screen (want); pump() fetches from these
+    m.MAX_INFLIGHT = 6
     m.deferred = invalid    ' wanted before ApiTask was listening
     m.rules = loadGuideRules()
 end sub
@@ -20,6 +22,9 @@ sub onApiReady()
     end if
 end sub
 
+' The channels on screen now (the latest call wins). At most MAX_INFLIGHT
+' guide requests run at a time, always for channels still wanted, so fast
+' scrolling never queues requests for rows that are already gone.
 function want(streamIds as Object) as Boolean
     api = m.top.api
     if api = invalid then return false
@@ -27,8 +32,17 @@ function want(streamIds as Object) as Boolean
         m.deferred = streamIds
         return false
     end if
+    m.wanted = streamIds
+    pump()
+    return true
+end function
+
+sub pump()
+    api = m.top.api
+    if api = invalid or type(m.wanted) <> "roArray" then return
     now = nowSeconds()
-    for each id in streamIds
+    for each id in m.wanted
+        if m.inflight.Count() >= m.MAX_INFLIGHT then return
         key = toInt(id).ToStr()
         entry = m.cache[key]
         if key <> "0" and m.inflight[key] = invalid and (entry = invalid or entry.validUntil <= now)
@@ -36,8 +50,7 @@ function want(streamIds as Object) as Boolean
             api.request = { id: "epg:" + key, action: "get_short_epg", params: { stream_id: key, limit: 4 } }
         end if
     end for
-    return true
-end function
+end sub
 
 function getPrograms(streamIds as Object) as Object
     out = {}
@@ -64,14 +77,18 @@ sub onApiResponse(event as Object)
     if not res.ok
         ' Don't hammer a failing channel; try again in two minutes.
         m.cache[key] = { now: invalid, upcoming: invalid, validUntil: now + 120 }
+        pump()
         return
     end if
 
     programs = []
     if type(res.data) = "roAssociativeArray" and type(res.data.epg_listings) = "roArray"
         for each listing in res.data.epg_listings
-            p = toProgram(listing)
-            if p <> invalid then programs.Push(p)
+            ' Skip anything that isn't a listing object (malformed provider data).
+            if type(listing) = "roAssociativeArray"
+                p = toProgram(listing)
+                if p <> invalid then programs.Push(p)
+            end if
         end for
     end if
     programs.SortBy("start")
@@ -103,6 +120,7 @@ sub onApiResponse(event as Object)
 
     m.cache[key] = { now: current, upcoming: upcoming, validUntil: validUntil }
     m.top.programs = { streamId: key, now: current, upcoming: upcoming }
+    pump()      ' next wanted channel, if any
 end sub
 
 ' Xtream short EPG listing -> { title, flags, start, ends, description }. Uses the UTC

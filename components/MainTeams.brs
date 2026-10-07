@@ -127,6 +127,7 @@ sub fetchNetworkGuides(networks as Object)
         if action = "get_short_epg" then params.limit = listings
         sendRequest({
             id: "teamGuide"
+            priority: "low"
             action: action
             params: params
             cacheFile: n.guideFile
@@ -349,6 +350,7 @@ end sub
 sub requestTeamLogo(ctx as Object)
     sendRequest({
         id: "teamLogo"
+        priority: "low"
         url: logoRules().searchUrl + urlEncode(ctx.names[ctx.index])
         context: ctx
         timeoutMs: 15000

@@ -10,7 +10,10 @@
   listening is silently lost. Don't send until `ready` is true.
 
   request:  { id, action, params?, context?, timeoutMs?, cacheFile?, cacheFirst?,
-              maxAgeSeconds?, saveOnly? }
+              maxAgeSeconds?, saveOnly?, priority? }
+  priority "low" marks background work (full catalogs, network schedules,
+  logos): it starts only after waiting on-screen requests, and at most two
+  run at once, so a slot is always free for what the viewer is doing.
                 Xtream player_api.php call
             { id, url, ... }      plain GET returning JSON
             { id, op: "clearCache" }

@@ -4,7 +4,22 @@
 sub initLogin()
     m.setup = invalid
     m.pendingSetup = invalid    ' values submitted from Setup, awaiting login
-    m.serverTimezone = ""       ' server_info.timezone, for timeshift URLs
+    ' server_info.timezone, for timeshift URLs: the last one seen is saved, so
+    ' rewind works even before (or without) a successful login this session.
+    m.serverTimezone = m.store.callFunc("getSettings").serverTimezone
+    m.accountExpires = 0        ' user_info.exp_date (UTC seconds), 0 if none
+    m.expiryNoted = false       ' the "expires soon" notice, once per session
+
+    ' A launch login that fails for network reasons is retried in the
+    ' background: 1 minute, then doubling up to 15 minutes.
+    m.loginRetryDelay = 60
+    m.loginRetryTimer = CreateObject("roSGNode", "Timer")
+    m.loginRetryTimer.ObserveField("fire", "onLoginRetry")
+    m.top.AppendChild(m.loginRetryTimer)
+end sub
+
+sub onLoginRetry()
+    if m.pendingSetup = invalid and m.store.callFunc("isConfigured") then login()
 end sub
 
 sub login()
@@ -26,8 +41,14 @@ sub onLogin(res as Object)
         else if result.rejected
             showSetup(result.message)
         else
-            ' Offline or server trouble: keep going on saved and cached data.
+            ' Offline or server trouble: keep going on saved and cached data,
+            ' and try again later.
             showToast(result.message)
+            print "[main] will retry the login in "; m.loginRetryDelay; " s"
+            m.loginRetryTimer.duration = m.loginRetryDelay
+            m.loginRetryTimer.control = "start"
+            m.loginRetryDelay = m.loginRetryDelay * 2
+            if m.loginRetryDelay > 900 then m.loginRetryDelay = 900
         end if
         return
     end if
@@ -48,7 +69,13 @@ sub onLogin(res as Object)
             return
         end if
     end if
-    m.serverTimezone = result.timezone
+    m.loginRetryTimer.control = "stop"
+    m.loginRetryDelay = 60
+    if result.timezone <> "" and result.timezone <> m.serverTimezone
+        m.store.callFunc("setSetting", "serverTimezone", result.timezone)
+        m.serverTimezone = result.timezone
+    end if
+    noteAccountExpiry(toInt(result.expires))
     m.connections = { active: result.activeConnections, max: result.maxConnections }
     refreshSearchIndex()
 
@@ -69,8 +96,8 @@ end sub
 function evaluateLogin(res as Object) as Object
     if not res.ok
         if res.code = 401 or res.code = 403 then return { ok: false, rejected: true, message: "Login rejected. Check the username and password." }
-        if res.code > 0 then return { ok: false, rejected: false, message: "The server answered with an error (" + res.error + "). Check the server URL." }
-        return { ok: false, rejected: false, message: "Can't reach the server: " + res.error }
+        if res.code = 404 then return { ok: false, rejected: false, message: "The server doesn't answer like an Xtream Codes server (HTTP 404). Check the server URL." }
+        return { ok: false, rejected: false, message: friendlyRequestError(res) }
     end if
 
     data = res.data
@@ -182,6 +209,7 @@ function settingsInfo() as Object
         server: server
         version: CreateObject("roAppInfo").GetVersion()
         connections: connectionsText()
+        expires: accountExpiryText()
         market: m.store.callFunc("getMarket").label
         showMyTeams: m.store.callFunc("getSettings").showMyTeams
         showNoGameTeams: m.store.callFunc("getSettings").showNoGameTeams
@@ -229,3 +257,24 @@ sub backupToConsole()
     print "[backup] END"
     showToast("Backup sent to the computer (scripts\backup-roku.ps1 saves it).")
 end sub
+
+' user_info.exp_date: shown in Settings, and a notice once per session when
+' the account ends within 7 days. 0 (or "null") means no end date.
+sub noteAccountExpiry(expires as Integer)
+    m.accountExpires = expires
+    settings = m.sections.settings
+    if settings <> invalid then settings.info = settingsInfo()
+    if expires <= 0 or m.expiryNoted then return
+    daysLeft = Int((expires - nowSeconds()) / 86400)
+    if daysLeft < 0 or daysLeft > 7 then return
+    m.expiryNoted = true
+    when = "today"
+    if daysLeft = 1 then when = "tomorrow"
+    if daysLeft > 1 then when = "in " + daysLeft.ToStr() + " days"
+    showToast("Your IPTV account expires " + when + " (" + formatDate(expires) + ").")
+end sub
+
+function accountExpiryText() as String
+    if m.accountExpires <= 0 then return ""
+    return formatDate(m.accountExpires)
+end function

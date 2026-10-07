@@ -60,7 +60,7 @@ sub onChannelGuide(res as Object)
     m.infoFor.programs = []
     m.infoFor.programsNote = ""
     if not res.ok
-        m.infoFor.programsNote = "Couldn't load the guide: " + res.error
+        m.infoFor.programsNote = "Couldn't load the guide. " + friendlyRequestError(res)
     else if type(res.data) = "roAssociativeArray" and type(res.data.epg_listings) = "roArray"
         now = nowSeconds()
         upcoming = []

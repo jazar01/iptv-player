@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-  Settings. In: info { deviceName, deviceId, server, version, connections, market,
+  Settings. In: info { deviceName, deviceId, server, version, connections, expires, market,
   showMyTeams, myTeamsFirst, showNoGameTeams, showFavoritesInRecent }.
   Out: chosen ("teams" opens My Teams, "teamsRow" toggles the My Teams row,
   "teamsPosition" switches it between after Favorites and first,
@@ -21,7 +21,7 @@
       font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont"
       color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png"
       vertFocusAnimationStyle="floatingFocus" />
-    <Label id="details" translation="[96,730]" width="1600" wrap="true"
+    <Label id="details" translation="[96,720]" width="1600" wrap="true"
       font="font:SmallSystemFont" color="0x8C96A0FF" />
 
     <!-- Backup panel: * opens it, Play/Pause backs up, Back closes it. -->

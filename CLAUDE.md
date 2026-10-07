@@ -28,7 +28,7 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   between screens and services and routes ApiTask responses by `id`. Split by
   area: `MainScene.brs` (core, focus, keys), `MainLogin.brs`, `MainHome.brs`,
   `MainCatalog.brs`, `MainPlayback.brs`, `MainSearch.brs`, `MainTeams.brs`,
-  `MainChannelInfo.brs`. All share one
+  `MainChannelInfo.brs`, `MainMovies.brs`. All share one
   `m`, so `init*()` in each file sets up its own state.
 - `components/services/SearchTask.*`: search index on its own thread. ApiTask
   downloads the full lists to `cachefs:/catalog/all_*.json` (`saveOnly`,
@@ -38,8 +38,10 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
 - `components/services/ChannelMatch.brs`: shared re-matching rules (guide
   ID, then name; series by name and year). `match_selftest=1` in the
   manifest runs its on-device self-test at launch; take it out again after.
-- `components/services/ApiTask.*`: long-running Task, up to 4 requests at once,
-  so responses arrive in any order: match by `id` (and `context`). Optional
+- `components/services/ApiTask.*`: long-running Task, up to 4 requests at once
+  (background ones marked `priority: "low"` use at most 2), so responses
+  arrive in any order: match by `id` (and `context`). Screens show failures
+  through `friendlyRequestError(res)` (Utils), never raw error text. Optional
   `cacheFile`/`cacheFirst` caches catalog responses in `cachefs:/catalog/`.
   Full request/response shape is in `ApiTask.xml`.
 - `components/services/EpgService.*`: now/next via `get_short_epg`, only for
@@ -58,7 +60,9 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   `MainChannelInfo.brs`), PlayerScreen (Video node, live overlay, readable
   errors, progress reports every 30 s and on stop, live pause/rewind via the
   provider's timeshift `.m3u8` archive, kept `archiveLagSeconds` behind live).
-- `components/search/`: SearchScreen (MiniKeyboard plus results list).
+- `components/search/`: SearchScreen (DynamicMiniKeyboard with voice entry,
+  plus results list; matching with word forms, synonyms, close spellings and
+  an all-but-one fallback is in SearchTask).
 - `components/teams/`: TeamsScreen and TeamEditScreen (Settings → My Teams),
   MarketScreen (Settings → Local stations).
 - `components/services/MyTeams.brs`: finds saved teams' games in event-channel
@@ -167,58 +171,25 @@ is the final check.
 
 ## Status
 
-- Milestone 1 done: setup, login, live categories printed to the console.
-  Verified on a real Roku.
-- Milestone 2 built: top bar, Home (Favorites with now/next, Continue
-  Watching), Favorites grid, Live TV browser with * favorites, Settings.
-  Verified on a Roku: Home, top bar, Live TV browsing, startup login, adding
-  a favorite and it surviving a restart, guide data fetched. Visual pass
-  waits for the mockup in `docs/`.
-- Milestone 3 built: live / movie / episode playback, Movies and Series
-  browsers, series pages, resume prompt, watched at 90%, Continue Watching
-  with next episode, connection-limit message. Saved state is schema 2.
-  Verified on a Roku: live playback with Up/Down and Back, readable error on
-  a broken stream, movie resume and Continue Watching, episode playback and
-  Continue Watching. Not yet tried: * to mark episodes watched/unwatched,
-  reaching 90% (watched, next episode), the connection-limit message.
-- Milestone 4 built: Search (live channels, movies, series) in the top bar,
-  REWIND tag on archived channels, live pause/rewind/back-to-live through the
-  provider's timeshift archive. Verified on a Roku: search, short pause,
-  rewind and back to live on an SD channel, readable highlighted rows.
-  Known limit: HD archives fail on this Roku (one-minute segments of ~45 MB
-  exceed its ~31.6 MB video buffer); the app says so and suggests SD.
-- Recently Viewed row (after Continue Watching): live channels watched for a
-  minute, favorites left out, up to 15. Saved state is schema 3. Row drawn on
-  a Roku; a channel being added after a minute not yet tried.
-- Channel matching built: favorites, Recently Viewed and series are re-found
-  after a provider renumbering. Self-test passed on a Roku against the real
-  catalog; a real renumbering hasn't happened yet.
-- Visual pass (own design, no mockup): gradient background, rounded cards and
-  panels, one focus style (blue outline on cards, dark highlight with blue bar
-  on list rows), top-bar logo mark, player fade, tidier series page (year
-  once, episode titles without the repeated series name and S01E01 code, via
-  episodeTitlePrefix in data/guide-rules.json). Checked on a Roku: Home, Live
-  TV list, series page, player strip (by eye).
-- My Teams step 1 built (requirements: Later features, My Teams, "Built"):
-  Settings → My Teams, games from event-channel names (`MyTeams.brs` in
-  SearchTask, rules `myTeams` and `nameTimes` in data/guide-rules.json),
-  home row, replays, channel chooser, starts-later prompt. Saved state is
-  schema 4. Checked on a Roku: teams saved, a game found and listed.
-- My Teams step 2 built: network broadcasts from the full schedules of 16
-  national channels (`myTeams.networks` by guide ID) plus the device's local
-  ABC/CBS/NBC/FOX stations (Settings → Local stations, schema 5 `market`,
-  stations found from provider channel names; the row can be switched off
-  per device in Settings, schema 6 `settings.showMyTeams`; "no game" cards
-  for teams without one, `settings.showNoGameTeams`),
-  fetched to cachefs:/teams/ by ApiTask and searched in SearchTask; merged
-  into the same game card with the network channel first. Verified on a Roku.
-- Usage-based ordering built: decaying scores in their own registry section
-  (StateStore recordUsage / getUsageScores), snapshot at launch
-  (`m.usageScores`), applied in HomeRows (favorites, Continue Watching, My
-  Teams tie-break); pin / unpin in the Favorites grid. Scores only build up
-  with real viewing, so the ordering effect isn't verified yet.
-- Local stations also in Search (first, tagged LOCAL) and Live TV (a
-  "Local stations" first category answered by SearchTask localsRequest,
-  LOCAL tags). Not yet checked on a Roku.
-- Not yet built: off-device backup and sync, planned for V2 (design and open
-  decisions in the requirements: "Off-device backup and sync (V2)").
+All of version 1 is built; the design and per-feature notes are in
+docs/requirements.md. Saved state is schema 6 (later per-device options and
+optional record marks joined without a schema change).
+
+- Built and checked on the Basement Roku: setup, login (retried in the
+  background when it fails at launch), Home (Favorites, My Teams, Continue
+  Watching, Favorite Series, Recently Viewed, "See all" grids, channel logos),
+  Live TV (now playing, logos, Local stations, channel info, * menu), Movies
+  (details page), Series (artwork, episode details, Favorite Series), Search
+  (voice, word forms, synonyms, close spellings), playback (live, VOD,
+  pause/rewind/Start over via the timeshift archive, stall and end-of-stream
+  recovery, other copies / similar channels on errors), My Teams (event
+  channels and network schedules, logos), Settings (per-device options,
+  connections, account expiry, backup panel), manual backup and automatic
+  restore.
+- Known limits: HD timeshift archives exceed this Roku's video buffer; some
+  channels use an AAC variant no Roku decodes (Tennis Channel 2); this
+  provider sends no episode descriptions for some series.
+- Not yet tried on a Roku: a real provider renumbering, reaching 90% of an
+  episode, the connection-limit message, the usage-ordering effect.
+- Next: off-device backup and sync, planned for V2 (see the requirements:
+  "Off-device backup and sync (V2)").

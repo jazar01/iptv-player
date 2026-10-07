@@ -311,8 +311,9 @@ sub onConnectionCheck(res as Object)
     print "[main] connection check: "; result.activeConnections; " of "; result.maxConnections; " in use"
     reason = ""
     if type(res.context) = "roAssociativeArray" then reason = asString(res.context.reason)
-    ' -100 (kept stalling): its reloads are what fill the count, so no blame either.
-    formatError = (m.failCode = -5 or m.failCode = -6 or m.failCode = -100)
+    ' -100 (kept stalling) and -101 (stream ended): their own reloads fill the
+    ' count, so no blame either.
+    formatError = (m.failCode = -5 or m.failCode = -6 or m.failCode = -100 or m.failCode = -101)
     if reason = "failed" and not formatError and m.player <> invalid and result.maxConnections > 0 and result.activeConnections >= result.maxConnections
         m.player.errorText = "All " + result.maxConnections.ToStr() + " connections on this account are in use. Stop watching on another TV, then try again."
     else if reason = "info"

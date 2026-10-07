@@ -4,6 +4,8 @@ sub init()
     m.itemList = m.top.FindNode("itemList")
     m.status = m.top.FindNode("status")
     m.delay = m.top.FindNode("categoryDelay")
+    m.visibleDelay = m.top.FindNode("visibleDelay")
+    m.visibleDelay.ObserveField("fire", "reportVisible")
 
     m.categoryIds = []
     m.currentCategory = ""      ' requested
@@ -56,14 +58,17 @@ sub onCategories()
     focus = 0
     found = false
     for each c in m.top.categories
-        id = asString(c.category_id)
-        if id = m.currentCategory
-            focus = m.categoryIds.Count()
-            found = true
+        ' Skip anything that isn't a category object (malformed provider data).
+        if type(c) = "roAssociativeArray"
+            id = asString(c.category_id)
+            if id = m.currentCategory
+                focus = m.categoryIds.Count()
+                found = true
+            end if
+            m.categoryIds.Push(id)
+            item = content.CreateChild("ContentNode")
+            item.title = asString(c.category_name)
         end if
-        m.categoryIds.Push(id)
-        item = content.CreateChild("ContentNode")
-        item.title = asString(c.category_name)
     end for
     m.categoryList.content = content
     if m.categoryIds.Count() = 0
@@ -124,8 +129,13 @@ sub onItems()
     keep = 0
     if id = m.shownCategory and m.itemList.itemFocused > 0 then keep = m.itemList.itemFocused
 
+    ' Only item objects: a malformed entry would stop the app in fillNode.
     m.allItems = []
-    if type(d.items) = "roArray" then m.allItems = d.items
+    if type(d.items) = "roArray"
+        for each raw in d.items
+            if type(raw) = "roAssociativeArray" then m.allItems.Push(raw)
+        end for
+    end if
     m.loaded = 0
     m.itemList.content = CreateObject("roSGNode", "ContentNode")
     m.byStream = {}
@@ -202,7 +212,8 @@ end function
 
 sub onItemFocused()
     if m.loaded < m.allItems.Count() and m.itemList.itemFocused >= m.loaded - 20 then appendPage()
-    reportVisible()
+    m.visibleDelay.control = "stop"
+    m.visibleDelay.control = "start"
 end sub
 
 sub onTags()

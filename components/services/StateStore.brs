@@ -134,6 +134,7 @@ function getSettings() as Object
         showNoGameTeams: isTrue(m.doc.settings.showNoGameTeams)
         showFavoritesInRecent: isTrue(m.doc.settings.showFavoritesInRecent)
         myTeamsFirst: isTrue(m.doc.settings.myTeamsFirst)
+        serverTimezone: asString(m.doc.settings.serverTimezone)     ' last seen, for timeshift
     }
 end function
 
