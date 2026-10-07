@@ -367,6 +367,21 @@ Planned for version 2; not started. Prompted by Oct 6, 2026, when a failed sidel
 
 **Sharing between TVs: some, not all (to decide).** The saved document already supports record-by-record merging (`updatedAt`, tombstones), so chosen kinds of records (for example favorites, teams, series favorites, watch progress) can merge across TVs while others stay per TV (device name, local market, Recently Viewed, usage ordering). Which ones is still open.
 
+**Household configuration: pre-configures new installs.**
+
+- One household document on the service, alongside the device backups. It holds the provider account (server URL, username, password) and what a new TV starts with: the household favorites (live channels), My Teams (the saved teams), the local stations market, and every option on the Settings page (Show My Teams on Home, My Teams position, Show teams with no game, Favorites in Recently Viewed). The device name is still asked on each TV. Watch List, Favorite Series and viewing history start empty and are per TV. It replaces today's `backups\household.json`, which only changes with a redeploy.
+- Sealed like the backups: encrypted with the household key, so the host only stores encrypted data. Protocol additions: `GET /household`, `PUT /household`.
+- A TV that starts with no saved state asks for its own backup first, then falls back to the household configuration and asks only for a device name. The same "never blocks" rules apply: a short timeout, then the normal Setup screen.
+- Changing the household configuration doesn't overwrite TVs that are already set up. Any later "push to all TVs" (for example a new provider password) is a separate, explicit choice.
+
+**Admin web app (phone or computer).**
+
+- A small web app served by the same host as the backup Worker: Cloudflare Pages or the Worker's static assets, both free (e.g. `backup.<your domain>/admin`). Not a native iOS app, which would need a Mac with Xcode and a paid Apple developer account (free installs expire after 7 days). On an iPhone it's added to the home screen from Safari and runs full screen like an app.
+- Edits the household configuration. Optionally it also lists the household's TVs with their last backup time, and lets you view or restore a TV's backup.
+- Encryption happens in the browser (Web Crypto) with the household key, entered once on each phone or computer and kept in that browser's storage, so the service still never sees plain data.
+- Access: Cloudflare Access (Zero Trust free plan, up to 50 users) asks for an email code or Google sign-in before the page loads. Its sign-up may ask for a card even on the free plan; confirm when setting up. Fallback: a password checked by the Worker. The Roku endpoints stay key-signed, with no sign-in.
+- Built and deployed from this repo with the rest of V2 (Worker, admin page, protocol test script).
+
 **Still open:** the domain/hostname to use, and which records are shared.
 
 Later, the service could also compute results the Roku can't (full-guide search, e.g. for My Teams) and push parsing-rule updates.
