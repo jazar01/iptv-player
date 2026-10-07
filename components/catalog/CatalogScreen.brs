@@ -251,6 +251,7 @@ function itemSummary(node as Object) as Object
         year: node.year
         archiveDays: node.archiveDays
         poster: node.logo
+        categoryId: m.shownCategory     ' for category usage ordering
     }
 end function
 

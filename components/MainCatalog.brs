@@ -174,16 +174,18 @@ sub onCatalogCategories(res as Object)
     if res.ok and type(res.data) = "roArray"
         if not res.fromCache then print "[main] "; res.data.Count(); " "; kind; " categories"
         state.categoriesShown = true
+        ' Most used first, then this Roku's country (categoryOrder).
+        ordered = orderCategories(res.data, kind)
         if kind = "live"
             ' Same file My Teams reads (liveCategoriesFile): tell it when fresh.
             if not res.fromCache then searchSend("load", { kind: "categories" })
-            m.liveCategories = res.data
-            screen.categories = liveCategoriesWithLocal(res.data)
+            m.liveCategories = ordered
+            screen.categories = liveCategoriesWithLocal(ordered)
         else if kind = "series"
-            m.seriesCategories = res.data
-            screen.categories = seriesCategoriesWithFavorites(res.data)
+            m.seriesCategories = ordered
+            screen.categories = seriesCategoriesWithFavorites(ordered)
         else
-            screen.categories = res.data
+            screen.categories = ordered
         end if
     else if not state.categoriesShown
         state.requested = false     ' try again next visit
@@ -559,3 +561,102 @@ sub onCatalogVisible(event as Object)
     end for
     m.epg.callFunc("want", ids)
 end sub
+
+' ---------------------------------------------------------------------------
+' Category order (data/guide-rules.json "categoryOrder"): the most-used
+' categories first (usage scores, as at launch, so lists don't reshuffle
+' while browsing), then this Roku's country ("US | ..."), then the rest, each
+' group in the provider's order.
+
+' Picking something from a category is one use of it ("kc"/"km"/"ks" + ID in
+' the usage table). Virtual categories ("__local", "__favseries") don't count.
+sub recordCategoryUse(kind as String, categoryId as Dynamic)
+    id = asString(categoryId)
+    if id = "" or Left(id, 2) = "__" then return
+    m.store.callFunc("recordUsage", categoryUsageKey(kind, id))
+end sub
+
+function categoryUsageKey(kind as String, id as String) as String
+    letter = "c"
+    if kind = "movie" then letter = "m"
+    if kind = "series" then letter = "s"
+    return "k" + letter + safeKey(id)
+end function
+
+' categories: provider list [{ category_id, category_name }] (or the Guide's
+' [{ id, name }]). Returns a new list in display order.
+function orderCategories(categories as Object, kind as String) as Object
+    rules = categoryOrderRules()
+
+    ' The most-used few, best first.
+    scored = []
+    for i = 0 to categories.Count() - 1
+        c = categories[i]
+        if type(c) = "roAssociativeArray"
+            score = usageScore(m.usageScores, categoryUsageKey(kind, categoryField(c, "id")))
+            if score > 0 then scored.Push({ c: c, sortKey: rankKey(score, i) })
+        end if
+    end for
+    scored.SortBy("sortKey")
+    top = []
+    topIds = {}
+    for each s in scored
+        if top.Count() < rules.topUsed
+            top.Push(s.c)
+            topIds[categoryField(s.c, "id")] = true
+        end if
+    end for
+
+    ' The rest in the provider's order: this country's, then the others.
+    mine = []
+    others = []
+    for each c in categories
+        if type(c) = "roAssociativeArray" and not topIds.DoesExist(categoryField(c, "id"))
+            if isMyCountry(categoryField(c, "name"), rules) then mine.Push(c) else others.Push(c)
+        end if
+    end for
+    ordered = []
+    ordered.Append(top)
+    ordered.Append(mine)
+    ordered.Append(others)
+    return ordered
+end function
+
+' A category's ID or name, from the provider's shape (category_id,
+' category_name) or the Guide's (id, name).
+function categoryField(c as Object, field as String) as String
+    if field = "id"
+        if c.category_id <> invalid then return asString(c.category_id)
+        return asString(c.id)
+    end if
+    if c.category_name <> invalid then return asString(c.category_name)
+    return asString(c.name)
+end function
+
+function isMyCountry(name as String, rules as Object) as Boolean
+    if rules.regex = invalid or rules.prefixes.Count() = 0 then return false
+    match = rules.regex.Match(name)
+    if match.Count() < 2 then return false
+    return rules.prefixes.DoesExist(UCase(match[1]))
+end function
+
+function categoryOrderRules() as Object
+    if m.categoryOrder <> invalid then return m.categoryOrder
+    rules = { topUsed: 5, regex: invalid, prefixes: {} }
+    cfg = guideRules().categoryOrder
+    if type(cfg) = "roAssociativeArray"
+        if toInt(cfg.topUsed) > 0 then rules.topUsed = toInt(cfg.topUsed)
+        if asString(cfg.countryPattern) <> "" then rules.regex = CreateObject("roRegex", asString(cfg.countryPattern), "")
+        info = CreateObject("roDeviceInfo")
+        country = UCase(info.GetUserCountryCode())
+        if country = "" then country = UCase(info.GetCountryCode())
+        accepted = [country]
+        if type(cfg.countryPrefixes) = "roAssociativeArray" and type(cfg.countryPrefixes[country]) = "roArray" then accepted = cfg.countryPrefixes[country]
+        for each p in accepted
+            if asString(p) <> "" then rules.prefixes[UCase(asString(p))] = true
+        end for
+        print "[main] category order: country "; country; ", top "; rules.topUsed; " used first"
+    end if
+    m.categoryOrder = rules
+    return rules
+end function

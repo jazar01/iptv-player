@@ -91,6 +91,7 @@ The top bar holds Home, Live TV, Guide, Movies, Series, Search and Settings, plu
 - On launch, show the cached catalog from the last session immediately and refresh in the background.
 - Favorites carry their own names and IDs, so the home screen draws without waiting on the network.
 - Browse grids load in pages, so large catalogs never block the UI.
+- Category order (Live TV, Movies, Series, the Guide's chooser): the 5 most-used categories first (a use is picking a channel, movie or series from it; usage table keys "kc"/"km"/"ks" + category ID, as at launch so lists don't reshuffle while browsing), then categories prefixed with this Roku's country ("US |"; `categoryOrder` in `data/guide-rules.json` maps country codes to the provider's prefixes, e.g. GB to UK), then all others, each group in the provider's order. Local stations / Favorite series / Favorites stay first.
 - Background downloads (full catalogs, network schedules, team logos) are low priority in ApiTask: they wait behind on-screen requests and use at most 2 of the 4 slots.
 - Guide (now/next) requests follow the screen: the rows on screen are reported once scrolling pauses (0.3 s), and EpgService keeps at most 6 requests in flight, always for channels still on screen.
 - A login that fails at launch for network reasons is retried in the background (1 min, doubling to 15 min); the provider's time zone from the last good login is saved, so rewind and Start over work before it succeeds.

@@ -80,6 +80,8 @@ end sub
 ' A card or list item was chosen on Home, a "See all" grid or a catalog.
 sub onItemSelected(event as Object)
     item = event.GetData()
+    ' Picked from a catalog category: one use of that category (ordering).
+    if asString(item.categoryId) <> "" then recordCategoryUse(item.kind, item.categoryId)
     if item.kind = "seeAll"
         openRowGrid(item.rowId)
     else if item.kind = "channel"

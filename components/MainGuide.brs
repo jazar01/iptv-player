@@ -36,7 +36,7 @@ sub onGuideResult(event as Object)
     result = event.GetData()
     screen = m.sections.guide
     if screen = invalid or result.id <> "guide" then return
-    if type(result.categories) = "roArray" and result.categories.Count() > 0 then m.guideCategories = result.categories
+    if type(result.categories) = "roArray" and result.categories.Count() > 0 then m.guideCategories = orderCategories(result.categories, "channel")
     choices = [{ id: "favorites", name: "Favorites" }]
     market = m.store.callFunc("getMarket")
     if market.key <> "" then choices.Push({ id: "__local", name: "Local stations - " + market.label })
@@ -105,6 +105,7 @@ end sub
 
 sub onGuidePlay(event as Object)
     ch = event.GetData()
+    if m.guideChoice <> "favorites" and m.guideChoice <> "__local" then recordCategoryUse("channel", m.guideChoice)
     playLive({ streamId: ch.streamId, name: ch.name, epgChannelId: ch.epgChannelId, archiveDays: ch.archiveDays })
 end sub
 

@@ -1,5 +1,15 @@
 {
   "comment": "Provider guide conventions. Edit here, not in code. See 'Provider guide findings' in docs/requirements.md.",
+  "categoryOrder": {
+    "comment": "Category lists (Live TV, Movies, Series, the Guide's chooser): the topUsed most-used categories first, then categories whose name starts with this Roku's country (countryPattern captures the prefix, e.g. 'US |'; countryPrefixes maps the Roku's country code to the prefixes the provider uses), then the rest in the provider's order.",
+    "topUsed": 5,
+    "countryPattern": "^\\s*([A-Za-z]{2,3})\\s*\\|",
+    "countryPrefixes": {
+      "US": ["US", "USA"],
+      "GB": ["UK", "GB"],
+      "CA": ["CA", "CAN"]
+    }
+  },
   "search": {
     "comment": "Search matches word forms on its own (baking/bake, movies/movie). Each synonyms group makes any of its words find the others; add groups freely (lower case; phrases allowed).",
     "synonyms": [
