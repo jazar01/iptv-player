@@ -150,9 +150,13 @@ sub onGamesTimer()
     if m.section = "home" and m.overlays.Count() = 0 then requestGames()
 end sub
 
-' Replays: a matchup already seen (started) in the last few days, at least
-' six hours earlier, is labelled Replay. Games that have started are
-' remembered for next time.
+' Replays: a matchup already seen (started) 6 to 15 hours earlier is
+' labelled Replay: rebroadcasts air later that night or the next morning,
+' while the next game of a series (the same matchup again) is at least
+' about 17 hours later (a night game, then an afternoon one), and a
+' doubleheader's second game under 6. Titles that say replay are labelled
+' by the guide rules (MyTeams.brs). Games that have started are remembered
+' for next time.
 sub onGamesResult(event as Object)
     result = event.GetData()
     if result.id <> "home" then return
@@ -165,7 +169,10 @@ sub onGamesResult(event as Object)
     for each g in result.games
         key = matchupKey(g)
         earlier = seen[key]
-        if earlier <> invalid and earlier < g.start - 6 * 3600 then g.replay = true
+        if earlier <> invalid
+            gap = g.start - earlier
+            if gap > 6 * 3600 and gap < 15 * 3600 then g.replay = true
+        end if
         if g.start <= now and not g.replay then started.Push({ key: key, start: g.start })
     end for
     if started.Count() > 0 then m.store.callFunc("recordSeenGames", started)
