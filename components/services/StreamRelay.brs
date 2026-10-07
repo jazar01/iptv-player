@@ -166,7 +166,7 @@ sub serveSegment(s as Object, url as String)
     port = CreateObject("roMessagePort")
     x.SetMessagePort(port)
     x.AsyncGetToFile(file)
-    ev = wait(30000, port)
+    ev = wait(90000, port)      ' archive segments are a minute long (about 20 MB)
     code = 0
     if ev <> invalid and type(ev) = "roUrlEvent" then code = ev.GetResponseCode()
     if ev = invalid then x.AsyncCancel()
@@ -185,6 +185,10 @@ sub serveSegment(s as Object, url as String)
         m.logged["seg"] = true
         print "[relay] first segment: "; data.Count(); " bytes, "; fixed; " audio headers fixed in "; clock.TotalMilliseconds(); " ms"
     end if
+    if fixed = 0 and not m.logged.DoesExist("nofix")
+        m.logged["nofix"] = true
+        print "[relay] a segment had no audio headers to fix ("; data.Count(); " bytes)"
+    end if
     sendBody(s, 200, "video/mp2t", data)
 end sub
 
@@ -195,14 +199,16 @@ end sub
 
 function fixAacProfile(data as Object) as Integer
     total = data.Count()
-    pid = aacPid(data)
+    first = packetStart(data)
+    if first < 0 then return 0
+    pid = aacPid(data, first)
     if pid < 0 then return 0
     fixed = 0
     synced = false
     skip = 0                ' frame bytes left before the next header
     hdr = [0, 0, 0, 0, 0, 0]
     have = 0                ' header bytes collected
-    p = 0
+    p = first
     while p + 188 <= total
         if data[p] = &h47 and (((data[p + 1] and &h1F) << 8) or data[p + 2]) = pid
             afc = (data[p + 3] >> 4) and 3
@@ -255,12 +261,24 @@ function fixAacProfile(data as Object) as Integer
     return fixed
 end function
 
+' Where whole TS packets begin: live segments start with one, but archive
+' segments are cut from a recording at any byte (one began at byte 87).
+function packetStart(data as Object) as Integer
+    total = data.Count()
+    for k = 0 to 187
+        if k + 376 < total
+            if data[k] = &h47 and data[k + 188] = &h47 and data[k + 376] = &h47 then return k
+        end if
+    end for
+    return -1
+end function
+
 ' The PID of the first ADTS AAC stream (type 0x0F), from the PAT and PMT.
-function aacPid(data as Object) as Integer
+function aacPid(data as Object, first as Integer) as Integer
     total = data.Count()
     pmt = -1
-    p = 0
-    while p + 188 <= total and p < 188 * 2000
+    p = first
+    while p + 188 <= total and p < first + 188 * 2000
         if data[p] = &h47 and (data[p + 1] and &h40) <> 0
             pid = ((data[p + 1] and &h1F) << 8) or data[p + 2]
             afc = (data[p + 3] >> 4) and 3
@@ -380,12 +398,12 @@ sub sendBody(s as Object, code as Integer, contentType as String, body as Object
     sendAll(s, body)
 end sub
 
-' Writes all of it, waiting while the socket's buffer is full (up to 20 s).
+' Writes all of it, waiting while the socket's buffer is full (up to 60 s).
 sub sendAll(s as Object, data as Object)
     total = data.Count()
     sent = 0
     clock = CreateObject("roTimespan")
-    while sent < total and clock.TotalMilliseconds() < 20000
+    while sent < total and clock.TotalMilliseconds() < 60000
         chunk = total - sent
         if chunk > 65536 then chunk = 65536
         n = s.send(data, sent, chunk)
