@@ -3,7 +3,7 @@
 
 sub init()
     m.SCHEMA = 7
-    m.WATCHLIST_CAP = 30         ' about 115 bytes each: keeps the document under ~7 KB
+    m.WATCHLIST_CAP = 20         ' about 115 bytes each (2.3 KB at most)
     m.RECENT_CAP = 15
     m.SEEN_CAP = 20
     m.SEEN_DAYS = 4

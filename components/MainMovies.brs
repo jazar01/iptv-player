@@ -115,7 +115,7 @@ sub toggleWatchList(item as Object)
         saved = m.store.callFunc("setOnWatchList", { id: id }, false)
         message = "Removed " + name + " from your Watch List"
     else if m.store.callFunc("watchListFull")
-        showToast("Your Watch List is full (30 movies). Remove one first.")
+        showToast("Your Watch List is full (20 movies). Remove one first.")
         return
     else
         saved = m.store.callFunc("setOnWatchList", { id: id, name: name, year: item.year, ext: item.ext, mins: toInt(item.duration) \ 60 }, true)
