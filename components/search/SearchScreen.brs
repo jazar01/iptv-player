@@ -4,6 +4,7 @@ sub init()
     setKeyboardVoice(m.keyboard, "generic")
     m.resultList = m.top.FindNode("resultList")
     m.status = m.top.FindNode("status")
+    m.recentHead = m.top.FindNode("recentHead")
     m.delay = m.top.FindNode("typingDelay")
     m.favoriteIds = {}
     m.inResults = false
@@ -30,6 +31,7 @@ sub onStatus()
 end sub
 
 sub onText()
+    if m.keyboard.text.Trim() <> "" then m.recentHead.visible = false
     m.delay.control = "stop"
     m.delay.control = "start"
 end sub
@@ -47,6 +49,7 @@ sub onResults()
     r = m.top.results
     ' Ignore answers to text that has since changed.
     if asString(r.text) <> m.keyboard.text.Trim() then return
+    m.recentHead.visible = false
 
     content = CreateObject("roSGNode", "ContentNode")
     for each item in r.items
@@ -176,7 +179,9 @@ sub showRecentSearches()
     m.resultList.content = content
     if content.GetChildCount() > 0
         m.top.status = ""
+        m.recentHead.visible = true
     else
+        m.recentHead.visible = false
         m.top.status = "Type to search channels, movies and series."
         if m.inResults then focusKeyboard()
     end if

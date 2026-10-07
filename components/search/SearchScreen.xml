@@ -33,10 +33,14 @@
   <children>
     <!-- DynamicMiniKeyboard: MiniKeyboard plus voice entry (set to whole words). -->
     <DynamicMiniKeyboard id="keyboard" translation="[96,190]" />
-    <MarkupList id="resultList" translation="[720,190]" itemComponentName="CatalogItem"
-      itemSize="[1104,64]" itemSpacing="[0,4]" numRows="12" vertFocusAnimationStyle="floatingFocus"
+    <MarkupList id="resultList" translation="[720,256]" itemComponentName="CatalogItem"
+      itemSize="[1104,64]" itemSpacing="[0,4]" numRows="11" vertFocusAnimationStyle="floatingFocus"
       focusBitmapUri="pkg:/images/ui/row-focus.9.png" />
-    <Label id="status" translation="[740,210]" width="1080" wrap="true"
+    <!-- Over the list while it shows recent searches. The list starts below
+         y 200, clear of Roku's own "use your phone" keyboard banner. -->
+    <Label id="recentHead" translation="[740,206]" width="1080" visible="false"
+      font="font:SmallSystemFont" color="0xA0A8B0FF" text="Recent searches      OK to search again     *  to remove" />
+    <Label id="status" translation="[740,270]" width="1080" wrap="true"
       font="font:MediumSystemFont" color="0xA0A8B0FF" text="Type to search channels, movies and series." />
     <Timer id="typingDelay" duration="0.35" />
   </children>
