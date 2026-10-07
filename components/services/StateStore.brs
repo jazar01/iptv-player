@@ -16,6 +16,11 @@ sub init()
     m.usageSection = CreateObject("roRegistrySection", "iptv_usage")
     m.usage = invalid
 
+    ' Recent searches: per device, in their own section (not the synced
+    ' document), newest first.
+    m.searchSection = CreateObject("roRegistrySection", "iptv_searches")
+    m.SEARCH_CAP = 10
+
     m.backend = RegistryBackend("iptv_state")
     m.doc = m.backend.read()
     restored = false
@@ -1161,3 +1166,48 @@ sub purgeTombstones(cutoff as Integer)
         m.doc[key] = kept
     end for
 end sub
+
+' ---------------------------------------------------------------------------
+' Recent searches (Search, when the box is empty). A search is remembered
+' when one of its results is chosen. Per device; not in the backup.
+
+function getRecentSearches() as Object
+    list = []
+    if m.searchSection.Exists("list")
+        parsed = ParseJson(m.searchSection.Read("list"))
+        if type(parsed) = "roArray"
+            for each q in parsed
+                if asString(q) <> "" then list.Push(asString(q))
+            end for
+        end if
+    end if
+    return list
+end function
+
+' Moves (or adds) it to the front; the same words in other capitals count
+' as the same search.
+function addRecentSearch(text as String) as Boolean
+    q = text.Trim()
+    if Len(q) < 2 then return true
+    list = [q]
+    for each old in getRecentSearches()
+        if LCase(old) <> LCase(q) and list.Count() < m.SEARCH_CAP then list.Push(old)
+    end for
+    return saveRecentSearches(list)
+end function
+
+function removeRecentSearch(text as String) as Boolean
+    list = []
+    for each old in getRecentSearches()
+        if LCase(old) <> LCase(text.Trim()) then list.Push(old)
+    end for
+    return saveRecentSearches(list)
+end function
+
+function saveRecentSearches(list as Object) as Boolean
+    if not m.searchSection.Write("list", FormatJson(list)) or not m.searchSection.Flush()
+        print "[state] WARNING: could not save recent searches"
+        return false
+    end if
+    return true
+end function

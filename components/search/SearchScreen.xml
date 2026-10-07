@@ -6,9 +6,13 @@
   In:  results    SearchTask results { text, items }
        favoriteIds { "<streamId>": true, "s<seriesId>": true }, to tag favorite channels and series
        status     message shown where the results go
+       recentSearches  [text] newest first, listed while the box is empty
+       reset      set when Search is opened from the top bar: empty box, recent searches
   Out: query      search text (after the typing pause)
        selected   { kind, itemId, streamId, name, epgChannelId, ext, year, archiveDays }
        options    same, when * is pressed on a channel
+       searchUsed      the search text, when one of its results is chosen
+       removeRecent    a recent search to forget (* on it)
 -->
 <component name="SearchScreen" extends="Group">
   <interface>
@@ -20,6 +24,10 @@
     <field id="query" type="string" alwaysNotify="true" />
     <field id="selected" type="assocarray" alwaysNotify="true" />
     <field id="options" type="assocarray" alwaysNotify="true" />
+    <field id="recentSearches" type="array" onChange="onRecentSearches" />
+    <field id="searchUsed" type="string" alwaysNotify="true" />
+    <field id="removeRecent" type="string" alwaysNotify="true" />
+    <field id="reset" type="boolean" alwaysNotify="true" onChange="onReset" />
   </interface>
 
   <children>

@@ -198,11 +198,30 @@ function createSearchScreen() as Object
     screen.ObserveField("query", "onSearchQuery")
     screen.ObserveField("selected", "onItemSelected")
     screen.ObserveField("options", "onToggleFavorite")
+    screen.ObserveField("searchUsed", "onSearchUsed")
+    screen.ObserveField("removeRecent", "onRemoveRecentSearch")
     return screen
 end function
 
 sub onSearchShown(screen as Object)
     screen.favoriteIds = favoriteIdSet()
+    screen.recentSearches = m.store.callFunc("getRecentSearches")
+    screen.reset = true
+end sub
+
+' A result was chosen: remember the search (shown while the box is empty).
+sub onSearchUsed(event as Object)
+    m.store.callFunc("addRecentSearch", event.GetData())
+    screen = m.sections.search
+    if screen <> invalid then screen.recentSearches = m.store.callFunc("getRecentSearches")
+end sub
+
+sub onRemoveRecentSearch(event as Object)
+    text = event.GetData()
+    m.store.callFunc("removeRecentSearch", text)
+    showToast("Removed """ + text + """ from recent searches")
+    screen = m.sections.search
+    if screen <> invalid then screen.recentSearches = m.store.callFunc("getRecentSearches")
 end sub
 
 sub onSearchQuery(event as Object)

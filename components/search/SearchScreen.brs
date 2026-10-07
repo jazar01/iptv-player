@@ -37,8 +37,7 @@ end sub
 sub sendQuery()
     text = m.keyboard.text.Trim()
     if text = ""
-        m.resultList.content = CreateObject("roSGNode", "ContentNode")
-        m.top.status = "Type to search channels, movies and series."
+        showRecentSearches()
         return
     end if
     m.top.query = text
@@ -119,7 +118,14 @@ end function
 
 sub onItemSelected()
     i = m.resultList.itemSelected
-    if i >= 0 and i < resultCount() then m.top.selected = resultSummary(m.resultList.content.GetChild(i))
+    if i < 0 or i >= resultCount() then return
+    node = m.resultList.content.GetChild(i)
+    if node.itemKind = "recent"
+        runRecentSearch(node.name)
+        return
+    end if
+    m.top.searchUsed = m.keyboard.text.Trim()
+    m.top.selected = resultSummary(node)
 end sub
 
 sub focusKeyboard()
@@ -140,9 +146,56 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         i = m.resultList.itemFocused
         if i >= 0 and i < resultCount()
             node = m.resultList.content.GetChild(i)
+            if node.itemKind = "recent" then m.top.removeRecent = node.name
             if node.itemKind = "channel" or node.itemKind = "series" or node.itemKind = "movie" then m.top.options = resultSummary(node)
         end if
         return true
     end if
     return false
 end function
+
+' ---------------------------------------------------------------------------
+' Recent searches: listed (tagged RECENT) while the box is empty. OK runs
+' one again; * forgets it.
+
+sub onRecentSearches()
+    if m.keyboard.text.Trim() = "" then showRecentSearches()
+end sub
+
+sub showRecentSearches()
+    content = CreateObject("roSGNode", "ContentNode")
+    recent = m.top.recentSearches
+    if type(recent) = "roArray"
+        for each q in recent
+            node = content.CreateChild("CatalogNode")
+            node.itemKind = "recent"
+            node.name = asString(q)
+            node.tag = "RECENT"
+        end for
+    end if
+    m.resultList.content = content
+    if content.GetChildCount() > 0
+        m.top.status = ""
+    else
+        m.top.status = "Type to search channels, movies and series."
+        if m.inResults then focusKeyboard()
+    end if
+end sub
+
+sub runRecentSearch(text as String)
+    m.delay.control = "stop"
+    m.keyboard.text = text
+    m.delay.control = "stop"    ' the text change restarted it; search now instead
+    m.top.query = text
+end sub
+
+' Opened from the top bar: start with an empty box and the recent searches
+' (the last search is the first of them). Coming back from a result keeps
+' the results instead.
+sub onReset()
+    m.delay.control = "stop"
+    m.keyboard.text = ""
+    m.delay.control = "stop"
+    m.inResults = false
+    showRecentSearches()
+end sub

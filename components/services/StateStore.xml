@@ -66,6 +66,10 @@
     <function name="updateWatchListDetails" />
     <function name="getSavedMovies" />
     <function name="remapMovies" />
+
+    <function name="getRecentSearches" />
+    <function name="addRecentSearch" />
+    <function name="removeRecentSearch" />
   </interface>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />

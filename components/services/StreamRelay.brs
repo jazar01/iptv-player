@@ -12,6 +12,7 @@ sub relayLoop()
     m.segOrder = []
     m.nextSeg = 1
     m.logged = {}           ' one-off log lines already printed
+    m.pidFor = {}           ' relay key -> its audio PID (for a segment whose tables come late)
     m.port = CreateObject("roMessagePort")
     m.top.ObserveField("add", m.port)
     m.conns = {}
@@ -89,7 +90,7 @@ end sub
 
 ' /p/<key>.m3u8                       live playlist
 ' /t/<key>/<duration>/<start>.m3u8    archive playlist
-' /s/<number>.ts                      a segment, audio fixed
+' /s/<key>/<number>.ts                a segment, audio fixed
 sub serve(s as Object, path as String)
     p = path.Split("?")[0]
     if Left(p, 3) = "/p/" and Right(p, 5) = ".m3u8"
@@ -103,8 +104,12 @@ sub serve(s as Object, path as String)
         if template <> "" then url = template.Replace("{duration}", bits[1]).Replace("{start}", bits[2])
         servePlaylist(s, url, bits[0])
     else if Left(p, 3) = "/s/"
-        number = Mid(p, 4).Split(".")[0]
-        serveSegment(s, asString(m.segUrls[number]))
+        bits = Mid(p, 4).Split("/")
+        if bits.Count() = 2
+            serveSegment(s, bits[0], asString(m.segUrls[bits[1].Split(".")[0]]))
+        else
+            sendStatus(s, 404)
+        end if
     else
         sendStatus(s, 404)
     end if
@@ -131,7 +136,7 @@ sub servePlaylist(s as Object, url as String, key as String)
         if l = "" or Left(l, 1) = "#"
             out.Push(l)
         else
-            out.Push("/s/" + segmentNumber(resolveUrl(r.finalUrl, l)) + ".ts")
+            out.Push("/s/" + key + "/" + segmentNumber(resolveUrl(r.finalUrl, l)) + ".ts")
         end if
     end for
     text = out.Join(Chr(10))
@@ -156,59 +161,251 @@ function segmentNumber(url as String) as String
     return number
 end function
 
-sub serveSegment(s as Object, url as String)
+' A segment, passed on while it downloads: the download goes to a temporary
+' file, and whatever has arrived (in whole TS packets) is fixed and sent, so
+' the player can start long before a one-minute archive segment is complete.
+' Plain-http segments (the archive's edge server) are read straight off a
+' socket as they arrive; roUrlTransfer (https, and any fallback) only
+' writes its file at the end.
+sub serveSegment(s as Object, key as String, url as String)
     if url = ""
         sendStatus(s, 404)
         return
     end if
     file = "tmp:/relay_segment.ts"
-    x = newTransfer(url)
-    port = CreateObject("roMessagePort")
-    x.SetMessagePort(port)
-    x.AsyncGetToFile(file)
-    ev = wait(90000, port)      ' archive segments are a minute long (about 20 MB)
-    code = 0
-    if ev <> invalid and type(ev) = "roUrlEvent" then code = ev.GetResponseCode()
-    if ev = invalid then x.AsyncCancel()
-    if code <> 200
-        print "[relay] segment failed: HTTP "; code
-        DeleteFile(file)
-        sendStatus(s, 502)
-        return
-    end if
-    data = CreateObject("roByteArray")
-    data.ReadFile(file)
     DeleteFile(file)
+    port = CreateObject("roMessagePort")
+    src = invalid
+    if LCase(Left(url, 7)) = "http://" then src = openPlainHttp(url, port)
+    x = invalid
+    if src = invalid
+        x = newTransfer(url)
+        x.SetMessagePort(port)
+        x.AsyncGetToFile(file)
+    end if
+    fs = CreateObject("roFileSystem")
+    fixer = { pid: -1, synced: false, skip: 0, have: 0, b3: 0, b4: 0, fixed: 0 }
+    first = -1              ' where whole packets begin
+    sent = 0                ' bytes of the file sent so far
+    started = false         ' response headers sent
+    done = false
+    code = 0
     clock = CreateObject("roTimespan")
-    fixed = fixAacProfile(data)
-    if not m.logged.DoesExist("seg")
-        m.logged["seg"] = true
-        print "[relay] first segment: "; data.Count(); " bytes, "; fixed; " audio headers fixed in "; clock.TotalMilliseconds(); " ms"
+    firstSendMs = -1
+    while true
+        ev = wait(40, port)
+        if src <> invalid
+            pumpSocket(src, file)
+            done = src.done
+            code = 200
+        else if ev <> invalid and type(ev) = "roUrlEvent"
+            done = true
+            code = ev.GetResponseCode()
+        end if
+        if done and code <> 200
+            print "[relay] segment failed: HTTP "; code
+            if not started then sendStatus(s, 502)
+            exit while
+        end if
+        if not done and clock.TotalMilliseconds() > 120000
+            print "[relay] segment timed out"
+            if x <> invalid then x.AsyncCancel()
+            exit while
+        end if
+        size = 0
+        if src <> invalid
+            size = src.written
+        else
+            info = fs.Stat(file)
+            if type(info) = "roAssociativeArray" then size = toInt(info.size)
+        end if
+        if first < 0 and (size >= 2000 or (done and size > 0))
+            first = packetStart(readBytes(file, 0, size))
+            if first < 0 then first = -2    ' not MPEG-TS packets: passed on as is
+        end if
+        ' The audio stream's PID, from the start of the data (the tables
+        ' come round several times a second).
+        if first >= 0 and fixer.pid = -1
+            fixer.pid = aacPid(readBytes(file, 0, size), first)
+            if fixer.pid < 0
+                fixer.pid = -1
+                if done or size - first > 3000000
+                    fixer.pid = -2      ' no AAC stream found: nothing to fix
+                    known = m.pidFor[key]
+                    if known <> invalid then fixer.pid = known
+                end if
+            else
+                m.pidFor[key] = fixer.pid
+            end if
+        end if
+        if first = -2 or (first >= 0 and fixer.pid <> -1)
+            upto = size
+            if not done and first >= 0 then upto = first + ((size - first) \ 188) * 188
+            if upto > sent
+                chunk = readBytes(file, sent, upto - sent)
+                if fixer.pid >= 0
+                    from = 0
+                    if sent < first then from = first - sent
+                    fixPackets(fixer, chunk, from)
+                end if
+                if not started
+                    sendHead(s, 200, "video/mp2t", -1)
+                    started = true
+                    firstSendMs = clock.TotalMilliseconds()
+                end if
+                sendAll(s, chunk)
+                sent = upto
+            end if
+        end if
+        if done and sent >= size then exit while
+    end while
+    if src <> invalid then src.sock.close()
+    DeleteFile(file)
+    if started and not m.logged.DoesExist("seg" + Left(key, 1))
+        m.logged["seg" + Left(key, 1)] = true
+        how = "download"
+        if src <> invalid then how = "socket"
+        print "[relay] "; key; " first segment ("; how; "): "; sent; " bytes, sending began after "; firstSendMs; " ms, "; fixer.fixed; " audio headers fixed, done in "; clock.TotalMilliseconds(); " ms"
     end if
-    if fixed = 0 and not m.logged.DoesExist("nofix")
+    if started and fixer.fixed = 0 and not m.logged.DoesExist("nofix")
         m.logged["nofix"] = true
-        print "[relay] a segment had no audio headers to fix ("; data.Count(); " bytes)"
+        print "[relay] a segment had no audio headers to fix ("; sent; " bytes)"
     end if
-    sendBody(s, 200, "video/mp2t", data)
 end sub
 
-' ---------------------------------------------------------------------------
-' MPEG-TS: find the AAC (ADTS) stream and set each frame header's profile
-' field from Main (0) to LC (1). Headers can span TS packets, so the byte
-' positions of the current header are collected as packets go by.
+' GET over a plain socket, so the body can be read as it arrives. Returns
+' { sock, buf, written, length, done, idle } once a 200 response's headers
+' are in, or invalid (redirect, error, chunked body, can't connect) to use
+' roUrlTransfer instead.
+function openPlainHttp(url as String, port as Object) as Dynamic
+    rest = Mid(url, 8)
+    slash = Instr(1, rest, "/")
+    hostPort = rest
+    path = "/"
+    if slash > 0
+        hostPort = Left(rest, slash - 1)
+        path = Mid(rest, slash)
+    end if
+    host = hostPort
+    portNumber = 80
+    colon = Instr(1, hostPort, ":")
+    if colon > 0
+        host = Left(hostPort, colon - 1)
+        portNumber = Val(Mid(hostPort, colon + 1), 10)
+    end if
+    addr = CreateObject("roSocketAddress")
+    if not addr.setHostName(host) then return invalid
+    addr.setPort(portNumber)
+    sock = CreateObject("roStreamSocket")
+    sock.setSendToAddress(addr)
+    sock.connect()
+    clock = CreateObject("roTimespan")
+    while not sock.isConnected() and clock.TotalMilliseconds() < 5000
+        sleep(10)
+    end while
+    if not sock.isConnected()
+        print "[relay] socket fetch: couldn't connect; using a download"
+        sock.close()
+        return invalid
+    end if
+    crlf = Chr(13) + Chr(10)
+    request = "GET " + path + " HTTP/1.1" + crlf + "Host: " + hostPort + crlf + "User-Agent: " + rokuUserAgent() + crlf + "Accept: */*" + crlf + "Connection: close" + crlf + crlf
+    sendAll(sock, textBytes(request))
 
-function fixAacProfile(data as Object) as Integer
+    ' Response headers, a byte at a time (a few hundred bytes).
+    head = ""
+    one = CreateObject("roByteArray")
+    one[0] = 0
+    clock.Mark()
+    while Right(head, 4) <> crlf + crlf and Len(head) < 16384 and clock.TotalMilliseconds() < 10000
+        if sock.getCountRcvBuf() > 0
+            if sock.receive(one, 0, 1) = 1 then head = head + Chr(one[0])
+        else if sock.isReadable()
+            exit while      ' closed before the headers ended
+        else
+            sleep(5)
+        end if
+    end while
+    status = 0
+    firstLine = head.Split(crlf)[0]
+    parts = firstLine.Split(" ")
+    if parts.Count() >= 2 then status = Val(parts[1], 10)
+    lower = LCase(head)
+    if Right(head, 4) <> crlf + crlf or status <> 200 or Instr(1, lower, "transfer-encoding: chunked") > 0
+        print "[relay] socket fetch: HTTP "; status; "; using a download"
+        sock.close()
+        return invalid
+    end if
+    length = -1
+    found = CreateObject("roRegex", "content-length:\s*([0-9]+)", "").Match(lower)
+    if found.Count() > 1 then length = Val(found[1], 10)
+    buf = CreateObject("roByteArray")
+    buf[65535] = 0
+    sock.setMessagePort(port)
+    sock.notifyReadable(true)
+    return { sock: sock, buf: buf, written: 0, length: length, done: false, idle: CreateObject("roTimespan") }
+end function
+
+' Moves whatever has arrived on the socket to the end of the file.
+sub pumpSocket(src as Object, file as String)
+    if src.done then return
+    n = src.sock.getCountRcvBuf()
+    if n > 0
+        while n > 0
+            k = n
+            if k > 65536 then k = 65536
+            got = src.sock.receive(src.buf, 0, k)
+            if got <= 0 then exit while
+            src.buf.AppendFile(file, 0, got)
+            src.written = src.written + got
+            n = src.sock.getCountRcvBuf()
+        end while
+        src.idle.Mark()
+    else if src.length < 0 and src.sock.isReadable()
+        ' No length given: the body ends when the server closes. Roku can
+        ' report "readable" with no data before more arrives, so only a
+        ' read that returns nothing counts as closed.
+        got = src.sock.receive(src.buf, 0, 1)
+        if got = 1
+            src.buf.AppendFile(file, 0, 1)
+            src.written = src.written + 1
+            src.idle.Mark()
+        else if got = 0
+            src.done = true
+        end if
+    end if
+    if src.length >= 0 and src.written >= src.length then src.done = true
+    if src.idle.TotalMilliseconds() > 30000
+        print "[relay] socket fetch stalled"
+        src.done = true
+    end if
+end sub
+
+' Like roUrlTransfer's ("Roku/DVP-14.0 (...)"): the provider answers 404 to
+' requests that don't look like they come from a Roku.
+function rokuUserAgent() as String
+    v = CreateObject("roDeviceInfo").GetOSVersion()
+    return "Roku/DVP-" + asString(v.major) + "." + asString(v.minor) + " (" + asString(v.major) + "." + asString(v.minor) + "." + asString(v.revision) + "." + asString(v.build) + ")"
+end function
+
+function readBytes(file as String, start as Integer, length as Integer) as Object
+    b = CreateObject("roByteArray")
+    if length > 0 then b.ReadFile(file, start, length)
+    return b
+end function
+
+' ---------------------------------------------------------------------------
+' MPEG-TS: in the AAC (ADTS) stream, set each frame header's profile field
+' from Main (0) to LC (1). Works on consecutive chunks of whole packets: the
+' fixer carries the position in the current frame from one chunk to the
+' next, and header bytes are judged as they go by (the profile is the third
+' byte, fixed before the length bytes are even seen).
+' fixer: { pid, synced, skip, have, b3, b4, fixed }
+
+sub fixPackets(f as Object, data as Object, from as Integer)
     total = data.Count()
-    first = packetStart(data)
-    if first < 0 then return 0
-    pid = aacPid(data, first)
-    if pid < 0 then return 0
-    fixed = 0
-    synced = false
-    skip = 0                ' frame bytes left before the next header
-    hdr = [0, 0, 0, 0, 0, 0]
-    have = 0                ' header bytes collected
-    p = first
+    pid = f.pid
+    p = from
     while p + 188 <= total
         if data[p] = &h47 and (((data[p + 1] and &h1F) << 8) or data[p + 2]) = pid
             afc = (data[p + 3] >> 4) and 3
@@ -218,48 +415,49 @@ function fixAacProfile(data as Object) as Integer
                 if (data[p + 1] and &h40) <> 0
                     ' A PES packet starts here, and with it a new frame.
                     off = off + 9 + data[off + 8]
-                    synced = true
-                    skip = 0
-                    have = 0
+                    f.synced = true
+                    f.skip = 0
+                    f.have = 0
                 end if
                 i = off
                 stopAt = p + 188
-                while synced and i < stopAt
-                    if skip > 0
+                while f.synced and i < stopAt
+                    if f.skip > 0
                         advance = stopAt - i
-                        if skip < advance then advance = skip
+                        if f.skip < advance then advance = f.skip
                         i = i + advance
-                        skip = skip - advance
+                        f.skip = f.skip - advance
                     else
-                        hdr[have] = i
-                        have = have + 1
-                        i = i + 1
-                        if have = 6
-                            have = 0
-                            if data[hdr[0]] <> &hFF or (data[hdr[1]] and &hF6) <> &hF0
-                                synced = false
-                            else
-                                frameLen = ((data[hdr[3]] and 3) << 11) or (data[hdr[4]] << 3) or ((data[hdr[5]] >> 5) and 7)
-                                if frameLen < 7
-                                    synced = false
-                                else
-                                    b = data[hdr[2]]
-                                    if (b and &hC0) = 0
-                                        data[hdr[2]] = (b and &h3F) or &h40
-                                        fixed = fixed + 1
-                                    end if
-                                    skip = frameLen - 6
-                                end if
+                        b = data[i]
+                        if f.have = 0
+                            if b = &hFF then f.have = 1 else f.synced = false
+                        else if f.have = 1
+                            if (b and &hF6) = &hF0 then f.have = 2 else f.synced = false
+                        else if f.have = 2
+                            if (b and &hC0) = 0
+                                data[i] = (b and &h3F) or &h40
+                                f.fixed = f.fixed + 1
                             end if
+                            f.have = 3
+                        else if f.have = 3
+                            f.b3 = b
+                            f.have = 4
+                        else if f.have = 4
+                            f.b4 = b
+                            f.have = 5
+                        else
+                            frameLen = ((f.b3 and 3) << 11) or (f.b4 << 3) or ((b >> 5) and 7)
+                            f.have = 0
+                            if frameLen < 7 then f.synced = false else f.skip = frameLen - 6
                         end if
+                        i = i + 1
                     end if
                 end while
             end if
         end if
         p = p + 188
     end while
-    return fixed
-end function
+end sub
 
 ' Where whole TS packets begin: live segments start with one, but archive
 ' segments are cut from a recording at any byte (one began at byte 87).
@@ -389,13 +587,20 @@ sub sendStatus(s as Object, code as Integer)
 end sub
 
 sub sendBody(s as Object, code as Integer, contentType as String, body as Object)
+    sendHead(s, code, contentType, body.Count())
+    sendAll(s, body)
+end sub
+
+' length -1: no Content-Length (the body ends when the connection closes).
+sub sendHead(s as Object, code as Integer, contentType as String, length as Integer)
     reason = "OK"
     if code = 404 then reason = "Not Found"
     if code = 502 then reason = "Bad Gateway"
     crlf = Chr(13) + Chr(10)
-    head = "HTTP/1.1 " + code.ToStr() + " " + reason + crlf + "Content-Type: " + contentType + crlf + "Content-Length: " + body.Count().ToStr() + crlf + "Connection: close" + crlf + crlf
+    head = "HTTP/1.1 " + code.ToStr() + " " + reason + crlf + "Content-Type: " + contentType + crlf
+    if length >= 0 then head = head + "Content-Length: " + length.ToStr() + crlf
+    head = head + "Connection: close" + crlf + crlf
     sendAll(s, textBytes(head))
-    sendAll(s, body)
 end sub
 
 ' Writes all of it, waiting while the socket's buffer is full (up to 60 s).

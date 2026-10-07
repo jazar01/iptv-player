@@ -71,8 +71,9 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   `MainGuide.brs`: channels from SearchTask `guideRequest`, schedules from
   `get_simple_data_table`).
 - `components/search/`: SearchScreen (DynamicMiniKeyboard with voice entry,
-  plus results list; matching with word forms, synonyms, close spellings and
-  an all-but-one fallback is in SearchTask).
+  plus results list, which shows recent searches while the box is empty;
+  matching with word forms, synonyms, close spellings and an all-but-one
+  fallback is in SearchTask).
 - `components/teams/`: TeamsScreen and TeamEditScreen (Settings → My Teams),
   MarketScreen (Settings → Local stations).
 - `components/services/MyTeams.brs`: finds saved teams' games in event-channel
