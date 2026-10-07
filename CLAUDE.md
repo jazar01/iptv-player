@@ -179,8 +179,10 @@ is the final check.
 
 ## Environment
 
-- Windows 11, PowerShell 7. Windows PowerShell 5.1 blocks scripts on this
-  machine; use `pwsh`.
+- Windows 11, PowerShell 7 (`pwsh`, preferred). The user's terminal may be
+  Windows PowerShell 5.1, which also runs the scripts: keep them working
+  in both (5.1 has no `ConvertFrom-Json -AsHashtable`, no `??` / `?:`, no
+  `&&`; deploy.ps1's backup check uses .NET's JavaScriptSerializer there).
 - Node.js (`C:\Program Files\nodejs`) and Git (`C:\Program Files\Git\cmd`) are
   installed but may be missing from PATH in older shells; prepend them if a
   command isn't found.
