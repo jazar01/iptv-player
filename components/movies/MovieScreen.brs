@@ -67,9 +67,11 @@ function joinLine(parts as Object, separator as String) as String
     return out
 end function
 
-' Play, or (started) Resume from 1:12:05 and Start over.
+' Play, or (started) Resume from 1:12:05 and Start over; then the Watch
+' List button. Focus stays on the same button when the labels change.
 sub drawButtons()
     position = m.top.position
+    focused = m.buttons.itemFocused
     content = CreateObject("roSGNode", "ContentNode")
     if position >= 30
         m.actions = [position, 0]
@@ -82,10 +84,19 @@ sub drawButtons()
         item = content.CreateChild("ContentNode")
         item.title = "Play"
     end if
+    m.actions.Push("watchlist")
+    item = content.CreateChild("ContentNode")
+    if m.top.onWatchList then item.title = "Remove from Watch List" else item.title = "Add to Watch List"
     m.buttons.content = content
+    if focused > 0 and focused < m.actions.Count() then m.buttons.jumpToItem = focused
 end sub
 
 sub onButton()
     i = m.buttons.itemSelected
-    if i >= 0 and i < m.actions.Count() then m.top.play = { position: m.actions[i] }
+    if i < 0 or i >= m.actions.Count() then return
+    if type(m.actions[i]) = "String" or type(m.actions[i]) = "roString"
+        m.top.watchListToggle = true
+    else
+        m.top.play = { position: m.actions[i] }
+    end if
 end sub

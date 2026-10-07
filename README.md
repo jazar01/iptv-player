@@ -15,7 +15,8 @@ installing and backing up.
 - My Teams: upcoming and live games for teams you follow, found in event
   channels and the schedules of the national sports networks and your local
   ABC/CBS/NBC/FOX stations, with team logos.
-- Continue Watching (movies and the next episode of a series), Favorite Series,
+- Continue Watching (movies and the next episode of a series), Watch List
+  (movies to watch later), Favorite Series,
   and Recently Viewed channels.
 - "See all" grid for every row; rows ordered by what you watch most.
 

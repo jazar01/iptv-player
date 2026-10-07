@@ -181,12 +181,13 @@ is the final check.
 ## Status
 
 All of version 1 is built; the design and per-feature notes are in
-docs/requirements.md. Saved state is schema 6 (later per-device options and
+docs/requirements.md. Saved state is schema 7 (later per-device options and
 optional record marks joined without a schema change).
 
 - Built and checked on the Basement Roku: setup, login (retried in the
   background when it fails at launch), Home (Favorites, My Teams, Continue
-  Watching, Favorite Series, Recently Viewed, "See all" grids, channel logos),
+  Watching, Watch List, Favorite Series, Recently Viewed, "See all" grids,
+  channel logos),
   Live TV (now playing, logos, Local stations, channel info, * menu), Movies
   (details page), Series (artwork, episode details, Favorite Series), Search
   (voice, word forms, synonyms, close spellings), playback (live, VOD,

@@ -233,6 +233,10 @@ sub drawInfo(c as Object)
         ' Favorite Series: name (year), and where you are in it.
         m.infoTitle.text = c.name
         m.infoText.text = c.subtitle
+    else if c.kind = "movie"
+        ' Watch List: name (year), and runtime or "Not available".
+        m.infoTitle.text = c.name
+        m.infoText.text = c.subtitle
     else if c.kind = "seeAll"
         m.infoTitle.text = "See all"
         m.infoText.text = c.message

@@ -231,10 +231,11 @@ sub onPlayerClosed()
     m.stepTimer.control = "stop"
     m.stepTarget = invalid
     removeOverlay(player)
-    refreshHome()
     ' Back on a movie page: its Resume button reflects where playback stopped.
     if m.movieScreen <> invalid and m.movieItem <> invalid then m.movieScreen.position = m.store.callFunc("getPosition", "movie", m.movieItem.itemId)
-    updateCatalogTags()
+    ' Home, catalog tags and the Watch List (a movie watched to the end
+    ' leaves it).
+    onWatchListChanged()
     refreshSeriesProgress()
 end sub
 

@@ -182,6 +182,10 @@ sub onCatalogOptions(event as Object)
         toggleSeriesFavorite(channel)      ' Series list: * adds or removes it
         return
     end if
+    if asString(channel.kind) = "movie"
+        toggleWatchList(channel)          ' Movies list: * adds or removes it
+        return
+    end if
     if channel.streamId = invalid or channel.streamId = 0 then return
     favLabel = "Add to Favorites"
     if m.store.callFunc("isFavorite", channel.streamId) then favLabel = "Remove from Favorites"

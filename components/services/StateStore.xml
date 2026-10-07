@@ -58,6 +58,14 @@
     <function name="setSeriesFavorite" />
     <function name="isSeriesFavorite" />
     <function name="getFavoriteSeries" />
+
+    <function name="getWatchList" />
+    <function name="isOnWatchList" />
+    <function name="watchListFull" />
+    <function name="setOnWatchList" />
+    <function name="updateWatchListDetails" />
+    <function name="getSavedMovies" />
+    <function name="remapMovies" />
   </interface>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />

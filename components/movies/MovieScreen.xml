@@ -2,14 +2,17 @@
 <!--
   Movie details, shown when a movie is chosen in Movies or Search: the
   backdrop behind, the poster, title, year / runtime / rating / genre, plot,
-  director and cast, and Play (or Resume / Start over).
+  director and cast, Play (or Resume / Start over), and Add to / Remove from
+  Watch List.
 
   In:  movie     { name, year, poster } known before details arrive
        details   { name, year, runtime, rating, genre, plot, director, cast,
                    poster, backdrop } from get_vod_info (MainMovies.brs)
        position  saved position in seconds (0: not started)
        status    message while loading or on error
+       onWatchList  whether the movie is on the Watch List (button label)
   Out: play      { position } when Play / Resume / Start over is chosen
+       watchListToggle  set when the Watch List button is chosen
 -->
 <component name="MovieScreen" extends="Group">
   <interface>
@@ -17,7 +20,9 @@
     <field id="details" type="assocarray" onChange="draw" />
     <field id="position" type="integer" onChange="drawButtons" />
     <field id="status" type="string" onChange="draw" alwaysNotify="true" />
+    <field id="onWatchList" type="boolean" onChange="drawButtons" />
     <field id="play" type="assocarray" alwaysNotify="true" />
+    <field id="watchListToggle" type="boolean" alwaysNotify="true" />
   </interface>
 
   <children>
@@ -35,7 +40,7 @@
       font="font:SmallSystemFont" color="0xE6EAEEFF" />
     <Label id="people" translation="[560,620]" width="1180" wrap="true" maxLines="3" lineSpacing="4"
       font="font:SmallestSystemFont" color="0x8C96A0FF" />
-    <LabelList id="buttons" translation="[560,780]" itemSize="[520,64]" numRows="2"
+    <LabelList id="buttons" translation="[560,780]" itemSize="[520,64]" numRows="3"
       font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont"
       color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png"
       vertFocusAnimationStyle="floatingFocus" />

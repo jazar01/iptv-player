@@ -264,9 +264,11 @@ end function
 ' are missing from the current catalog are looked up, and only against a
 ' fully loaded list, so a failed download can't re-match anything.
 
-' req: { id, channels: [{ streamId, name, epgChannelId }], series: [{ seriesId, name, year }] }
+' req: { id, channels: [{ streamId, name, epgChannelId }], series: [{ seriesId, name, year }],
+'        movies: [{ movieId, name, year }] (the Watch List) }
+' Movies not found again are listed in missingMovies (shown "Not available").
 function matchSaved(req as Object) as Object
-    result = { id: req.id, liveReady: m.index.live.Count() > 0, seriesReady: m.index.series.Count() > 0, channels: {}, series: {}, unmatched: [] }
+    result = { id: req.id, liveReady: m.index.live.Count() > 0, seriesReady: m.index.series.Count() > 0, movieReady: m.index.movie.Count() > 0, channels: {}, series: {}, movies: {}, missingMovies: [], unmatched: [] }
     if result.liveReady and type(req.channels) = "roArray"
         for each saved in req.channels
             oldId = toInt(saved.streamId).ToStr()
@@ -293,6 +295,23 @@ function matchSaved(req as Object) as Object
                     e = found.entry
                     result.series[oldId] = { seriesId: e.itemId, name: e.name, year: e.year, method: found.method }
                     print "[match] series "; oldId; " '"; saved.name; "' -> "; e.itemId; " '"; e.name; "' by "; found.method
+                end if
+            end if
+        end for
+    end if
+    if result.movieReady and type(req.movies) = "roArray"
+        for each saved in req.movies
+            oldId = toInt(saved.movieId).ToStr()
+            if m.byId.movie[oldId] = invalid and not result.movies.DoesExist(oldId)
+                ' Same rule as series: the only movie with that name and year.
+                found = matchSeries(saved, lookupFor("movie"), currentMatchRules())
+                if found = invalid
+                    result.unmatched.Push("movie " + oldId + " '" + asString(saved.name) + "'")
+                    result.missingMovies.Push(oldId)
+                else
+                    e = found.entry
+                    result.movies[oldId] = { movieId: e.itemId, name: e.name, year: e.year, ext: e.ext, method: found.method }
+                    print "[match] movie "; oldId; " '"; saved.name; "' -> "; e.itemId; " '"; e.name; "' by "; found.method
                 end if
             end if
         end for

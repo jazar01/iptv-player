@@ -56,7 +56,7 @@ sub onIndexChanged()
             end if
         end for
     end for
-    searchSend("matchRequest", { id: "saved", channels: channels, series: m.store.callFunc("getSavedSeries") })
+    searchSend("matchRequest", { id: "saved", channels: channels, series: m.store.callFunc("getSavedSeries"), movies: m.store.callFunc("getSavedMovies") })
     ' The catalog changed: My Teams games may have too.
     requestGames()
     if m.localsWaiting then requestLocalStations("live")
@@ -73,6 +73,19 @@ sub onMatchResult(event as Object)
     end if
     if result.series.Count() > 0
         if m.store.callFunc("remapSeries", result.series) then changed = changed + result.series.Count()
+    end if
+    if result.movies <> invalid and result.movies.Count() > 0
+        if m.store.callFunc("remapMovies", result.movies) then changed = changed + result.movies.Count()
+    end if
+    ' Watch List movies the provider no longer has: "Not available" on Home.
+    if isTrue(result.movieReady)
+        missing = {}
+        for each id in result.missingMovies
+            missing[id] = true
+        end for
+        redraw = (missing.Count() <> m.missingMovies.Count())
+        m.missingMovies = missing
+        if redraw and changed = 0 then refreshHome()
     end if
     if changed = 0 then return
     print "[main] re-matched "; changed; " saved item(s) after a provider renumbering"
@@ -218,6 +231,9 @@ function favoriteIdSet() as Object
     end for
     for each s in m.store.callFunc("getFavoriteSeries")
         ids["s" + toInt(s.seriesId).ToStr()] = true     ' favorite series: "s<id>"
+    end for
+    for each w in m.store.callFunc("getWatchList")
+        ids["m" + toInt(w.id).ToStr()] = true           ' Watch List movies: "m<id>"
     end for
     return ids
 end function

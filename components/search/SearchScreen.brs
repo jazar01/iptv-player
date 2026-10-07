@@ -81,6 +81,7 @@ function resultTag(node as Object) as String
         if node.archiveDays > 0 then return "REWIND"
         return "CHANNEL"
     end if
+    if node.itemKind = "movie" and m.favoriteIds.DoesExist("m" + node.itemId.ToStr()) then return "LIST"
     if node.itemKind = "movie" then return "MOVIE"
     if m.favoriteIds.DoesExist("s" + node.itemId.ToStr()) then return "FAVORITE"
     return "SERIES"
@@ -139,7 +140,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         i = m.resultList.itemFocused
         if i >= 0 and i < resultCount()
             node = m.resultList.content.GetChild(i)
-            if node.itemKind = "channel" or node.itemKind = "series" then m.top.options = resultSummary(node)
+            if node.itemKind = "channel" or node.itemKind = "series" or node.itemKind = "movie" then m.top.options = resultSummary(node)
         end if
         return true
     end if

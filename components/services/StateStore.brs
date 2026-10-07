@@ -2,7 +2,8 @@
 ' docs/requirements.md). Records carry updatedAt; deletions are tombstones.
 
 sub init()
-    m.SCHEMA = 6
+    m.SCHEMA = 7
+    m.WATCHLIST_CAP = 30         ' about 115 bytes each: keeps the document under ~7 KB
     m.RECENT_CAP = 15
     m.SEEN_CAP = 20
     m.SEEN_DAYS = 4
@@ -586,6 +587,114 @@ function getFavoriteSeries() as Object
     return list
 end function
 
+' ---------------------------------------------------------------------------
+' Watch List: movies saved to watch later. Records { id, name, year, ext,
+' mins, addedAt, updatedAt, deleted }; removal is a tombstone.
+' Watching a movie to the end (markWatched) takes it off. Never trimmed; at
+' WATCHLIST_CAP movies, adding is refused (watchListFull).
+
+' Newest added first.
+function getWatchList() as Object
+    list = []
+    for each w in m.doc.watchlist
+        if not isTrue(w.deleted) then list.Push(w)
+    end for
+    list.SortBy("addedAt", "r")
+    return list
+end function
+
+function isOnWatchList(id as Dynamic) as Boolean
+    w = findWatchListEntry(toInt(id))
+    return w <> invalid and not isTrue(w.deleted)
+end function
+
+function watchListFull() as Boolean
+    return getWatchList().Count() >= m.WATCHLIST_CAP
+end function
+
+' entry: { id, name, year, ext, mins? }
+function setOnWatchList(entry as Object, onList as Boolean) as Boolean
+    id = toInt(entry.id)
+    if id = 0 then return false
+    w = findWatchListEntry(id)
+    now = nowSeconds()
+    if not onList
+        if w = invalid or isTrue(w.deleted) then return true
+        w.deleted = true
+        w.updatedAt = now
+        return persist()
+    end if
+    if w = invalid
+        w = { id: id }
+        m.doc.watchlist.Push(w)
+    end if
+    if isTrue(w.deleted) or w.addedAt = invalid then w.addedAt = now
+    w.deleted = false
+    w.name = shortName(entry.name)
+    w.year = toInt(entry.year)
+    w.ext = asString(entry.ext)
+    if toInt(entry.mins) > 0 then w.mins = toInt(entry.mins)
+    w.updatedAt = now
+    return persist()
+end function
+
+' The details page knows the runtime (and year): fill them in for a movie
+' on the list (saved only when something changed).
+function updateWatchListDetails(entry as Object) as Boolean
+    w = findWatchListEntry(toInt(entry.id))
+    if w = invalid or isTrue(w.deleted) then return true
+    changed = false
+    if toInt(entry.mins) > 0 and toInt(w.mins) <> toInt(entry.mins)
+        w.mins = toInt(entry.mins)
+        changed = true
+    end if
+    if toInt(entry.year) > 0 and toInt(w.year) = 0
+        w.year = toInt(entry.year)
+        changed = true
+    end if
+    if not changed then return true
+    w.updatedAt = nowSeconds()
+    return persist()
+end function
+
+function findWatchListEntry(id as Integer) as Dynamic
+    for each w in m.doc.watchlist
+        if toInt(w.id) = id then return w
+    end for
+    return invalid
+end function
+
+' For re-matching after a renumbering: [{ movieId, name, year }].
+function getSavedMovies() as Object
+    list = []
+    for each w in getWatchList()
+        list.Push({ movieId: toInt(w.id), name: asString(w.name), year: toInt(w.year) })
+    end for
+    return list
+end function
+
+' map: { "<old id>": { movieId, name, year, ext } }. A movie whose new ID is
+' already on the list becomes a tombstone instead of a duplicate.
+function remapMovies(map as Object) as Boolean
+    if map.Count() = 0 then return true
+    now = nowSeconds()
+    for each w in m.doc.watchlist
+        target = map[toInt(w.id).ToStr()]
+        if target <> invalid and not isTrue(w.deleted)
+            if isOnWatchList(target.movieId)
+                w.deleted = true
+            else
+                w.id = toInt(target.movieId)
+                w.name = shortName(target.name)
+                if toInt(target.year) > 0 then w.year = toInt(target.year)
+                if asString(target.ext) <> "" then w.ext = asString(target.ext)
+            end if
+            w.updatedAt = now
+        end if
+    end for
+    return persist()
+end function
+
 ' Every saved series (for re-matching), not only those in Continue Watching.
 function getSavedSeries() as Object
     list = []
@@ -674,6 +783,14 @@ function markWatched(entry as Object) as Boolean
     kind = asString(entry.kind)
     id = toInt(entry.id)
     removeResume(kind, id)
+    if kind = "movie"
+        ' Watched: off the Watch List too.
+        w = findWatchListEntry(id)
+        if w <> invalid and not isTrue(w.deleted)
+            w.deleted = true
+            w.updatedAt = nowSeconds()
+        end if
+    end if
     if kind = "episode"
         s = findSeries(toInt(entry.seriesId))
         advance = isTrue(entry.fromPlayback) or s = invalid or s.current = invalid or toInt(s.current.episodeId) = id
@@ -874,6 +991,7 @@ function newDocument() as Object
         credentials: invalid
         favorites: []
         series: []
+        watchlist: []
         resume: []
         recent: []
         teams: []
@@ -889,7 +1007,7 @@ sub normalizeDocument(doc as Object)
     if toInt(doc.schema) > m.SCHEMA then print "[state] WARNING: saved schema "; doc.schema; " is newer than this build ("; m.SCHEMA; ")"
     if asString(doc.deviceId) = "" then doc.deviceId = CreateObject("roDeviceInfo").GetRandomUUID()
     doc.deviceName = asString(doc.deviceName)
-    for each key in ["favorites", "series", "resume", "recent", "teams", "seenGames"]
+    for each key in ["favorites", "series", "resume", "recent", "teams", "seenGames", "watchlist"]
         if type(doc[key]) <> "roArray" then doc[key] = []
     end for
 
@@ -943,6 +1061,12 @@ sub normalizeDocument(doc as Object)
     if toInt(doc.schema) < 6
         doc.schema = 6
         print "[state] migrated saved state to schema 6"
+    end if
+
+    ' Schema 7: `watchlist` (movies to watch), created empty above.
+    if toInt(doc.schema) < 7
+        doc.schema = 7
+        print "[state] migrated saved state to schema 7"
     end if
 end sub
 
@@ -1029,7 +1153,7 @@ end function
 
 ' Drop deleted records whose deletion is older than cutoff (UTC seconds).
 sub purgeTombstones(cutoff as Integer)
-    for each key in ["favorites", "series", "teams"]
+    for each key in ["favorites", "series", "teams", "watchlist"]
         kept = []
         for each r in m.doc[key]
             if not (isTrue(r.deleted) and toInt(r.updatedAt) < cutoff) then kept.Push(r)

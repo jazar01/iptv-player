@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-  Content for one HomeCard. kind: "channel" | "resume" | "game" | "noGame" | "seeAll" | "empty".
+  Content for one HomeCard. kind: "channel" | "resume" | "series" | "movie" |
+  "game" | "noGame" | "seeAll" | "empty". movie cards (Watch List): itemId =
+  stream ID, ext, year; subtitle = runtime or "Not available".
   noGame cards (My Teams): name = team, subtitle = its sports, itemKey "team:<id>".
   game cards (My Teams): name = matchup, subtitle = sport, nowStart/nowEnd =
   start and expected end, nowFlags = "live" / "replay".

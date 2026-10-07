@@ -8,10 +8,10 @@
 ' My Teams appears once a team is saved (unless switched off in Settings),
 ' always in the same place: after Favorites, or first (Settings).
 function homeRowModules(services as Object) as Object
-    if not services.store.callFunc("getSettings").showMyTeams or services.store.callFunc("getTeams").Count() = 0 then return [favoritesRow(), continueWatchingRow(), favoriteSeriesRow(), recentRow()]
+    if not services.store.callFunc("getSettings").showMyTeams or services.store.callFunc("getTeams").Count() = 0 then return [favoritesRow(), continueWatchingRow(), watchListRow(), favoriteSeriesRow(), recentRow()]
     ' A fixed place, chosen in Settings: first, or (default) after Favorites.
-    if services.store.callFunc("getSettings").myTeamsFirst then return [myTeamsRow(), favoritesRow(), continueWatchingRow(), favoriteSeriesRow(), recentRow()]
-    return [favoritesRow(), myTeamsRow(), continueWatchingRow(), favoriteSeriesRow(), recentRow()]
+    if services.store.callFunc("getSettings").myTeamsFirst then return [myTeamsRow(), favoritesRow(), continueWatchingRow(), watchListRow(), favoriteSeriesRow(), recentRow()]
+    return [favoritesRow(), myTeamsRow(), continueWatchingRow(), watchListRow(), favoriteSeriesRow(), recentRow()]
 end function
 
 ' Usage ordering (requirements: Usage-based item ordering). services.usage is
@@ -54,7 +54,7 @@ function sortFavorites(favorites as Object, usage as Dynamic) as Object
     return out
 end function
 
-' services: { store, epg, games, usage, launchTime }
+' services: { store, epg, games, usage, launchTime, icons, missingMovies }
 function buildHomeRows(services as Object) as Object
     rows = []
     for each module in homeRowModules(services)
@@ -324,6 +324,64 @@ function continueWatchingRowItems(services as Object) as Object
         items.Push(e.item)
     end for
     return items
+end function
+
+' ---------------------------------------------------------------------------
+' Watch List: movies saved to watch later, newest added first. A movie
+' started on this TV shows in Continue Watching instead (not in both); one
+' the provider no longer has is marked so it can be removed. Hidden while
+' there are none.
+
+function watchListRow() as Object
+    return {
+        id: "watchlist"
+        title: "Watch List"
+        emptyText: ""
+        hideWhenEmpty: true
+        items: watchListRowItems
+    }
+end function
+
+function watchListRowItems(services as Object) as Object
+    started = {}
+    for each r in services.store.callFunc("getResume")
+        if r.kind = "movie" then started[toInt(r.id).ToStr()] = true
+    end for
+    missing = services.missingMovies
+    if type(missing) <> "roAssociativeArray" then missing = {}
+    items = []
+    for each w in services.store.callFunc("getWatchList")
+        key = toInt(w.id).ToStr()
+        if not started.DoesExist(key)
+            name = asString(w.name)
+            year = toInt(w.year)
+            if year > 0 and Instr(1, name, year.ToStr()) = 0 then name = name + " (" + year.ToStr() + ")"
+            subtitle = ""
+            if missing.DoesExist(key)
+                subtitle = "Not available"
+            else if toInt(w.mins) > 0
+                subtitle = formatRuntime(toInt(w.mins))
+            end if
+            items.Push({
+                kind: "movie"
+                itemKey: "movie:" + key
+                itemId: toInt(w.id)
+                name: name
+                ext: asString(w.ext)
+                year: year
+                subtitle: subtitle
+            })
+        end if
+    end for
+    return items
+end function
+
+' 125 -> "2 h 5 min", 48 -> "48 min".
+function formatRuntime(minutes as Integer) as String
+    if minutes < 60 then return minutes.ToStr() + " min"
+    hours = minutes \ 60
+    rest = minutes mod 60
+    return hours.ToStr() + " h " + rest.ToStr() + " min"
 end function
 
 ' ---------------------------------------------------------------------------

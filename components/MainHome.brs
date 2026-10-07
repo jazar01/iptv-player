@@ -15,7 +15,7 @@ end sub
 sub refreshHome()
     home = m.sections.home
     if home = invalid then return
-    rows = buildHomeRows({ store: m.store, epg: m.epg, games: m.games, usage: m.usageScores, launchTime: m.launchTime, icons: m.channelIcons })
+    rows = buildHomeRows({ store: m.store, epg: m.epg, games: m.games, usage: m.usageScores, launchTime: m.launchTime, icons: m.channelIcons, missingMovies: m.missingMovies })
     home.rows = rows
     requestChannelIcons(rows)
     if m.rowGrid <> invalid
@@ -109,6 +109,10 @@ end sub
 sub toggleFavorite(channel as Object)
     if asString(channel.kind) = "series"
         toggleSeriesFavorite(channel)
+        return
+    end if
+    if asString(channel.kind) = "movie"
+        toggleWatchList(channel)
         return
     end if
     if channel.streamId = invalid or channel.streamId = 0 then return

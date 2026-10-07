@@ -138,7 +138,7 @@ function createCatalogScreen(kind as String) as Object
     screen.kind = kind
     screen.ObserveField("wantCategory", "onWantCategory")
     screen.ObserveField("selected", "onItemSelected")
-    screen.ObserveField("options", "onCatalogOptions")      ' live only: favorite or channel info
+    screen.ObserveField("options", "onCatalogOptions")      ' favorite / channel info, Favorite Series, Watch List
     screen.ObserveField("visibleChannels", "onCatalogVisible")      ' live: what's on now
     return screen
 end function
@@ -184,6 +184,9 @@ sub onCatalogCategories(res as Object)
         else if kind = "series"
             m.seriesCategories = ordered
             screen.categories = seriesCategoriesWithFavorites(ordered)
+        else if kind = "movie"
+            m.movieCategories = ordered
+            screen.categories = movieCategoriesWithWatchList(ordered)
         else
             screen.categories = ordered
         end if
@@ -202,6 +205,10 @@ sub onWantCategory(event as Object)
     end if
     if id = "__favseries"
         showFavoriteSeriesCategory()
+        return
+    end if
+    if id = "__watchlist"
+        showWatchListCategory()
         return
     end if
     ' Shown-for-this-request: a cached copy delivered now counts; an earlier
@@ -235,7 +242,7 @@ sub onCatalogItems(res as Object)
 end sub
 
 ' Right-hand tags in each catalog: favorites (over local stations), movies in
-' progress, series being watched.
+' progress (over the Watch List), series being watched.
 function catalogTags(kind as String) as Object
     tags = {}
     if kind = "live"
@@ -246,6 +253,9 @@ function catalogTags(kind as String) as Object
             tags[toInt(f.streamId).ToStr()] = "FAVORITE"
         end for
     else if kind = "movie"
+        for each w in m.store.callFunc("getWatchList")
+            tags[toInt(w.id).ToStr()] = "LIST"
+        end for
         for each r in m.store.callFunc("getResume")
             if r.kind = "movie" then tags[toInt(r.id).ToStr()] = "IN PROGRESS"
         end for
@@ -280,6 +290,7 @@ sub resetCatalogs()
     m.seriesInfo = {}
     m.liveCategories = invalid
     m.seriesCategories = invalid
+    m.movieCategories = invalid
 end sub
 
 ' ---------------------------------------------------------------------------
