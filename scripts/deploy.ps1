@@ -126,10 +126,22 @@ function Get-RestoreBundle {
     function Read-Backup([string]$path) {
         $text = (Get-Content $path -Raw).Trim()
         if (-not ($text.StartsWith('{') -and $text.EndsWith('}'))) { throw "$path doesn't look like a backup." }
-        # Must be complete JSON with the saved document's basics. -AsHashtable
-        # keeps keys case-sensitive, so a backup with "seenGames" and
-        # "seengames" both still reads. The raw text is what gets bundled.
-        try { $doc = $text | ConvertFrom-Json -AsHashtable -ErrorAction Stop }
+        # Must be complete JSON with the saved document's basics, read with
+        # case-sensitive keys so a backup with "seenGames" and "seengames"
+        # both still reads: -AsHashtable in PowerShell 7, .NET's serializer
+        # in Windows PowerShell 5.1 (which has no -AsHashtable). The raw text
+        # is what gets bundled.
+        try {
+            if ($PSVersionTable.PSVersion.Major -ge 6) {
+                $doc = $text | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+            } else {
+                Add-Type -AssemblyName System.Web.Extensions
+                $serializer = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+                $serializer.MaxJsonLength = [int]::MaxValue
+                $doc = $serializer.DeserializeObject($text)
+            }
+            if ($null -eq $doc -or -not ($doc -is [System.Collections.IDictionary])) { throw 'not an object' }
+        }
         # The parser's message can quote the file (and its password): not shown.
         catch { throw "$path isn't valid JSON." }
         $keys = @($doc.Keys | ForEach-Object { "$_".ToLower() })
