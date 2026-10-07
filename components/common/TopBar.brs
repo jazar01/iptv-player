@@ -1,6 +1,6 @@
 sub init()
-    m.sections = ["home", "live", "movies", "series", "search", "settings"]
-    names = ["Home", "Live TV", "Movies", "Series", "Search", "Settings"]
+    m.sections = ["home", "live", "guide", "movies", "series", "search", "settings"]
+    names = ["Home", "Live TV", "Guide", "Movies", "Series", "Search", "Settings"]
     m.TAB_WIDTH = 200
     m.TABS_X = 196
 

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Guide: a grid of channels (rows) by time (a 3-hour window, starting at the
+  current half hour), with the focused program's details above it. Up/Down
+  change channel, Left/Right move between programs (the window scrolls at its
+  edges, up to the end of the loaded schedules), OK plays a program that's on
+  now, * picks the channels shown (Favorites, Local stations, a category).
+
+  In:  channels    [{ streamId, name, logo, epgChannelId, archiveDays }]
+       title       what's shown, e.g. "Favorites" or "US | Sports"
+       categories  [{ id, name }] for the chooser ("favorites", "__local" first)
+       schedule    { streamId, listings: [{ start, ends, title, desc }], failed? }
+                   one channel's schedule (MainGuide.brs); applied to its row
+       status      message where the grid goes (loading, empty)
+  Out: wantSchedules  stream IDs of the rows on screen (schedules to fetch)
+       play           the channel to play (OK on a program that's on now)
+       categoryChosen chooser pick: "favorites", "__local" or a category ID
+-->
+<component name="GuideScreen" extends="Group">
+  <interface>
+    <field id="channels" type="array" onChange="onChannels" />
+    <field id="title" type="string" onChange="drawInfo" />
+    <field id="categories" type="array" onChange="onCategories" />
+    <field id="schedule" type="assocarray" onChange="onSchedule" alwaysNotify="true" />
+    <field id="status" type="string" onChange="onStatus" alwaysNotify="true" />
+    <field id="wantSchedules" type="array" />
+    <field id="play" type="assocarray" alwaysNotify="true" />
+    <field id="categoryChosen" type="string" alwaysNotify="true" />
+  </interface>
+
+  <children>
+    <!-- Focused program: what's shown, title, time, description. -->
+    <Label id="showing" translation="[96,140]" width="1300" font="font:SmallBoldSystemFont" color="0x4DA3FFFF" />
+    <Label id="hint" translation="[1100,140]" width="724" horizAlign="right" font="font:SmallestSystemFont" color="0x6E7882FF"
+      text="OK: watch     *: channels shown" />
+    <Label id="progTitle" translation="[96,178]" width="1728" maxLines="1" font="font:MediumBoldSystemFont" color="0xFFFFFFFF" />
+    <Label id="progTime" translation="[96,226]" width="1728" font="font:SmallSystemFont" color="0xC8D0D8FF" />
+    <Label id="progDesc" translation="[96,264]" width="1728" height="64" wrap="true" maxLines="2"
+      font="font:SmallestSystemFont" color="0xA0A8B0FF" />
+
+    <!-- Time header and grid; rows are drawn by GuideScreen.brs. -->
+    <Group id="timeHeader" translation="[0,338]" />
+    <Group id="rows" translation="[0,372]" />
+    <Rectangle id="nowLine" translation="[0,368]" width="3" height="640" color="0xFF5A4ACC" visible="false" />
+    <Label id="status" translation="[96,420]" width="1728" wrap="true" font="font:MediumSystemFont" color="0xA0A8B0FF"
+      text="Loading the guide ..." />
+
+    <!-- Channels chooser (*). -->
+    <Group id="chooser" visible="false">
+      <Rectangle width="1920" height="1080" color="0x000000B0" />
+      <Poster translation="[560,120]" width="800" height="860" uri="pkg:/images/ui/rounded.9.png" blendColor="0x1F2833F8" />
+      <Label translation="[600,150]" width="720" font="font:MediumBoldSystemFont" color="0xFFFFFFFF" text="Channels to show" />
+      <LabelList id="chooserList" translation="[600,210]" itemSize="[720,56]" numRows="13"
+        font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont"
+        color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png"
+        vertFocusAnimationStyle="floatingFocus" />
+    </Group>
+
+    <Timer id="nowTimer" duration="60" repeat="true" />
+    <!-- Ask for the rows' schedules once scrolling pauses. -->
+    <Timer id="wantDelay" duration="0.3" />
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/guide/GuideScreen.brs" />
+</component>

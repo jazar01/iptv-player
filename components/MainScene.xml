@@ -43,4 +43,5 @@
   <script type="text/brightscript" uri="pkg:/components/MainTeams.brs" />
   <script type="text/brightscript" uri="pkg:/components/MainChannelInfo.brs" />
   <script type="text/brightscript" uri="pkg:/components/MainMovies.brs" />
+  <script type="text/brightscript" uri="pkg:/components/MainGuide.brs" />
 </component>

@@ -8,6 +8,7 @@
 '   MainTeams.brs     My Teams games, replays, logos, Settings -> My Teams
 '   MainChannelInfo.brs  channel info panel, * menu in Live TV
 '   MainMovies.brs    movie details page
+'   MainGuide.brs     the Guide (channels-by-time grid)
 '
 ' Launch: with saved credentials, Home draws immediately from saved favorites
 ' and cached data while the login is re-validated in the background. Without
@@ -37,6 +38,7 @@ sub init()
     initSearch()
     initChannelInfo()
     initMovies()
+    initGuide()
 
     m.api.ObserveField("response", "onApiResponse")
     m.api.ObserveField("ready", "onApiReady")
@@ -95,6 +97,8 @@ sub onApiResponse(event as Object)
         onSeriesInfo(res)
     else if res.id = "catalogAll"
         onCatalogAll(res)
+    else if res.id = "guideTable"
+        onGuideTable(res)
     else if res.id = "movieInfo"
         onMovieInfo(res)
     else if res.id = "channelGuide"
@@ -130,6 +134,8 @@ sub showSection(name as String)
         checkConnections("settings")
     else if name = "search"
         onSearchShown(screen)
+    else if name = "guide"
+        onGuideShown(screen)
     else
         onCatalogShown(screen)
     end if
@@ -148,6 +154,8 @@ function createSection(name as String) as Object
         screen.ObserveField("chosen", "onSettingsChosen")
     else if name = "search"
         screen = createSearchScreen()
+    else if name = "guide"
+        screen = createGuideScreen()
     else
         screen = createCatalogScreen(sectionKind(name))
     end if

@@ -38,6 +38,9 @@
        their guideFile (saved to cachefs: by ApiTask for MainScene).
   In:  localsRequest { id, market }
   Out: localsResult  { id, market, ready, items: [get_live_streams-shaped items] } (ABC, CBS, NBC, FOX)
+  In:  guideRequest  { id, categoryId }   the Guide: live categories, and one category's channels
+  Out: guideResult   { id, categoryId, ready, categories: [{ id, name }],
+                       channels: [{ streamId, name, epgChannelId, archiveDays, logo }] }
   In:  iconsRequest  { id, streamIds: [] }   logos for Home channel cards
   Out: iconsResult   { id, ready, icons: { "<streamId>": url or "" } }
   In:  infoRequest   { id, streamId, market, similar }   channel info (similar: also find
@@ -66,6 +69,8 @@
     <field id="marketsResult" type="assocarray" alwaysNotify="true" />
     <field id="localsRequest" type="assocarray" alwaysNotify="true" />
     <field id="localsResult" type="assocarray" alwaysNotify="true" />
+    <field id="guideRequest" type="assocarray" alwaysNotify="true" />
+    <field id="guideResult" type="assocarray" alwaysNotify="true" />
     <field id="iconsRequest" type="assocarray" alwaysNotify="true" />
     <field id="iconsResult" type="assocarray" alwaysNotify="true" />
     <field id="infoRequest" type="assocarray" alwaysNotify="true" />

@@ -18,6 +18,7 @@ sub runLoop()
     m.top.ObserveField("localsRequest", port)
     m.top.ObserveField("infoRequest", port)
     m.top.ObserveField("iconsRequest", port)
+    m.top.ObserveField("guideRequest", port)
     m.top.ready = true
 
     while true
@@ -29,6 +30,8 @@ sub runLoop()
                 m.top.matchResult = matchSaved(msg.GetData())
             else if msg.GetField() = "gamesRequest"
                 m.top.gamesResult = findGames(msg.GetData())
+            else if msg.GetField() = "guideRequest"
+                m.top.guideResult = guideChannels(msg.GetData())
             else if msg.GetField() = "iconsRequest"
                 m.top.iconsResult = channelIcons(msg.GetData())
             else if msg.GetField() = "infoRequest"
@@ -130,6 +133,23 @@ sub resetCategoryLookups()
     m.localStations = invalid
     m.categoryNames = invalid
 end sub
+
+' Guide: the live categories (for its chooser) and, when categoryId is set,
+' that category's channels in catalog order. req: { id, categoryId }
+function guideChannels(req as Object) as Object
+    result = { id: req.id, categoryId: asString(req.categoryId), ready: m.index.live.Count() > 0, categories: [], channels: [] }
+    cats = liveCategories()
+    if cats <> invalid
+        for each c in cats
+            if type(c) = "roAssociativeArray" then result.categories.Push({ id: asString(c.category_id), name: asString(c.category_name) })
+        end for
+    end if
+    if result.categoryId = "" then return result
+    for each e in m.index.live
+        if e.categoryId = result.categoryId then result.channels.Push({ streamId: e.itemId, name: e.name, epgChannelId: e.epgChannelId, archiveDays: e.archiveDays, logo: asString(e.icon) })
+    end for
+    return result
+end function
 
 ' Home channel cards: logo URLs for these stream IDs ("" when the channel
 ' has none or isn't in the list). req: { id, streamIds: [] }

@@ -28,7 +28,7 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   between screens and services and routes ApiTask responses by `id`. Split by
   area: `MainScene.brs` (core, focus, keys), `MainLogin.brs`, `MainHome.brs`,
   `MainCatalog.brs`, `MainPlayback.brs`, `MainSearch.brs`, `MainTeams.brs`,
-  `MainChannelInfo.brs`, `MainMovies.brs`. All share one
+  `MainChannelInfo.brs`, `MainMovies.brs`, `MainGuide.brs`. All share one
   `m`, so `init*()` in each file sets up its own state.
 - `components/services/SearchTask.*`: search index on its own thread. ApiTask
   downloads the full lists to `cachefs:/catalog/all_*.json` (`saveOnly`,
@@ -60,6 +60,9 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   `MainChannelInfo.brs`), PlayerScreen (Video node, live overlay, readable
   errors, progress reports every 30 s and on stop, live pause/rewind via the
   provider's timeshift `.m3u8` archive, kept `archiveLagSeconds` behind live).
+- `components/guide/`: GuideScreen (channels-by-time grid; filled by
+  `MainGuide.brs`: channels from SearchTask `guideRequest`, schedules from
+  `get_simple_data_table`).
 - `components/search/`: SearchScreen (DynamicMiniKeyboard with voice entry,
   plus results list; matching with word forms, synonyms, close spellings and
   an all-but-one fallback is in SearchTask).
@@ -108,6 +111,12 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   escaping. The BrighterScript check can't catch this.
 - Never set `ApiTask.request` before `ready`; MainScene uses `sendRequest()`,
   which queues until then.
+- Moving focus from a child back to its parent screen: call
+  `child.SetFocus(false)` before `parent.SetFocus(true)`. Otherwise the child
+  (even hidden) can keep focus and swallow keys; the Guide's chooser list ate
+  Up/Down this way. Don't change focus inside a list's `itemSelected`
+  handler either; the list takes focus back when its key handling ends
+  (defer it with a short Timer).
 - List item components are recycled: observe content fields with
   `ObserveFieldScoped` and unobserve the old content when `itemContent` changes.
 - Saved document shape and record rules (updatedAt, tombstones, UTC) are in the

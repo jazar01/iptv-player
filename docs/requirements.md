@@ -63,7 +63,7 @@ Settings shows the account's end date (`user_info.exp_date`), and a notice appea
 
 The home screen opens on fixed rows in a fixed order: Favorites, Continue Watching, then Recently Viewed. My Teams sits below Favorites, or first if Settings → My Teams on Home says First; it stays in that place. (It used to jump to the top while a game was live or about to start, which also happened for replays; dropped Oct 2026 in favor of a fixed place.)
 
-The top bar holds Home, Live TV, Movies, Series, Search and Settings, plus a clock. A reference mockup exists for the TV layout at 1920×1080.
+The top bar holds Home, Live TV, Guide, Movies, Series, Search and Settings, plus a clock. A reference mockup exists for the TV layout at 1920×1080.
 
 **Rows**
 
@@ -104,6 +104,15 @@ The top bar holds Home, Live TV, Movies, Series, Search and Settings, plus a clo
 - When a market is set (Settings → Local stations), Live TV's first category is "Local stations - <market>", listing that market's ABC, CBS, NBC and FOX stations. It opens automatically like any first category. With no market set, the category isn't shown.
 - In every Live TV list, those stations are tagged LOCAL. FAVORITE takes priority.
 - The list comes from the search index, so it shows "Loading local stations ..." until the index has loaded. Changing the market updates the category and the tags right away.
+
+## Guide
+
+The Guide (top bar) is a grid of channels by time.
+
+- **Channels:** Favorites by default; `*` picks Local stations or any Live TV category (from the search index, with logos).
+- **Grid:** a 3-hour window from the current half hour, 7 channels at a time, program blocks sized by length, the program on now shaded and a red line at the current time. Above it, the focused program's title, day and time, length ("On now" when it is) and description.
+- **Moving:** Up/Down change channel; Left/Right move between programs, scrolling the window by half hours at its edges, back to now and up to about a day ahead. OK on a program that's on now plays the channel; on a later one it says when it starts.
+- **Data:** each channel's full schedule (`get_simple_data_table`), fetched for the rows on screen and the next screenful once scrolling pauses, at most 4 at a time, kept for an hour (3 hours back to 30 ahead).
 
 ## Search
 
