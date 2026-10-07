@@ -125,6 +125,9 @@ sub onVideoState()
             ' load the next stretch from here; at the archive's edge, rejoin live.
             played = Int(m.video.position)
             reached = m.tsStart + played
+            ' Stretches end on whole minutes: start the next on one (to the
+            ' nearest), so it begins with its first piece.
+            if isTrue(m.play.relayed) then reached = ((reached + 30) \ 60) * 60
             if not m.tsConfirmed
                 timeshiftFailed("ended without playing")
             else if played > 5 and archiveEdge() - reached >= 60
@@ -516,6 +519,7 @@ sub startOver()
         showNote("This program has only just started; the archive hasn't caught up yet.")
         return
     end if
+    start = start - (start mod 60)      ' the minute it began in (see rewindLive)
     print "[player] start over: "; current.title; " from "; formatClock(start)
     m.note = "From the start:  " + asString(current.title)
     startTimeshift(start, 0)
@@ -528,6 +532,10 @@ sub rewindLive()
     end if
     target = archiveEdge()
     if m.mode = "paused" and m.pausedAt < target then target = m.pausedAt
+    ' From the start of that minute: the archive comes in one-minute pieces,
+    ' and playing from inside one means waiting for the piece up to there
+    ' (through the audio fix, up to about 12 s instead of about 5).
+    target = target - (target mod 60)
     start = target - 10 * 60
     startTimeshift(start, target - start)
 end sub
@@ -563,6 +571,10 @@ sub startTimeshift(startUtc as Integer, playStart as Integer)
     ' waiting on segments that don't exist yet.
     minutes = Int((archiveEdge() - m.tsStart) / 60) + 1
     if minutes < 1 then minutes = 1
+    ' Through the audio fix, at most 15 minutes at a time: the provider takes
+    ' longer to build a longer playlist (about 4 s for 11 minutes, 20 s for
+    ' 90), and the next stretch loads when this one ends.
+    if isTrue(m.play.relayed) and minutes > 15 then minutes = 15
     url = t.url.Replace("{start}", serverTimeString(m.tsStart, t.tz)).Replace("{duration}", minutes.ToStr())
     print "[player] timeshift from "; serverTimeString(m.tsStart, t.tz); " server time, "; minutes; " min"
     m.video.enableTrickPlay = true

@@ -1,5 +1,8 @@
 ' Audio-fix relay (see StreamRelay.xml). One request at a time: the Video
-' node asks for the playlist, then segments one after another.
+' node asks for the playlist, then segments one after another. Segment
+' downloads run in the background between requests (pumpAll), and are
+' fixed as the bytes arrive, so a request can be answered from a download
+' that is still going.
 
 sub init()
     m.top.functionName = "relayLoop"
@@ -12,7 +15,10 @@ sub relayLoop()
     m.segOrder = []
     m.nextSeg = 1
     m.logged = {}           ' one-off log lines already printed
-    m.pidFor = {}           ' relay key -> its audio PID (for a segment whose tables come late)
+    m.pidFor = {}           ' stream ID -> its audio PID (live and archive share it)
+    m.downloads = []        ' segment downloads, oldest first (see newDownload)
+    m.nextFile = 1
+    m.PARTS = 12            ' virtual parts per one-minute archive segment
     m.port = CreateObject("roMessagePort")
     m.top.ObserveField("add", m.port)
     m.conns = {}
@@ -22,7 +28,7 @@ sub relayLoop()
         return
     end if
     while true
-        msg = wait(0, m.port)
+        msg = wait(30, m.port)
         if type(msg) = "roSGNodeEvent"
             a = msg.GetData()
             if type(a) = "roAssociativeArray" then m.urls[asString(a.key)] = asString(a.url)
@@ -39,6 +45,7 @@ sub relayLoop()
                 onReadable(id)
             end if
         end if
+        pumpAll()
     end while
 end sub
 
@@ -77,13 +84,21 @@ sub onReadable(id as Integer)
     crlf = Chr(13) + Chr(10)
     if Instr(1, entry.buf, crlf + crlf) = 0 and Len(entry.buf) < 8192 then return
     s.notifyReadable(false)
-    lineEnd = Instr(1, entry.buf, crlf)
-    requestLine = entry.buf
-    if lineEnd > 0 then requestLine = Left(entry.buf, lineEnd - 1)
-    parts = requestLine.Split(" ")
+    lines = entry.buf.Split(crlf)
+    parts = lines[0].Split(" ")
     path = ""
     if parts.Count() >= 2 then path = parts[1]
-    serve(s, path)
+    ' Range: bytes=<from>-<to> (the split archive minute).
+    range = invalid
+    re = CreateObject("roRegex", "^range:\s*bytes=([0-9]+)-([0-9]*)", "i")
+    for each l in lines
+        found = re.Match(l)
+        if found.Count() > 2
+            range = { from: Val(found[1], 10), upto: -1 }
+            if found[2] <> "" then range.upto = Val(found[2], 10)
+        end if
+    end for
+    serve(s, path, range)
     s.close()
     m.conns.Delete(key)
 end sub
@@ -91,10 +106,12 @@ end sub
 ' /p/<key>.m3u8                       live playlist
 ' /t/<key>/<duration>/<start>.m3u8    archive playlist
 ' /s/<key>/<number>.ts                a segment, audio fixed
-sub serve(s as Object, path as String)
+' /v/<key>/<number>/<part>.ts         part of an archive segment (see servePlaylist)
+sub serve(s as Object, path as String, range as Dynamic)
     p = path.Split("?")[0]
     if Left(p, 3) = "/p/" and Right(p, 5) = ".m3u8"
         key = Mid(p, 4, Len(p) - 8)
+        dropDownloads("t")      ' back to live: archive downloads aren't needed
         servePlaylist(s, asString(m.urls[key]), key)
     else if Left(p, 3) = "/t/" and Right(p, 5) = ".m3u8"
         bits = Mid(p, 4, Len(p) - 8).Split("/")
@@ -102,11 +119,19 @@ sub serve(s as Object, path as String)
         if bits.Count() = 3 then template = asString(m.urls[bits[0]])
         url = ""
         if template <> "" then url = template.Replace("{duration}", bits[1]).Replace("{start}", bits[2])
+        dropDownloads("")       ' a new archive point: earlier downloads are stale
         servePlaylist(s, url, bits[0])
+    else if Left(p, 3) = "/v/"
+        bits = Mid(p, 4).Split("/")
+        if bits.Count() = 3
+            servePart(s, bits[0], asString(m.segUrls[bits[1]]), Val(bits[2].Split(".")[0], 10))
+        else
+            sendStatus(s, 404)
+        end if
     else if Left(p, 3) = "/s/"
         bits = Mid(p, 4).Split("/")
         if bits.Count() = 2
-            serveSegment(s, bits[0], asString(m.segUrls[bits[1].Split(".")[0]]))
+            serveSegment(s, bits[0], asString(m.segUrls[bits[1].Split(".")[0]]), range)
         else
             sendStatus(s, 404)
         end if
@@ -115,6 +140,14 @@ sub serve(s as Object, path as String)
     end if
 end sub
 
+' ---------------------------------------------------------------------------
+' Playlists
+
+' Live: segments pointed at the relay. Archive: each one-minute segment
+' (about 20 MB) is listed as PARTS virtual segments of a few seconds
+' (/v/<key>/<number>/<part>.ts), and the target duration lowered to match,
+' so the player starts after the first part instead of a whole minute. The
+' relay still downloads each minute once and serves the parts from it.
 sub servePlaylist(s as Object, url as String, key as String)
     if url = ""
         sendStatus(s, 404)
@@ -130,16 +163,41 @@ sub servePlaylist(s as Object, url as String, key as String)
         m.logged["pl" + key] = true
         print "[relay] "; key; " playlist ok ("; r.redirects; " redirect(s) followed)"
     end if
+    archive = (Left(key, 1) = "t")
+    count = m.PARTS
+    longest = 0
     out = []
     for each line in r.body.Split(Chr(10))
         l = line.Trim()
         if l = "" or Left(l, 1) = "#"
             out.Push(l)
         else
-            out.Push("/s/" + key + "/" + segmentNumber(resolveUrl(r.finalUrl, l)) + ".ts")
+            number = segmentNumber(resolveUrl(r.finalUrl, l))
+            last = out.Count() - 1
+            if archive and last >= 0 and Left(out[last], 8) = "#EXTINF:"
+                seconds = Val(out[last].Mid(8).Split(",")[0])
+                out.Pop()
+                partMs = Int(seconds * 1000 / count)
+                if partMs > longest then longest = partMs
+                duration = (partMs \ 1000).ToStr() + "." + Right("00" + (partMs mod 1000).ToStr(), 3)
+                for p = 0 to count - 1
+                    out.Push("#EXTINF:" + duration + ",")
+                    out.Push("/v/" + key + "/" + number + "/" + p.ToStr() + ".ts")
+                end for
+            else
+                out.Push("/s/" + key + "/" + number + ".ts")
+            end if
         end if
     end for
     text = out.Join(Chr(10))
+    if longest > 0
+        target = (longest + 999) \ 1000
+        text = CreateObject("roRegex", "#EXT-X-TARGETDURATION:[0-9]+", "").Replace(text, "#EXT-X-TARGETDURATION:" + target.ToStr())
+        if not m.logged.DoesExist("split")
+            m.logged["split"] = true
+            print "[relay] "; key; " archive minutes split into "; count; " parts of about "; target; " s"
+        end if
+    end if
     sendBody(s, 200, "application/vnd.apple.mpegurl", textBytes(text))
 end sub
 
@@ -161,123 +219,281 @@ function segmentNumber(url as String) as String
     return number
 end function
 
-' A segment, passed on while it downloads: the download goes to a temporary
-' file, and whatever has arrived (in whole TS packets) is fixed and sent, so
-' the player can start long before a one-minute archive segment is complete.
-' Plain-http segments (the archive's edge server) are read straight off a
-' socket as they arrive; roUrlTransfer (https, and any fallback) only
-' writes its file at the end.
-sub serveSegment(s as Object, key as String, url as String)
+' ---------------------------------------------------------------------------
+' Segments
+
+' The whole segment, or the requested byte range, sent as the download
+' (already running, or started now) gets that far.
+sub serveSegment(s as Object, key as String, url as String, range as Dynamic)
     if url = ""
         sendStatus(s, 404)
         return
     end if
-    file = "tmp:/relay_segment.ts"
-    DeleteFile(file)
-    port = CreateObject("roMessagePort")
-    src = invalid
-    if LCase(Left(url, 7)) = "http://" then src = openPlainHttp(url, port)
-    x = invalid
-    if src = invalid
-        x = newTransfer(url)
-        x.SetMessagePort(port)
-        x.AsyncGetToFile(file)
+    d = findDownload(url)
+    if d = invalid then d = newDownload(key, url)
+    sentTo = 0
+    last = -1               ' last byte to send (-1: to the end)
+    if range <> invalid and d.length > 0
+        sentTo = range.from
+        last = d.length - 1
+        if range.upto >= 0 and range.upto < last then last = range.upto
     end if
-    fs = CreateObject("roFileSystem")
-    fixer = { pid: -1, synced: false, skip: 0, have: 0, b3: 0, b4: 0, fixed: 0 }
-    first = -1              ' where whole packets begin
-    sent = 0                ' bytes of the file sent so far
-    started = false         ' response headers sent
-    done = false
-    code = 0
+    started = false
     clock = CreateObject("roTimespan")
-    firstSendMs = -1
-    while true
-        ev = wait(40, port)
-        if src <> invalid
-            pumpSocket(src, file)
-            done = src.done
-            code = 200
-        else if ev <> invalid and type(ev) = "roUrlEvent"
-            done = true
-            code = ev.GetResponseCode()
+    while clock.TotalMilliseconds() < 120000
+        pumpDownload(d)
+        if d.failed and not started
+            sendStatus(s, 502)
+            return
         end if
-        if done and code <> 200
-            print "[relay] segment failed: HTTP "; code
-            if not started then sendStatus(s, 502)
-            exit while
-        end if
-        if not done and clock.TotalMilliseconds() > 120000
-            print "[relay] segment timed out"
-            if x <> invalid then x.AsyncCancel()
-            exit while
-        end if
-        size = 0
-        if src <> invalid
-            size = src.written
-        else
-            info = fs.Stat(file)
-            if type(info) = "roAssociativeArray" then size = toInt(info.size)
-        end if
-        if first < 0 and (size >= 2000 or (done and size > 0))
-            first = packetStart(readBytes(file, 0, size))
-            if first < 0 then first = -2    ' not MPEG-TS packets: passed on as is
-        end if
-        ' The audio stream's PID, from the start of the data (the tables
-        ' come round several times a second).
-        if first >= 0 and fixer.pid = -1
-            fixer.pid = aacPid(readBytes(file, 0, size), first)
-            if fixer.pid < 0
-                fixer.pid = -1
-                if done or size - first > 3000000
-                    fixer.pid = -2      ' no AAC stream found: nothing to fix
-                    known = m.pidFor[key]
-                    if known <> invalid then fixer.pid = known
+        available = d.ready
+        if last >= 0 and available > last + 1 then available = last + 1
+        if available > sentTo
+            if not started
+                started = true
+                if last >= 0 and range <> invalid and isTrue(range.whole)
+                    sendHead(s, 200, "video/mp2t", last - sentTo + 1)     ' a virtual part: a whole file to the player
+                else if last >= 0
+                    sendRangeHead(s, sentTo, last, d.length)
+                else
+                    sendHead(s, 200, "video/mp2t", d.length)
                 end if
-            else
-                m.pidFor[key] = fixer.pid
             end if
+            sendAll(s, readBytes(d.out, sentTo, available - sentTo))
+            sentTo = available
         end if
-        if first = -2 or (first >= 0 and fixer.pid <> -1)
-            upto = size
-            if not done and first >= 0 then upto = first + ((size - first) \ 188) * 188
-            if upto > sent
-                chunk = readBytes(file, sent, upto - sent)
-                if fixer.pid >= 0
-                    from = 0
-                    if sent < first then from = first - sent
-                    fixPackets(fixer, chunk, from)
-                end if
-                if not started
-                    sendHead(s, 200, "video/mp2t", -1)
-                    started = true
-                    firstSendMs = clock.TotalMilliseconds()
-                end if
-                sendAll(s, chunk)
-                sent = upto
-            end if
-        end if
-        if done and sent >= size then exit while
+        if last >= 0 and sentTo > last then exit while
+        if d.done and sentTo >= d.ready then exit while
+        if d.failed then exit while
+        if available <= sentTo then sleep(10)
     end while
-    if src <> invalid then src.sock.close()
-    DeleteFile(file)
-    if started and not m.logged.DoesExist("seg" + Left(key, 1))
+    if not m.logged.DoesExist("seg" + Left(key, 1)) and d.done
         m.logged["seg" + Left(key, 1)] = true
-        how = "download"
-        if src <> invalid then how = "socket"
-        print "[relay] "; key; " first segment ("; how; "): "; sent; " bytes, sending began after "; firstSendMs; " ms, "; fixer.fixed; " audio headers fixed, done in "; clock.TotalMilliseconds(); " ms"
-    end if
-    if started and fixer.fixed = 0 and not m.logged.DoesExist("nofix")
-        m.logged["nofix"] = true
-        print "[relay] a segment had no audio headers to fix ("; sent; " bytes)"
+        print "[relay] "; key; " first segment: "; d.ready; " bytes, "; d.fixer.fixed; " audio headers fixed"
     end if
 end sub
 
+' One of the PARTS pieces of an archive segment: bytes cut at whole packets
+' in proportion to the segment's size (known once its download has the
+' response headers). Without a size (not plain http), part 0 is the whole
+' segment and the others are empty.
+sub servePart(s as Object, key as String, url as String, part as Integer)
+    if url = ""
+        sendStatus(s, 404)
+        return
+    end if
+    d = findDownload(url)
+    if d = invalid then d = newDownload(key, url)
+    clock = CreateObject("roTimespan")
+    while d.align = -1 and not d.done and clock.TotalMilliseconds() < 5000
+        pumpDownload(d)
+        sleep(5)
+    end while
+    if d.length <= 0
+        if part = 0
+            serveSegment(s, key, url, invalid)
+        else
+            sendBody(s, 200, "video/mp2t", CreateObject("roByteArray"))
+        end if
+        return
+    end if
+    first = d.align
+    if first < 0 then first = 0
+    startAt = partBoundary(d.length, first, part)
+    endAt = partBoundary(d.length, first, part + 1)
+    if endAt <= startAt
+        sendBody(s, 200, "video/mp2t", CreateObject("roByteArray"))
+        return
+    end if
+    serveSegment(s, key, url, { from: startAt, upto: endAt - 1, whole: true })
+end sub
+
+' Where part k begins: 0 for the first, the size after the last, and
+' otherwise a whole packet in proportion.
+function partBoundary(length as Integer, first as Integer, k as Integer) as Integer
+    if k <= 0 then return 0
+    if k >= m.PARTS then return length
+    return first + ((Int((length - first) / m.PARTS * k)) \ 188) * 188
+end function
+
+' A segment download: plain http is read off a socket as it arrives (the
+' archive's edge server); anything else through roUrlTransfer, which only
+' has the file at the end. Either way the fixed bytes go to `out`, and
+' `ready` says how much of it can be served.
+function newDownload(key as String, url as String) as Object
+    while m.downloads.Count() >= 2      ' archive segments are ~20 MB each in tmp:
+        closeDownload(m.downloads.Shift())
+    end while
+    streamId = Mid(key, 2)
+    fixer = { pid: -1, pmt: -1, synced: false, skip: 0, have: 0, b3: 0, b4: 0, fixed: 0 }
+    known = m.pidFor[streamId]
+    if known <> invalid then fixer.pid = known
+    d = {
+        key: key
+        streamId: streamId
+        url: url
+        out: "tmp:/relay_" + m.nextFile.ToStr() + ".ts"
+        raw: "tmp:/relay_" + m.nextFile.ToStr() + "_raw.ts"
+        ready: 0            ' bytes of `out` that can be served
+        length: -1          ' the segment's size, when the server says
+        align: -1           ' where whole TS packets begin (-2: not TS)
+        done: false
+        failed: false
+        fixer: fixer
+        src: invalid        ' socket source (openPlainHttp)
+        xfer: invalid       ' roUrlTransfer source
+        port: invalid
+        buf: invalid        ' socket: received bytes not yet written
+        pend: 0
+    }
+    m.nextFile = m.nextFile + 1
+    DeleteFile(d.out)
+    if LCase(Left(url, 7)) = "http://" then d.src = openPlainHttp(url)
+    if d.src <> invalid
+        d.length = d.src.length
+        d.buf = CreateObject("roByteArray")
+        d.buf[65536 + 188] = 0
+    else
+        DeleteFile(d.raw)
+        d.port = CreateObject("roMessagePort")
+        d.xfer = newTransfer(url)
+        d.xfer.SetMessagePort(d.port)
+        d.xfer.AsyncGetToFile(d.raw)
+    end if
+    m.downloads.Push(d)
+    return d
+end function
+
+function findDownload(url as String) as Dynamic
+    for each d in m.downloads
+        if d.url = url then return d
+    end for
+    return invalid
+end function
+
+sub pumpAll()
+    for each d in m.downloads
+        if not d.done then pumpDownload(d)
+    end for
+end sub
+
+' prefix: drop downloads whose key starts with it ("" for all).
+sub dropDownloads(prefix as String)
+    kept = []
+    for each d in m.downloads
+        if prefix = "" or Left(d.key, Len(prefix)) = prefix then closeDownload(d) else kept.Push(d)
+    end for
+    m.downloads = kept
+end sub
+
+sub closeDownload(d as Object)
+    if d.src <> invalid then d.src.sock.close()
+    if d.xfer <> invalid and not d.done then d.xfer.AsyncCancel()
+    DeleteFile(d.out)
+    DeleteFile(d.raw)
+end sub
+
+sub pumpDownload(d as Object)
+    if d.done then return
+    if d.src <> invalid
+        pumpSocketDownload(d)
+    else
+        ev = d.port.GetMessage()
+        if ev <> invalid and type(ev) = "roUrlEvent"
+            if ev.GetResponseCode() <> 200
+                print "[relay] segment failed: HTTP "; ev.GetResponseCode()
+                d.failed = true
+                d.done = true
+                return
+            end if
+            ' The whole file at once: fix it and make it the output.
+            data = CreateObject("roByteArray")
+            data.ReadFile(d.raw)
+            DeleteFile(d.raw)
+            d.align = packetStart(data, data.Count())
+            if d.align >= 0 then fixPackets(d, data, d.align, data.Count())
+            data.WriteFile(d.out)
+            d.length = data.Count()
+            d.ready = d.length
+            d.done = true
+        end if
+    end if
+end sub
+
+' Reads what has arrived into d.buf after any partial packet left from last
+' time, fixes the whole packets and appends them to the output; the partial
+' packet at the end (under 188 bytes) moves to the front for next time.
+sub pumpSocketDownload(d as Object)
+    src = d.src
+    n = src.sock.getCountRcvBuf()
+    closed = false
+    if n > 0
+        room = 65536 + 188 - d.pend
+        if n > room then n = room
+        got = src.sock.receive(d.buf, d.pend, n)
+        if got > 0
+            d.pend = d.pend + got
+            src.written = src.written + got
+            src.idle.Mark()
+        end if
+    else if src.length < 0 and src.sock.isReadable()
+        ' No length given: only a read that returns nothing means closed
+        ' (Roku can say "readable" before more data arrives).
+        got = src.sock.receive(d.buf, d.pend, 1)
+        if got = 1
+            d.pend = d.pend + 1
+            src.written = src.written + 1
+        else if got = 0
+            closed = true
+        end if
+    end if
+    finished = closed or (src.length >= 0 and src.written >= src.length)
+    if not finished and src.idle.TotalMilliseconds() > 30000
+        print "[relay] socket download stalled"
+        finished = true
+    end if
+
+    if d.align = -1 and (d.pend >= 564 or finished)
+        d.align = packetStart(d.buf, d.pend)
+        if d.align < 0 then d.align = -2
+        if d.align > 0
+            ' Bytes before the first whole packet go out as they are.
+            d.buf.AppendFile(d.out, 0, d.align)
+            d.ready = d.ready + d.align
+            shiftBuffer(d, d.align)
+        end if
+    end if
+    if d.align <> -1 and d.pend > 0
+        whole = d.pend
+        if d.align >= 0 and not finished then whole = (d.pend \ 188) * 188
+        if whole > 0
+            if d.align >= 0 then fixPackets(d, d.buf, 0, whole)
+            d.buf.AppendFile(d.out, 0, whole)
+            d.ready = d.ready + whole
+            shiftBuffer(d, whole)
+        end if
+    end if
+    if finished
+        d.done = true
+        src.sock.close()
+    end if
+end sub
+
+' Drops the first `count` pending bytes (the rest is under 188 bytes, or
+' a buffer's worth only right after the alignment step).
+sub shiftBuffer(d as Object, count as Integer)
+    rest = d.pend - count
+    for i = 0 to rest - 1
+        d.buf[i] = d.buf[count + i]
+    end for
+    d.pend = rest
+end sub
+
 ' GET over a plain socket, so the body can be read as it arrives. Returns
-' { sock, buf, written, length, done, idle } once a 200 response's headers
-' are in, or invalid (redirect, error, chunked body, can't connect) to use
+' { sock, written, length, idle } once a 200 response's headers are in, or
+' invalid (redirect, error, chunked body, can't connect) to use
 ' roUrlTransfer instead.
-function openPlainHttp(url as String, port as Object) as Dynamic
+function openPlainHttp(url as String) as Dynamic
     rest = Mid(url, 8)
     slash = Instr(1, rest, "/")
     hostPort = rest
@@ -320,8 +536,6 @@ function openPlainHttp(url as String, port as Object) as Dynamic
     while Right(head, 4) <> crlf + crlf and Len(head) < 16384 and clock.TotalMilliseconds() < 10000
         if sock.getCountRcvBuf() > 0
             if sock.receive(one, 0, 1) = 1 then head = head + Chr(one[0])
-        else if sock.isReadable()
-            exit while      ' closed before the headers ended
         else
             sleep(5)
         end if
@@ -339,47 +553,8 @@ function openPlainHttp(url as String, port as Object) as Dynamic
     length = -1
     found = CreateObject("roRegex", "content-length:\s*([0-9]+)", "").Match(lower)
     if found.Count() > 1 then length = Val(found[1], 10)
-    buf = CreateObject("roByteArray")
-    buf[65535] = 0
-    sock.setMessagePort(port)
-    sock.notifyReadable(true)
-    return { sock: sock, buf: buf, written: 0, length: length, done: false, idle: CreateObject("roTimespan") }
+    return { sock: sock, written: 0, length: length, idle: CreateObject("roTimespan") }
 end function
-
-' Moves whatever has arrived on the socket to the end of the file.
-sub pumpSocket(src as Object, file as String)
-    if src.done then return
-    n = src.sock.getCountRcvBuf()
-    if n > 0
-        while n > 0
-            k = n
-            if k > 65536 then k = 65536
-            got = src.sock.receive(src.buf, 0, k)
-            if got <= 0 then exit while
-            src.buf.AppendFile(file, 0, got)
-            src.written = src.written + got
-            n = src.sock.getCountRcvBuf()
-        end while
-        src.idle.Mark()
-    else if src.length < 0 and src.sock.isReadable()
-        ' No length given: the body ends when the server closes. Roku can
-        ' report "readable" with no data before more arrives, so only a
-        ' read that returns nothing counts as closed.
-        got = src.sock.receive(src.buf, 0, 1)
-        if got = 1
-            src.buf.AppendFile(file, 0, 1)
-            src.written = src.written + 1
-            src.idle.Mark()
-        else if got = 0
-            src.done = true
-        end if
-    end if
-    if src.length >= 0 and src.written >= src.length then src.done = true
-    if src.idle.TotalMilliseconds() > 30000
-        print "[relay] socket fetch stalled"
-        src.done = true
-    end if
-end sub
 
 ' Like roUrlTransfer's ("Roku/DVP-14.0 (...)"): the provider answers 404 to
 ' requests that don't look like they come from a Roku.
@@ -396,23 +571,25 @@ end function
 
 ' ---------------------------------------------------------------------------
 ' MPEG-TS: in the AAC (ADTS) stream, set each frame header's profile field
-' from Main (0) to LC (1). Works on consecutive chunks of whole packets: the
-' fixer carries the position in the current frame from one chunk to the
+' from Main (0) to LC (1). Works on consecutive runs of whole packets: the
+' fixer carries the position in the current frame from one run to the
 ' next, and header bytes are judged as they go by (the profile is the third
-' byte, fixed before the length bytes are even seen).
-' fixer: { pid, synced, skip, have, b3, b4, fixed }
+' byte, fixed before the length bytes are even seen). The audio PID comes
+' from the PAT and PMT as they pass, or from the stream's earlier segments.
+' d.fixer: { pid, pmt, synced, skip, have, b3, b4, fixed }
 
-sub fixPackets(f as Object, data as Object, from as Integer)
-    total = data.Count()
-    pid = f.pid
+sub fixPackets(d as Object, data as Object, from as Integer, upto as Integer)
+    f = d.fixer
     p = from
-    while p + 188 <= total
-        if data[p] = &h47 and (((data[p + 1] and &h1F) << 8) or data[p + 2]) = pid
+    while p + 188 <= upto
+        if data[p] = &h47
+            pid = ((data[p + 1] and &h1F) << 8) or data[p + 2]
             afc = (data[p + 3] >> 4) and 3
-            if afc = 1 or afc = 3
+            pusi = (data[p + 1] and &h40) <> 0
+            if (afc = 1 or afc = 3) and pid = f.pid and f.pid >= 0
                 off = p + 4
                 if afc = 3 then off = off + 1 + data[off]
-                if (data[p + 1] and &h40) <> 0
+                if pusi
                     ' A PES packet starts here, and with it a new frame.
                     off = off + 9 + data[off + 8]
                     f.synced = true
@@ -453,61 +630,62 @@ sub fixPackets(f as Object, data as Object, from as Integer)
                         i = i + 1
                     end if
                 end while
+            else if pusi and (afc = 1 or afc = 3) and (pid = 0 or pid = f.pmt)
+                readTables(d, data, p, pid, afc)
             end if
         end if
         p = p + 188
     end while
 end sub
 
-' Where whole TS packets begin: live segments start with one, but archive
-' segments are cut from a recording at any byte (one began at byte 87).
-function packetStart(data as Object) as Integer
-    total = data.Count()
+' PAT (PID 0) -> the PMT's PID; PMT -> the first ADTS AAC stream (type 0x0F).
+sub readTables(d as Object, data as Object, p as Integer, pid as Integer, afc as Integer)
+    f = d.fixer
+    off = p + 4
+    if afc = 3 then off = off + 1 + data[off]
+    if off >= p + 180 then return
+    o = off + 1 + data[off]
+    if o + 12 > p + 188 then return
+    sectionLen = ((data[o + 1] and &h0F) << 8) or data[o + 2]
+    tableEnd = o + 3 + sectionLen - 4
+    if tableEnd > p + 188 then tableEnd = p + 188
+    if pid = 0
+        q = o + 8
+        while q + 4 <= tableEnd
+            program = (data[q] << 8) or data[q + 1]
+            if program <> 0
+                f.pmt = ((data[q + 2] and &h1F) << 8) or data[q + 3]
+                return
+            end if
+            q = q + 4
+        end while
+    else
+        infoLen = ((data[o + 10] and &h0F) << 8) or data[o + 11]
+        q = o + 12 + infoLen
+        while q + 5 <= tableEnd
+            if data[q] = &h0F
+                audio = ((data[q + 1] and &h1F) << 8) or data[q + 2]
+                if f.pid <> audio
+                    f.pid = audio
+                    f.synced = false
+                    m.pidFor[d.streamId] = audio
+                end if
+                return
+            end if
+            q = q + 5 + (((data[q + 3] and &h0F) << 8) or data[q + 4])
+        end while
+    end if
+end sub
+
+' Where whole TS packets begin among the first `count` bytes: live segments
+' start with one, but archive segments are cut from a recording at any byte
+' (one began at byte 87). -1 if not found.
+function packetStart(data as Object, count as Integer) as Integer
     for k = 0 to 187
-        if k + 376 < total
+        if k + 376 < count
             if data[k] = &h47 and data[k + 188] = &h47 and data[k + 376] = &h47 then return k
         end if
     end for
-    return -1
-end function
-
-' The PID of the first ADTS AAC stream (type 0x0F), from the PAT and PMT.
-function aacPid(data as Object, first as Integer) as Integer
-    total = data.Count()
-    pmt = -1
-    p = first
-    while p + 188 <= total and p < first + 188 * 2000
-        if data[p] = &h47 and (data[p + 1] and &h40) <> 0
-            pid = ((data[p + 1] and &h1F) << 8) or data[p + 2]
-            afc = (data[p + 3] >> 4) and 3
-            off = p + 4
-            if afc = 3 then off = off + 1 + data[off]
-            if (afc = 1 or afc = 3) and off < p + 180
-                o = off + 1 + data[off]
-                sectionLen = ((data[o + 1] and &h0F) << 8) or data[o + 2]
-                if pid = 0 and pmt < 0
-                    q = o + 8
-                    while q + 4 <= o + 3 + sectionLen - 4 and q + 4 <= p + 188
-                        program = (data[q] << 8) or data[q + 1]
-                        if program <> 0
-                            pmt = ((data[q + 2] and &h1F) << 8) or data[q + 3]
-                            exit while
-                        end if
-                        q = q + 4
-                    end while
-                else if pid = pmt and pmt >= 0
-                    infoLen = ((data[o + 10] and &h0F) << 8) or data[o + 11]
-                    q = o + 12 + infoLen
-                    while q + 5 <= o + 3 + sectionLen - 4 and q + 5 <= p + 188
-                        if data[q] = &h0F then return ((data[q + 1] and &h1F) << 8) or data[q + 2]
-                        q = q + 5 + (((data[q + 3] and &h0F) << 8) or data[q + 4])
-                    end while
-                    return -1
-                end if
-            end if
-        end if
-        p = p + 188
-    end while
     return -1
 end function
 
@@ -600,6 +778,13 @@ sub sendHead(s as Object, code as Integer, contentType as String, length as Inte
     head = "HTTP/1.1 " + code.ToStr() + " " + reason + crlf + "Content-Type: " + contentType + crlf
     if length >= 0 then head = head + "Content-Length: " + length.ToStr() + crlf
     head = head + "Connection: close" + crlf + crlf
+    sendAll(s, textBytes(head))
+end sub
+
+sub sendRangeHead(s as Object, first as Integer, last as Integer, total as Integer)
+    crlf = Chr(13) + Chr(10)
+    length = last - first + 1
+    head = "HTTP/1.1 206 Partial Content" + crlf + "Content-Type: video/mp2t" + crlf + "Content-Range: bytes " + first.ToStr() + "-" + last.ToStr() + "/" + total.ToStr() + crlf + "Content-Length: " + length.ToStr() + crlf + "Connection: close" + crlf + crlf
     sendAll(s, textBytes(head))
 end sub
 

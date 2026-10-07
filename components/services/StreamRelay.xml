@@ -10,7 +10,10 @@
   Video node plays http://127.0.0.1:<port>/p/<key>.m3u8; the relay fetches
   the provider's playlist, points its segments back at itself, and serves
   each segment with its audio headers corrected. Archive (timeshift)
-  playlists work the same way through /t/<key>/<duration>/<start>.m3u8.
+  playlists work the same way through /t/<key>/<duration>/<start>.m3u8,
+  with each one-minute segment listed as 12 parts of about 5 s
+  (/v/<key>/<number>/<part>.ts) so playback starts after the first part;
+  plain-http segments are read off a socket and fixed as they arrive.
 
   This and the Video node are the only HTTP outside ApiTask: segments are
   binary, too big for a field, and must be patched on the way through.
