@@ -8,8 +8,9 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
 ## Rules
 
 - All saved state goes through StateStore; all HTTP goes through ApiTask.
-  (Exceptions: the Video node fetches streams itself, and Poster nodes load
-  My Teams logos from their URL.)
+  (Exceptions: the Video node fetches streams itself, Poster nodes load
+  logos from their URL, and StreamRelay fetches live and archive playlists
+  and segments for streams it repairs.)
 - Provider parsing rules are data, not code.
 - Screens talk only to MainScene (interface fields in, output fields out). They
   never call ApiTask or StateStore directly.
@@ -44,6 +45,12 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   through `friendlyRequestError(res)` (Utils), never raw error text. Optional
   `cacheFile`/`cacheFirst` caches catalog responses in `cachefs:/catalog/`.
   Full request/response shape is in `ApiTask.xml`.
+- `components/services/StreamRelay.*`: audio fix for live streams Roku
+  rejects ("Unsupported AAC stream": HE-AAC whose ADTS headers say Main
+  profile). A local HTTP server on 127.0.0.1 serves the playlist with its
+  segments pointed back at itself and rewrites each audio header to LC.
+  MainPlayback sends a stream through it after that error (`relayStreams`,
+  4 hours); if it fails there too, `badStreams` and other copies.
 - `components/services/EpgService.*`: now/next via `get_short_epg`, only for
   channels on screen; cached until the current program ends. Title cleanup
   rules come from `data/guide-rules.json`.

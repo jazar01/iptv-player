@@ -18,6 +18,13 @@ sub initPlayback()
     m.badStreams = {}
     m.autoCopyFor = invalid     ' { streamId, name, item, afterFailure } waiting for its copies
 
+    ' The audio fix (StreamRelay): streams that failed with "Unsupported AAC
+    ' stream" play through it, streamId -> until (UTC seconds). Only if the
+    ' relayed stream fails too is it marked bad (badStreams) and a copy tried.
+    m.relayStreams = {}
+    m.relay = CreateObject("roSGNode", "StreamRelay")
+    m.relay.control = "RUN"
+
     ' Up/Down while watching: the channel shows at once, but its stream
     ' loads only once the presses stop, so skipping through channels
     ' doesn't open (and leave counting against the account) a stream each.
@@ -52,6 +59,7 @@ sub playLive(item as Object)
         stepFrom: toInt(item.stepFrom)     ' a copy played for this channel: Up/Down and the label go by it
     }
     if archiveDays > 0 then play.timeshift = timeshiftInfo(id)
+    if needsRelay(id) then relayPlay(play)
     startPlayer(play, 0)
 end sub
 
@@ -314,7 +322,18 @@ sub onPlayerFailed(event as Object)
     m.failCode = toInt(failure.code)
     ' Audio this Roku can't decode: remember the stream and go straight to a
     ' working copy (no connection check: the stream did connect).
-    if isTrue(failure.audioUnsupported) and m.playing <> invalid and m.playing.kind = "live"
+    if m.playing <> invalid and m.playing.kind = "live" and isTrue(failure.audioUnsupported) and not isTrue(m.playing.relayed) and m.relay.port > 0
+        ' First time: play it again through the audio fix.
+        id = toInt(m.playing.id)
+        m.relayStreams[id.ToStr()] = nowSeconds() + 4 * 3600
+        print "[main] stream "; id; " has audio Roku rejects; playing it through the audio fix"
+        playLive({ streamId: id, name: m.playing.name, epgChannelId: m.playing.epgChannelId, archiveDays: m.playing.archiveDays, stepFrom: m.playing.stepFrom, direct: true, note: "This channel's audio is being repaired for Roku." })
+        return
+    end if
+    if m.playing <> invalid and m.playing.kind = "live" and (isTrue(failure.audioUnsupported) or isTrue(m.playing.relayed))
+        ' Failed even through the audio fix (or the fix isn't running): mark
+        ' it bad and go to a working copy.
+        m.relayStreams.Delete(toInt(m.playing.id).ToStr())
         markStreamBad(m.playing.id)
         findPlayableCopy({ streamId: m.playing.id, name: m.playing.name, epgChannelId: m.playing.epgChannelId, archiveDays: m.playing.archiveDays, stepFrom: m.playing.stepFrom }, true)
         return
@@ -331,6 +350,27 @@ sub markStreamBad(streamId as Dynamic)
     key = toInt(streamId).ToStr()
     m.badStreams[key] = nowSeconds() + 4 * 3600
     print "[main] stream "; key; " has audio this Roku can't decode; skipping it for 4 hours"
+end sub
+
+function needsRelay(streamId as Dynamic) as Boolean
+    until = m.relayStreams[toInt(streamId).ToStr()]
+    return until <> invalid and nowSeconds() < until and m.relay.port > 0
+end function
+
+' Points a live play request (and its archive) at the audio fix. The relay
+' keeps the provider URLs (with the password); the player only sees
+' 127.0.0.1 addresses.
+sub relayPlay(play as Object)
+    base = "http://127.0.0.1:" + m.relay.port.ToStr()
+    key = "c" + play.id.ToStr()
+    m.relay.add = { key: key, url: play.url }
+    play.url = base + "/p/" + key + ".m3u8"
+    play.relayed = true
+    if type(play.timeshift) = "roAssociativeArray"
+        tkey = "t" + play.id.ToStr()
+        m.relay.add = { key: tkey, url: play.timeshift.url }
+        play.timeshift.url = base + "/t/" + tkey + "/{duration}/{start}.m3u8"
+    end if
 end sub
 
 function isStreamBad(streamId as Dynamic) as Boolean

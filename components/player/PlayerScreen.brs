@@ -97,6 +97,7 @@ end sub
 sub loadVideo(url as String, streamFormat as String, live as Boolean, playStart as Integer)
     m.video.control = "stop"
     m.errored = false
+    m.playedSinceLoad = false   ' a late "finished" from the previous stream is ignored
     c = CreateObject("roSGNode", "ContentNode")
     c.url = url
     c.title = asString(m.play.name)
@@ -112,6 +113,7 @@ sub onVideoState()
     if m.play = invalid then return
     watchStall(state)
 
+    if state = "playing" then m.playedSinceLoad = true
     if m.mode = "timeshift"
         if state = "playing" and not m.tsConfirmed
             m.tsConfirmed = true
@@ -144,15 +146,16 @@ sub onVideoState()
         ' stream will never play on this Roku, however often it's retried.
         audioUnsupported = (code = -5 and Instr(1, LCase(detail), "unsupported aac") > 0)
         message = friendlyError(code, httpStatus(detail))
-        if audioUnsupported and m.play.kind = "live" then message = "This copy of the channel sends audio your Roku can't decode. Looking for another copy ..."
+        if audioUnsupported and m.play.kind = "live" then message = "This channel sends audio your Roku can't decode as it is. Trying to fix it ..."
         m.errorMessage.text = message
         m.errorPanel.visible = true
         m.liveOverlay.visible = false
         m.saveTimer.control = "stop"
         m.top.failed = { play: m.play, code: code, message: message, audioUnsupported: audioUnsupported }
-    else if state = "finished" and m.play.kind = "live" and not m.errored
-        ' (After an error the Video node also reports "finished"; reconnecting
-        ' then would only repeat the error and hold another connection.)
+    else if state = "finished" and m.play.kind = "live" and not m.errored and m.playedSinceLoad
+        ' (After an error the Video node also reports "finished", sometimes only
+        ' once the next stream has loaded; reconnecting then would only repeat
+        ' the error or restart a stream that just began.)
         liveStreamEnded()
     else if state = "finished" and m.play.kind <> "live"
         m.finished = true

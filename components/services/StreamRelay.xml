@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Audio-fix relay for live streams whose AAC audio Roku rejects. Some of the
+  provider's copies send HE-AAC whose ADTS headers say "Main profile"
+  (probably an encoder bug); Roku refuses it ("Unsupported AAC stream"),
+  though the audio itself is fine. Rewriting that 2-bit field to LC makes it
+  play (tested Oct 7, 2026).
+
+  A small HTTP server on 127.0.0.1 (only reachable from this Roku): the
+  Video node plays http://127.0.0.1:<port>/p/<key>.m3u8; the relay fetches
+  the provider's playlist, points its segments back at itself, and serves
+  each segment with its audio headers corrected. Archive (timeshift)
+  playlists work the same way through /t/<key>/<duration>/<start>.m3u8.
+
+  This and the Video node are the only HTTP outside ApiTask: segments are
+  binary, too big for a field, and must be patched on the way through.
+
+  In:  add       { key, url } registers a provider URL (the live .m3u8, or the
+                 timeshift template with {duration} and {start}). URLs contain
+                 the password: kept in memory, never printed.
+  Out: port      the listening port (0 until ready)
+-->
+<component name="StreamRelay" extends="Task">
+  <interface>
+    <field id="add" type="assocarray" alwaysNotify="true" />
+    <field id="port" type="integer" value="0" />
+  </interface>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/services/StreamRelay.brs" />
+</component>
