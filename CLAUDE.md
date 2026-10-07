@@ -129,8 +129,8 @@ Roku IP and developer password: `-RokuIp`/`-Password`, then
 the local file's contents.
 
 Back up a Roku's saved state to `backups\<name>.json` (git-ignored; holds the
-provider password): run this, then on that TV open Settings and press * * * then Play/Pause (within
-5 seconds; hidden on purpose). `deploy.ps1` bundles the backups, so a Roku that starts with no saved
+provider password): run this, then on that TV open Settings and press * (a panel explains the backup;
+it isn't in the menu) and then Play/Pause. `deploy.ps1` bundles the backups, so a Roku that starts with no saved
 state (wiped, reinstalled) restores itself at launch:
 
     .\scripts\backup-roku.ps1 -Roku Basement

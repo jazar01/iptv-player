@@ -3,12 +3,12 @@
   Settings. In: info { deviceName, deviceId, server, version, connections, market,
   showMyTeams, myTeamsFirst, showNoGameTeams, showFavoritesInRecent }.
   Out: chosen ("teams" opens My Teams, "teamsRow" toggles the My Teams row,
-  "teamsPosition" switches it between after Favorites and first, "backup"
-  (not in the menu: * * * then Play/Pause within 5 s) prints the saved state to
-  the console for scripts/backup-roku.ps1,
+  "teamsPosition" switches it between after Favorites and first,
   "noGameTeams" toggles cards for teams with no game,
   "market" opens Local stations, "recentFavorites" toggles favorites in
-  Recently Viewed, "account" opens Setup).
+  Recently Viewed, "account" opens Setup, "backup" prints the saved state to
+  the console for scripts/backup-roku.ps1: from the backup panel, which *
+  opens and Play/Pause confirms).
 -->
 <component name="SettingsScreen" extends="Group">
   <interface>
@@ -23,6 +23,17 @@
       vertFocusAnimationStyle="floatingFocus" />
     <Label id="details" translation="[96,730]" width="1600" wrap="true"
       font="font:SmallSystemFont" color="0x8C96A0FF" />
+
+    <!-- Backup panel: * opens it, Play/Pause backs up, Back closes it. -->
+    <Group id="backupPanel" visible="false">
+      <Rectangle width="1920" height="1080" color="0x000000B0" />
+      <Poster translation="[300,150]" width="1320" height="780" uri="pkg:/images/ui/rounded.9.png" blendColor="0x1F2833F8" />
+      <Label translation="[360,200]" width="1200" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" text="Back up this TV" />
+      <Label id="backupText" translation="[360,290]" width="1200" wrap="true" lineSpacing="6"
+        font="font:SmallSystemFont" color="0xD0D6DCFF" />
+      <Label translation="[360,850]" width="1200" font="font:MediumBoldSystemFont" color="0x4DA3FFFF"
+        text="Play/Pause: back up now          Back: close without backing up" />
+    </Group>
   </children>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
