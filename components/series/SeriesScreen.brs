@@ -3,6 +3,11 @@ sub init()
     m.seasonList = m.top.FindNode("seasonList")
     m.episodeList = m.top.FindNode("episodeList")
     m.status = m.top.FindNode("status")
+    m.backdrop = m.top.FindNode("backdrop")
+    m.cover = m.top.FindNode("cover")
+    m.epPlot = m.top.FindNode("epPlot")
+    m.backdrop.ObserveField("loadStatus", "onBackdropStatus")
+    m.episodeList.ObserveField("itemFocused", "onEpisodeFocused")
     m.seasons = []
     m.shownSeason = -1
     m.inEpisodes = true
@@ -47,6 +52,7 @@ sub onInfo()
     m.seasons = []
     m.shownSeason = -1
     if type(info.seasons) = "roArray" then m.seasons = info.seasons
+    drawDetails(info.details)
     content = CreateObject("roSGNode", "ContentNode")
     for each s in m.seasons
         item = content.CreateChild("ContentNode")
@@ -103,9 +109,70 @@ sub showSeason(index as Integer)
         node.displayName = episodeTitle(e.name)
         node.ext = e.ext
         node.duration = e.duration
+        node.plot = asString(e.plot)
+        node.airDate = asString(e.airDate)
     end for
     m.episodeList.content = content
     applyProgress()
+    onEpisodeFocused()
+end sub
+
+' Header: cover, backdrop, year / genre / rating, plot, director and cast.
+sub drawDetails(details as Dynamic)
+    if type(details) <> "roAssociativeArray" then details = {}
+    m.cover.uri = asString(details.cover)
+    m.backdrop.uri = asString(details.backdrop)
+    onBackdropStatus()
+    meta = []
+    year = toInt(m.top.info.year)
+    if year > 0 then meta.Push(year.ToStr())
+    seasonCount = m.seasons.Count()
+    if seasonCount = 1
+        meta.Push("1 season")
+    else if seasonCount > 1
+        meta.Push(seasonCount.ToStr() + " seasons")
+    end if
+    if asString(details.genre) <> "" then meta.Push(asString(details.genre))
+    if asString(details.rating) <> "" then meta.Push("Rated " + asString(details.rating) + " / 10")
+    text = ""
+    for each part in meta
+        if text <> "" then text += "     "
+        text += part
+    end for
+    m.top.FindNode("meta").text = text
+    m.top.FindNode("plot").text = asString(details.plot)
+    people = ""
+    if asString(details.director) <> "" then people = "Director:  " + asString(details.director) + "     "
+    if asString(details.cast) <> "" then people = people + "Cast:  " + asString(details.cast)
+    m.top.FindNode("people").text = people
+end sub
+
+sub onBackdropStatus()
+    m.backdrop.visible = (m.backdrop.uri <> "" and m.backdrop.loadStatus = "ready")
+end sub
+
+' Below the list: the focused episode's air date, length and description.
+sub onEpisodeFocused()
+    i = m.episodeList.itemFocused
+    content = m.episodeList.content
+    plot = ""
+    if content <> invalid and i >= 0 and i < content.GetChildCount()
+        node = content.GetChild(i)
+        ' "Aired Feb 10, 2019     22 min", then the description if there is one.
+        facts = []
+        aired = friendlyDate(node.airDate)
+        if aired <> "" then facts.Push("Aired " + aired)
+        if node.duration > 0 then facts.Push(Int((node.duration + 30) / 60).ToStr() + " min")
+        for each f in facts
+            if plot <> "" then plot += "     "
+            plot += f
+        end for
+        if node.plot <> ""
+            if plot <> "" then plot += Chr(10)
+            plot += node.plot
+        end if
+    end if
+    m.epPlot.text = plot
 end sub
 
 ' "The Last Kingdom (2015) - S01E01 - Episode 1" -> "Episode 1", using the
@@ -197,4 +264,15 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return true
     end if
     return false
+end function
+
+' "2019-02-10" -> "Feb 10, 2019"; anything else is shown as given ("" stays "").
+function friendlyDate(text as String) as String
+    parts = text.Split("-")
+    if parts.Count() < 3 then return text
+    month = Val(parts[1], 10)
+    day = Val(Left(parts[2], 2), 10)
+    if month < 1 or month > 12 or day < 1 then return text
+    names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    return names[month - 1] + " " + day.ToStr() + ", " + parts[0]
 end function

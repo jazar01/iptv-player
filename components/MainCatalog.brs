@@ -363,23 +363,51 @@ function normalizeSeriesInfo(ctx as Object, data as Object) as Object
     seasons.SortBy("season")
     if seasons.Count() > 1 and seasons[0].season = 0 then seasons.Push(seasons.Shift())
 
-    return { seriesId: toInt(ctx.seriesId), name: name, year: year, seasons: seasons }
+    ' Artwork and details for the series page (field names vary by panel;
+    ' firstText is in MainMovies.brs). Anything missing is left out.
+    details = { cover: "", backdrop: "", plot: "", genre: "", rating: "", cast: "", director: "" }
+    info = data.info
+    if type(info) = "roAssociativeArray"
+        details.cover = firstText(info, ["cover", "cover_big", "movie_image"])
+        details.plot = firstText(info, ["plot", "description"])
+        details.genre = firstText(info, ["genre"])
+        details.cast = firstText(info, ["cast", "actors"])
+        details.director = firstText(info, ["director"])
+        backdrops = info.backdrop_path
+        if type(backdrops) = "roArray" and backdrops.Count() > 0 then details.backdrop = asString(backdrops[0])
+        if type(backdrops) = "roString" or type(backdrops) = "String" then details.backdrop = asString(backdrops)
+        rating = Val(asString(info.rating))
+        if rating > 0 then details.rating = Str(Int(rating * 10 + 0.5) / 10).Trim()
+    end if
+
+    return { seriesId: toInt(ctx.seriesId), name: name, year: year, seasons: seasons, details: details }
 end function
 
 function normalizeSeason(season as Integer, list as Dynamic) as Object
     episodes = []
     if type(list) = "roArray"
         for each e in list
-            duration = 0
-            if type(e.info) = "roAssociativeArray" then duration = toInt(e.info.duration_secs)
-            episodes.Push({
-                id: toInt(e.id)
-                season: season
-                episode: toInt(e.episode_num)
-                name: asString(e.title)
-                ext: asString(e.container_extension)
-                duration: duration
-            })
+            ' Skip anything that isn't an episode object (review R07).
+            if type(e) = "roAssociativeArray"
+                duration = 0
+                plot = ""
+                airDate = ""
+                if type(e.info) = "roAssociativeArray"
+                    duration = toInt(e.info.duration_secs)
+                    plot = firstText(e.info, ["plot", "description", "overview"])
+                    airDate = firstText(e.info, ["air_date", "releasedate", "release_date"])
+                end if
+                episodes.Push({
+                    id: toInt(e.id)
+                    season: season
+                    episode: toInt(e.episode_num)
+                    name: asString(e.title)
+                    ext: asString(e.container_extension)
+                    duration: duration
+                    plot: plot
+                    airDate: airDate
+                })
+            end if
         end for
     end if
     episodes.SortBy("episode")

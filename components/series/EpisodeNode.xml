@@ -12,5 +12,8 @@
     <field id="duration" type="integer" />
     <field id="state" type="string" />
     <field id="stateText" type="string" />
+    <!-- Shown below the list: the episode's description and air date. -->
+    <field id="plot" type="string" />
+    <field id="airDate" type="string" />
   </interface>
 </component>
