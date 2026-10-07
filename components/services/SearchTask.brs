@@ -144,18 +144,6 @@ function channelIcons(req as Object) as Object
         if e <> invalid then icon = asString(e.icon)
         result.icons[key] = icon
     end for
-    ' Continue Watching: movie posters ("m<id>") and series covers ("s<id>").
-    for each pair in [["movieIds", "movie", "m"], ["seriesIds", "series", "s"]]
-        ids = req[pair[0]]
-        if type(ids) = "roArray" and m.index[pair[1]].Count() > 0     ' not loaded yet: ask again later
-            for each id in ids
-                e = m.byId[pair[1]][toInt(id).ToStr()]
-                icon = ""
-                if e <> invalid then icon = asString(e.icon)
-                result.icons[pair[2] + toInt(id).ToStr()] = icon
-            end for
-        end if
-    end for
     return result
 end function
 

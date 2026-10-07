@@ -28,9 +28,6 @@
         font="font:SmallSystemFont" color="0xA0A8B0FF" />
       <Rectangle id="infoTrack" translation="[20,184]" width="360" height="6" color="0x3A444EFF" />
       <Rectangle id="infoFill" translation="[20,184]" width="0" height="6" color="0x4DA3FFFF" />
-      <!-- Continue Watching and Favorite Series: the poster or series cover at
-           the right, above the progress bar. -->
-      <Poster id="cardPoster" translation="[300,14]" width="84" height="126" loadDisplayMode="scaleToFit" visible="false" />
     </Group>
 
     <!-- My Teams: the team's logo (placed by drawBadge), or its initials while
