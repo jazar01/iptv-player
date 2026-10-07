@@ -211,7 +211,7 @@ sub onSettingsChosen(event as Object)
     end if
 end sub
 
-' Settings -> Back up to computer: the saved document, base64-encoded, on
+' Settings, hidden key sequence (* * * then Play/Pause): the saved document, base64-encoded, on
 ' the debug console between markers, for scripts\backup-roku.ps1 to save.
 ' Short prefixed lines survive the console's line wrapping. It includes the
 ' provider password, so it's only ever printed here, on request.

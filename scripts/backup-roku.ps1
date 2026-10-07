@@ -5,8 +5,8 @@
 
 .DESCRIPTION
     Connects to the Roku's debug console (port 8085) and waits for the app's
-    backup, which it prints when you choose Settings -> Back up to computer on
-    the TV. The backup is saved as backups\<Name>.json (the latest, which
+    backup, which it prints when, on the TV, you open Settings and press * * *
+    then Play/Pause (within 5 seconds). The backup is saved as backups\<Name>.json (the latest, which
     deploy.ps1 bundles for restoring) and backups\<Name>-<date>.json (a dated
     copy).
 
@@ -44,7 +44,7 @@ if (-not $RokuIp) {
 }
 if (-not $Name) { $Name = $RokuIp }
 
-Write-Host "Listening to $Name ($RokuIp). On that TV choose Settings -> Back up to computer ..."
+Write-Host "Listening to $Name ($RokuIp). On that TV open Settings and press * * * then Play/Pause (within 5 s) ..."
 $client = New-Object System.Net.Sockets.TcpClient($RokuIp, 8085)
 $stream = $client.GetStream()
 $stream.ReadTimeout = 2000

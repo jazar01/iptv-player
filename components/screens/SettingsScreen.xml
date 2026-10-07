@@ -4,7 +4,8 @@
   showMyTeams, myTeamsFirst, showNoGameTeams, showFavoritesInRecent }.
   Out: chosen ("teams" opens My Teams, "teamsRow" toggles the My Teams row,
   "teamsPosition" switches it between after Favorites and first, "backup"
-  prints the saved state to the console for scripts/backup-roku.ps1,
+  (not in the menu: * * * then Play/Pause within 5 s) prints the saved state to
+  the console for scripts/backup-roku.ps1,
   "noGameTeams" toggles cards for teams with no game,
   "market" opens Local stations, "recentFavorites" toggles favorites in
   Recently Viewed, "account" opens Setup).

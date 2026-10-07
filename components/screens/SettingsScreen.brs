@@ -1,7 +1,8 @@
 sub init()
     m.menu = m.top.FindNode("menu")
     m.details = m.top.FindNode("details")
-    m.actions = ["teams", "teamsRow", "teamsPosition", "noGameTeams", "market", "recentFavorites", "account", "backup"]
+    m.actions = ["teams", "teamsRow", "teamsPosition", "noGameTeams", "market", "recentFavorites", "account"]
+    m.keyLog = []       ' recent { key, at } for the hidden backup sequence
     buildMenu({})
 
     m.menu.ObserveField("itemSelected", "onSelected")
@@ -24,7 +25,6 @@ sub buildMenu(info as Object)
         "Local stations:   " + marketLabel
         "Favorites in Recently Viewed:   " + onOff(isTrue(info.showFavoritesInRecent))
         "Account and device name"
-        "Back up to computer"
     ]
     focus = m.menu.itemFocused
     content = CreateObject("roSGNode", "ContentNode")
@@ -57,3 +57,27 @@ sub onInfo()
     if connections = "" then connections = "checking ..."
     m.details.text = "Device name:  " + asString(info.deviceName) + nl + "Server:  " + asString(info.server) + nl + "Connections:  " + connections + "  (all devices on this account)" + nl + "Device ID:  " + asString(info.deviceId) + nl + "App version:  " + asString(info.version)
 end sub
+
+' Hidden: * * * then Play/Pause, within 5 seconds, sends "backup" (the saved
+' state to the debug console for scripts\backup-roku.ps1). Not in the menu,
+' so nobody stumbles on it; the list itself uses neither key.
+function onKeyEvent(key as String, press as Boolean) as Boolean
+    if not press then return false
+    now = CreateObject("roDateTime").AsSeconds()
+    m.keyLog.Push({ key: key, at: now })
+    while m.keyLog.Count() > 4
+        m.keyLog.Shift()
+    end while
+    if key = "play" and m.keyLog.Count() = 4 and now - m.keyLog[0].at <= 5
+        sequence = ""
+        for each k in m.keyLog
+            sequence += k.key + ","
+        end for
+        if sequence = "options,options,options,play,"
+            m.keyLog = []
+            m.top.chosen = "backup"
+            return true
+        end if
+    end if
+    return false
+end function
