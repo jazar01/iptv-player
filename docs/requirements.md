@@ -357,6 +357,15 @@ Planned for version 2; not started. Prompted by Oct 6, 2026, when a failed sidel
 - Two implementations kept in the repo: a Cloudflare Worker (free tier, Workers KV) and a portable script that stores files in a folder (any PC, Pi, NAS or Docker). `scripts/test-backup-server.ps1` checks any host against the protocol before switching.
 - `scripts/backup-export.ps1` / `backup-import.ps1` keep a local copy of all backups and move them between hosts.
 
+**Hosting on the home Raspberry Pi (option, recorded Oct 8, 2026).** If the Pi Dolby converter is built (below), the same Pi can be the main host: the folder-storage server and the admin web app run beside the converter, as another systemd service. Nothing on the TVs changes; the protocol, encryption and signing are the same as for Cloudflare.
+
+- **For:** one always-on box for both jobs; fast and private, since backups and the household configuration never leave the house; no cloud account needed.
+- **Off-site copy:** a failed card, a power surge or anything that takes the Pi takes the backups with it. Store them on an SSD (USB) rather than the microSD card, and copy them off the Pi every night (a PC, a USB drive, or a cloud folder, or the Cloudflare host as a second copy). The TVs refill an empty server within one launch each, but only while they still have their own state.
+- **Address:** a fixed IP reserved on the router, and the backup hostname pointed at it by the router's local DNS if it has one, otherwise the IP itself. Rokus can't resolve `.local` names. Moving later to Cloudflare stays a hostname change, with the same key.
+- **When the Pi is off or unreachable:** the app carries on with what each TV has saved and catches up when it's back (the "never slows or blocks" rules below).
+- **Admin page from outside the house:** home only, unless something like Tailscale is added; editing the household configuration away from home isn't needed today.
+- **Provider password:** the household configuration holding it is sealed with the household key, as on any host, so the Pi stores only encrypted data and other devices on the home network can't read it.
+
 **Switching hosts without touching the TVs.**
 
 - The app is built with a hostname you control (e.g. `backup.<your domain>`) and a household key, set once in `scripts/deploy.local.ps1` (git-ignored) and baked in at deploy. Moving providers is a DNS change (short TTL), with the same key on the new server.
@@ -388,7 +397,7 @@ Planned for version 2; not started. Prompted by Oct 6, 2026, when a failed sidel
 - Access: Cloudflare Access (Zero Trust free plan, up to 50 users) asks for an email code or Google sign-in before the page loads. Its sign-up may ask for a card even on the free plan; confirm when setting up. Fallback: a password checked by the Worker. The Roku endpoints stay key-signed, with no sign-in.
 - Built and deployed from this repo with the rest of V2 (Worker, admin page, protocol test script).
 
-**Still open:** the domain/hostname to use, and which records are shared.
+**Still open:** the host (Cloudflare, the home Pi, or both), the domain/hostname to use, and which records are shared.
 
 Later, the service could also compute results the Roku can't (full-guide search, e.g. for My Teams) and push parsing-rule updates.
 
@@ -405,6 +414,7 @@ Not built; recorded Oct 7, 2026 as an option. The problem: a TV that accepts onl
 - **Several TVs:** one Pi serves every affected TV (more than one is likely: the Deck Roku failed on SEC Network too). Each TV decides for itself from its Settings audio check; the Pi's address can go in the household configuration so new TVs pick it up. A Pi 4 handles several audio conversions at once, and the account allows 3 streams anyway. A TV is affected when the app's Settings show "Dolby audio: NO".
 - **Network:** per stream, about 6-10 Mbit/s from the Pi to a Roku (video unchanged; FS1 measured 5-6 Mbit/s, busy 1080p sports up to about 8-10; audio gets slightly smaller, Dolby 384-640 kbit/s to AAC 128-192). The Pi carries each stream twice (in from the provider, out to the Roku): about 12-20 Mbit/s per stream, 35-60 Mbit/s at 3 streams, a few percent of its gigabit port. Internet use doesn't change (the Pi downloads instead of the Roku); the Pi-to-Roku leg stays inside the house. Segments arrive and are passed on in bursts, which keeps the Roku's buffer full.
 - **Home network (as of Oct 2026):** the Pi on wired gigabit Ethernet; some Rokus are wireless, on Ubiquiti UniFi AP SHDs (802.11ac Wave 2, 4x4, up to about 1.7 Gbit/s on 5 GHz), far more than a few streams need. A wireless Roku gets the same amount of data from the Pi as it does from the internet today, so one that streams well now will through the Pi; delivery may even be steadier, since provider hiccups no longer reach it directly. If one struggles, check in the UniFi controller (Clients): that it's on 5 GHz (the Ultras support it), its signal (about -65 dBm or better) and link rate (well above 50 Mbit/s), and whether it flips between APs (lock it to the nearest only if so).
+- **Also the backup host:** the same Pi can host V2 backup and sharing and the admin web app (see "Hosting on the home Raspberry Pi" under Off-device backup and sync), with an SSD for storage and a nightly copy off the Pi.
 - **Alternative without code:** a soundbar or AV receiver with HDMI input between that Roku and its TV decodes Dolby itself (about $100 or more per TV). A Pi can't sit between Roku and TV instead: its two HDMI ports are outputs, and HDMI capture add-ons top out at 1080p30, are blocked by the Roku's HDCP, and add lag.
 
 ### Multiple provider accounts (options, undecided)
