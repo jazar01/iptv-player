@@ -21,6 +21,9 @@ sub relayLoop()
     m.PARTS = 12            ' virtual parts per one-minute archive segment
     m.port = CreateObject("roMessagePort")
     m.top.ObserveField("add", m.port)
+    m.top.ObserveField("discover", m.port)
+    m.clock = CreateObject("roTimespan")
+    m.search = invalid      ' a Dolby converter search under way (startSearch)
     m.conns = {}
     listener = startListening()
     if listener = invalid
@@ -34,10 +37,16 @@ sub relayLoop()
         try
             if type(msg) = "roSGNodeEvent"
                 a = msg.GetData()
-                if type(a) = "roAssociativeArray" then m.urls[asString(a.key)] = asString(a.url)
+                if msg.GetField() = "discover"
+                    startSearch(a)
+                else if type(a) = "roAssociativeArray"
+                    m.urls[asString(a.key)] = asString(a.url)
+                end if
             else if type(msg) = "roSocketEvent"
                 id = msg.getSocketID()
-                if id = listener.getID()
+                if m.search <> invalid and id = m.search.sock.getID()
+                    readSearchAnswer()
+                else if id = listener.getID()
                     c = listener.accept()
                     if c <> invalid
                         c.setMessagePort(m.port)
@@ -49,10 +58,71 @@ sub relayLoop()
                 end if
             end if
             pumpAll()
+            checkSearch()
         catch e
             print "[relay] ERROR (recovered): "; redact(e.message)
         end try
     end while
+end sub
+
+' ---------------------------------------------------------------------------
+' Dolby converter search: the question is broadcast on the home network
+' (UDP 8791), twice in case one is lost; the first answer wins, and none
+' within 2 s means none found. Answer: "IPTV-DOLBY-CONVERTER <port> <version>",
+' from the converter's address.
+
+sub startSearch(req as Dynamic)
+    if m.search <> invalid then finishSearch(invalid)
+    id = ""
+    if type(req) = "roAssociativeArray" then id = asString(req.id)
+    sock = CreateObject("roDatagramSocket")
+    here = CreateObject("roSocketAddress")
+    here.setAddress("0.0.0.0:0")
+    sock.setAddress(here)
+    sock.setBroadcast(true)
+    there = CreateObject("roSocketAddress")
+    there.setAddress("255.255.255.255:8791")
+    sock.setSendToAddress(there)
+    sock.setMessagePort(m.port)
+    sock.notifyReadable(true)
+    m.search = { id: id, sock: sock, started: m.clock.TotalMilliseconds(), sent: 0 }
+    sendSearch()
+end sub
+
+sub sendSearch()
+    m.search.sock.sendStr("IPTV-DOLBY-CONVERTER?")
+    m.search.sent = m.search.sent + 1
+end sub
+
+sub readSearchAnswer()
+    text = m.search.sock.receiveStr(512)
+    parts = text.Trim().Split(" ")
+    if parts.Count() < 2 or parts[0] <> "IPTV-DOLBY-CONVERTER" then return
+    from = m.search.sock.getReceivedFromAddress()
+    version = ""
+    if parts.Count() > 2 then version = parts[2]
+    finishSearch({ address: from.getHostName() + ":" + parts[1], version: version })
+end sub
+
+sub checkSearch()
+    if m.search = invalid then return
+    waited = m.clock.TotalMilliseconds() - m.search.started
+    if waited > 700 and m.search.sent < 2 then sendSearch()
+    if waited > 2000 then finishSearch(invalid)
+end sub
+
+' found: { address, version }, or invalid for none.
+sub finishSearch(found as Dynamic)
+    s = m.search
+    m.search = invalid
+    s.sock.close()
+    if found = invalid
+        print "[relay] no Dolby converter answered"
+        m.top.discovered = { id: s.id, found: false, address: "", version: "" }
+    else
+        print "[relay] Dolby converter found at "; found.address
+        m.top.discovered = { id: s.id, found: true, address: found.address, version: asString(found.version) }
+    end if
 end sub
 
 ' 127.0.0.1 only: nothing else on the network can use the relay.

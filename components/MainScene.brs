@@ -128,6 +128,8 @@ sub routeApiResponse(res as Object)
         onTeamGuide(res)
     else if res.id = "teamScores"
         onTeamScores(res)
+    else if res.id = "converterCheck"
+        onConverterCheck(res)
     end if
 end sub
 
@@ -217,6 +219,7 @@ sub showSection(name as String)
     else if name = "settings"
         screen.info = settingsInfo()
         checkConnections("settings")
+        checkConverter()
     else if name = "search"
         onSearchShown(screen)
     else if name = "guide"

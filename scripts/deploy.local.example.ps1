@@ -12,3 +12,7 @@ $LocalRokus = @(
     @{ Name = 'Bedroom'; Ip = '192.168.1.51' }
     # @{ Name = 'Kitchen'; Ip = '192.168.1.52'; Password = 'a-different-password' }
 )
+
+# The home Raspberry Pi for .\scripts\pi-deploy.ps1 (an SSH host from ~\.ssh\config,
+# or user@address; key login, no password prompt). Default: iptv-pi.
+# $LocalPi = 'iptv-pi'

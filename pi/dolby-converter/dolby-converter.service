@@ -1,0 +1,19 @@
+[Unit]
+Description=IPTV Player Dolby converter (Dolby audio to AAC stereo for Rokus)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dolbyconv
+ExecStart=/usr/bin/python3 /opt/dolby-converter/converter.py --port 8790 --allow 192.168.222.0/24
+Restart=always
+RestartSec=3
+# Nothing is written to disk; logs go to the journal (journalctl -u dolby-converter).
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

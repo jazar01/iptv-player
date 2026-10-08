@@ -33,7 +33,18 @@ sub initPlayback()
     ' with badStreams). Only if the relayed stream fails too with an audio
     ' or format error is it marked bad (badStreams) and a copy tried.
     m.relayStreams = marks.relay
+    ' The Dolby converter (a Raspberry Pi at home, Settings -> Dolby
+    ' converter): streams whose Dolby audio this TV refused play through it,
+    ' streamId -> until (7 days, kept with the other marks).
+    m.convertStreams = marks.convert
     m.relay = CreateObject("roSGNode", "StreamRelay")
+    ' It also searches the home network for a Dolby converter (MainLogin:
+    ' Settings -> Dolby converter); the timer covers a relay that never answers.
+    m.relay.ObserveField("discovered", "onConverterFound")
+    m.converterSearchTimer = CreateObject("roSGNode", "Timer")
+    m.converterSearchTimer.duration = 5
+    m.converterSearchTimer.ObserveField("fire", "onConverterSearchTimeout")
+    m.top.AppendChild(m.converterSearchTimer)
     m.relay.control = "RUN"
 
     ' Up/Down while watching: the channel shows at once, but its stream
@@ -82,7 +93,11 @@ sub playLive(item as Object)
         replaceFor: toInt(item.replaceFor)  ' a favorite that failed, this standing in for it (onSwapTimer)
     }
     if archiveDays > 0 then play.timeshift = timeshiftInfo(id)
-    if needsRelay(id) then relayPlay(play)
+    if needsConverter(id)
+        convertPlay(play)
+    else if needsRelay(id)
+        relayPlay(play)
+    end if
     startPlayer(play, 0)
 end sub
 
@@ -344,6 +359,28 @@ end sub
 sub onPlayerFailed(event as Object)
     failure = event.GetData()
     m.failCode = toInt(failure.code)
+    live = m.playing <> invalid and m.playing.kind = "live"
+    ' Dolby this TV doesn't take, and a Dolby converter is set up: play it
+    ' again through the converter (full quality, stereo AAC).
+    if live and isTrue(failure.dolbyUnsupported) and not isTrue(m.playing.converted) and converterAddress() <> ""
+        id = toInt(m.playing.id)
+        m.convertStreams[id.ToStr()] = nowSeconds() + m.MARK_SECONDS
+        saveStreamMarks()
+        print "[main] stream "; id; " has Dolby audio this TV doesn't take; playing it through the Dolby converter"
+        playLive({ streamId: id, name: m.playing.name, epgChannelId: m.playing.epgChannelId, archiveDays: m.playing.archiveDays, stepFrom: m.playing.stepFrom, replaceFor: m.playing.replaceFor, direct: true, note: "This channel's Dolby audio is converted to stereo by the Raspberry Pi." })
+        return
+    end if
+    ' Failed through the converter (the Pi off, or the channel itself): its
+    ' mark goes, so the next play tries the converter again only after a
+    ' fresh Dolby failure, and a copy plays now. Not marked bad: with the Pi
+    ' back, this channel plays at full quality again.
+    if live and isTrue(m.playing.converted)
+        print "[main] stream "; m.playing.id; " failed through the Dolby converter (code "; m.failCode; "); trying a copy"
+        m.convertStreams.Delete(toInt(m.playing.id).ToStr())
+        saveStreamMarks()
+        findPlayableCopy({ streamId: m.playing.id, name: m.playing.name, epgChannelId: m.playing.epgChannelId, archiveDays: m.playing.archiveDays, stepFrom: m.playing.stepFrom }, true)
+        return
+    end if
     ' Audio this Roku can't decode: remember the stream and go straight to a
     ' working copy (no connection check: the stream did connect).
     if m.playing <> invalid and m.playing.kind = "live" and isTrue(failure.audioUnsupported) and not isTrue(m.playing.relayed) and m.relay.port > 0
@@ -385,7 +422,41 @@ sub markStreamBad(streamId as Dynamic)
 end sub
 
 sub saveStreamMarks()
-    m.store.callFunc("setStreamMarks", { relay: m.relayStreams, bad: m.badStreams })
+    m.store.callFunc("setStreamMarks", { relay: m.relayStreams, convert: m.convertStreams, bad: m.badStreams })
+end sub
+
+' ---------------------------------------------------------------------------
+' Dolby converter: a service on a home Raspberry Pi (pi/dolby-converter)
+' that passes a stream on with its video untouched and its Dolby audio
+' converted to AAC stereo, for TVs that take stereo only. Its address goes
+' in front of the provider URL: http://<pi>/x/http/<host>/<path>.
+
+' "192.168.222.99:8790", or "" when none is set up.
+function converterAddress() as String
+    return m.store.callFunc("getSettings").dolbyConverter
+end function
+
+' Marked for the converter (or, with converter_test in the manifest, every
+' live channel, to try it on a TV that plays Dolby itself).
+function needsConverter(streamId as Dynamic) as Boolean
+    if converterAddress() = "" then return false
+    if CreateObject("roAppInfo").GetValue("converter_test") = "1" then return true
+    until = m.convertStreams[toInt(streamId).ToStr()]
+    return until <> invalid and nowSeconds() < until
+end function
+
+' http://host:port/path -> http://<pi>/x/http/host:port/path. Placeholders
+' in the path ({start}, {duration} in archive URLs) pass through.
+function converterUrl(url as String) as String
+    p = Instr(1, url, "://")
+    if p = 0 then return url
+    return "http://" + converterAddress() + "/x/" + Left(url, p - 1) + "/" + Mid(url, p + 3)
+end function
+
+sub convertPlay(play as Object)
+    play.url = converterUrl(play.url)
+    play.converted = true
+    if type(play.timeshift) = "roAssociativeArray" then play.timeshift.url = converterUrl(play.timeshift.url)
 end sub
 
 function needsRelay(streamId as Dynamic) as Boolean

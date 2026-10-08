@@ -146,6 +146,7 @@ function getSettings() as Object
         showFavoritesInRecent: isTrue(m.doc.settings.showFavoritesInRecent)
         myTeamsFirst: isTrue(m.doc.settings.myTeamsFirst)
         showScores: isTrue(m.doc.settings.showScores)
+        dolbyConverter: asString(m.doc.settings.dolbyConverter)     ' "address:port" of the Pi, "" = off
         serverTimezone: asString(m.doc.settings.serverTimezone)     ' last seen, for timeshift
     }
 end function
@@ -1238,19 +1239,20 @@ end function
 
 ' ---------------------------------------------------------------------------
 ' Stream marks: live streams whose audio doesn't play on this Roku as sent.
-' "relay": plays through the audio fix (StreamRelay); "bad": doesn't play
+' "relay": plays through the audio fix (StreamRelay); "convert": its Dolby
+' audio goes through the Dolby converter (a Raspberry Pi); "bad": doesn't play
 ' even so, or its Dolby audio isn't taken by this TV. Each is streamId ->
 ' until (UTC seconds). Per device, since it depends on the Roku and its TV.
 ' Losing them only means a stream fails once more, so a failed write is
 ' logged and skipped.
 
 function getStreamMarks() as Object
-    marks = { relay: {}, bad: {} }
+    marks = { relay: {}, convert: {}, bad: {} }
     if not m.marksSection.Exists("marks") then return marks
     parsed = ParseJson(m.marksSection.Read("marks"), "i")
     if type(parsed) <> "roAssociativeArray" then return marks
     now = nowSeconds()
-    for each kind in ["relay", "bad"]
+    for each kind in ["relay", "convert", "bad"]
         saved = parsed[kind]
         kept = marks[kind]
         if type(saved) = "roAssociativeArray"
@@ -1268,7 +1270,7 @@ end function
 function setStreamMarks(marks as Object) as Boolean
     now = nowSeconds()
     out = {}
-    for each kind in ["relay", "bad"]
+    for each kind in ["relay", "convert", "bad"]
         entries = []
         given = marks[kind]
         if type(given) = "roAssociativeArray"

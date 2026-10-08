@@ -22,11 +22,18 @@
                  timeshift template with {duration} and {start}). URLs contain
                  the password: kept in memory, never printed.
   Out: port      the listening port (0 until ready)
+
+  Also the search for a Dolby converter on the home network (Settings ->
+  Dolby converter; pi/dolby-converter answers it):
+  In:  discover   { id } broadcasts the question on UDP 8791
+  Out: discovered { id, found, address ("ip:port"), version }, about 2 s later
 -->
 <component name="StreamRelay" extends="Task">
   <interface>
     <field id="add" type="assocarray" alwaysNotify="true" />
     <field id="port" type="integer" value="0" />
+    <field id="discover" type="assocarray" alwaysNotify="true" />
+    <field id="discovered" type="assocarray" alwaysNotify="true" />
   </interface>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />

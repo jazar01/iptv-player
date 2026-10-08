@@ -21,7 +21,8 @@
       font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont"
       color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png"
       vertFocusAnimationStyle="floatingFocus" />
-    <Label id="details" translation="[96,720]" width="1600" wrap="true"
+    <!-- Beside the menu: below it there's no room once it has 9 items. -->
+    <Label id="details" translation="[1000,200]" width="824" wrap="true" lineSpacing="10"
       font="font:SmallSystemFont" color="0x8C96A0FF" />
 
     <!-- Backup panel: * opens it, Play/Pause backs up, Back closes it. -->

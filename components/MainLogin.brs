@@ -220,6 +220,7 @@ function settingsInfo() as Object
         connections: connectionsText()
         expires: accountExpiryText()
         audio: dolbyAudioText()
+        converter: converterText()
         market: m.store.callFunc("getMarket").label
         showMyTeams: m.store.callFunc("getSettings").showMyTeams
         showNoGameTeams: m.store.callFunc("getSettings").showNoGameTeams
@@ -247,6 +248,8 @@ sub onSettingsChosen(event as Object)
         toggleFavoritesInRecent()
     else if choice = "teamsPosition"
         toggleMyTeamsFirst()
+    else if choice = "converter"
+        editConverter()
     else if choice = "backup"
         backupToConsole()
     end if
@@ -308,6 +311,191 @@ function dolbyAudioText() as String
     if not dd and not ddPlus then return "Dolby audio: NO (this TV connection takes stereo only; Dolby channels won't play)"
     if dd then return "Dolby Digital: yes   Dolby Digital Plus: NO"
     return "Dolby Digital: NO   Dolby Digital Plus: yes"
+end function
+
+' ---------------------------------------------------------------------------
+' Settings -> Dolby converter: the address of the Raspberry Pi service that
+' converts Dolby audio to stereo (MainPlayback). Per device; checked against
+' its /health page whenever Settings opens or the address changes.
+
+function converterText() as String
+    address = converterAddress()
+    if address = "" then return "off"
+    status = asString(m.converterStatus)
+    if status = "" then status = "checking ..."
+    return address + "   (" + status + ")"
+end function
+
+sub checkConverter()
+    address = converterAddress()
+    if address = "" then return
+    m.converterStatus = ""
+    sendRequest({ id: "converterCheck", url: "http://" + address + "/health", context: { address: address }, timeoutMs: 4000 })
+end sub
+
+sub onConverterCheck(res as Object)
+    if asString(res.context.address) <> converterAddress() then return
+    if res.ok and type(res.data) = "roAssociativeArray"
+        m.converterStatus = "working, version " + asString(res.data.version)
+    else
+        m.converterStatus = "NOT answering; Dolby channels use other copies"
+    end if
+    print "[main] Dolby converter "; converterAddress(); ": "; m.converterStatus
+    settings = m.sections.settings
+    if settings <> invalid then settings.info = settingsInfo()
+end sub
+
+sub enterConverterAddress()
+    dlg = CreateObject("roSGNode", "StandardKeyboardDialog")
+    dlg.title = "Dolby converter"
+    dlg.message = ["The Raspberry Pi's address on your home network, such as 192.168.222.99 (port 8790 unless you give another). Leave it empty to turn it off.", "Used only for channels whose Dolby audio this TV doesn't take."]
+    dlg.text = converterAddress()
+    dlg.buttons = ["OK", "Cancel"]
+    setKeyboardVoice(dlg, "alphanumeric")
+    dlg.ObserveField("buttonSelected", "onConverterButton")
+    dlg.ObserveField("wasClosed", "onConverterClosed")
+    m.converterDialog = dlg
+    m.top.dialog = dlg
+end sub
+
+sub onConverterButton()
+    dlg = m.converterDialog
+    if dlg = invalid then return
+    m.converterDialog = invalid
+    choice = dlg.buttonSelected
+    typed = dlg.text
+    dlg.close = true
+    if choice <> 0 then return
+    address = converterAddressFrom(typed)
+    if address = invalid
+        showToast("That isn't an address like 192.168.222.99 or 192.168.222.99:8790.")
+        return
+    end if
+    saveConverter(address)
+end sub
+
+sub saveConverter(address as String)
+    if not m.store.callFunc("setSetting", "dolbyConverter", address)
+        showToast("Couldn't save the change. Storage may be full.")
+        return
+    end if
+    if address = "" then showToast("Dolby converter off") else showToast("Dolby converter: " + address)
+    checkConverter()
+    settings = m.sections.settings
+    if settings <> invalid then settings.info = settingsInfo()
+end sub
+
+' Settings -> Dolby converter: look for one on the home network first (the
+' Pi answers a broadcast; StreamRelay asks), then offer what was found.
+sub editConverter()
+    dlg = CreateObject("roSGNode", "StandardProgressDialog")
+    dlg.title = "Looking for a Dolby converter on your home network ..."
+    dlg.ObserveField("wasClosed", "onConverterSearchClosed")
+    m.converterDialog = dlg
+    m.top.dialog = dlg
+    m.converterSearching = true
+    m.converterSearchTimer.control = "start"     ' in case the relay doesn't answer
+    m.relay.discover = { id: "settings" }
+end sub
+
+sub onConverterFound(event as Object)
+    result = event.GetData()
+    if not isTrue(m.converterSearching) or asString(result.id) <> "settings" then return
+    showConverterChoice(result)
+end sub
+
+sub onConverterSearchTimeout()
+    if isTrue(m.converterSearching) then showConverterChoice({ found: false })
+end sub
+
+sub showConverterChoice(result as Object)
+    m.converterSearching = false
+    m.converterSearchTimer.control = "stop"
+    searching = m.converterDialog
+    m.converterDialog = invalid
+    if searching <> invalid then searching.close = true
+    current = converterAddress()
+    actions = []
+    buttons = []
+    if isTrue(result.found)
+        m.converterFound = asString(result.address)
+        message = "Found a Dolby converter at " + m.converterFound + "."
+        if m.converterFound = current then message = message + " This TV is set to use it."
+        ' Always offered, even when it's already the one in use: choosing it
+        ' is how you say yes to what was found.
+        buttons.Push("Use this converter")
+        actions.Push("use")
+    else
+        message = "No Dolby converter answered on this network. Check that the Raspberry Pi is on and connected, or enter its address."
+        buttons.Push("Try again")
+        actions.Push("again")
+    end if
+    buttons.Push("Enter an address")
+    actions.Push("enter")
+    if current <> ""
+        buttons.Push("Turn off")
+        actions.Push("off")
+    end if
+    buttons.Push("Cancel")
+    actions.Push("cancel")
+    dlg = CreateObject("roSGNode", "StandardMessageDialog")
+    dlg.title = "Dolby converter"
+    dlg.message = [message, "It's used only for channels whose Dolby audio this TV doesn't take: they play through it in stereo at full quality."]
+    dlg.buttons = buttons
+    dlg.ObserveField("buttonSelected", "onConverterChoice")
+    dlg.ObserveField("wasClosed", "onConverterClosed")
+    m.converterChoice = actions
+    m.converterDialog = dlg
+    m.top.dialog = dlg
+end sub
+
+sub onConverterChoice()
+    dlg = m.converterDialog
+    if dlg = invalid or type(m.converterChoice) <> "roArray" then return
+    choice = dlg.buttonSelected
+    m.converterDialog = invalid
+    dlg.close = true
+    if choice < 0 or choice >= m.converterChoice.Count() then return
+    action = m.converterChoice[choice]
+    if action = "use"
+        saveConverter(m.converterFound)
+    else if action = "off"
+        saveConverter("")
+    else if action = "again"
+        editConverter()
+    else if action = "enter"
+        enterConverterAddress()
+    end if
+end sub
+
+' Only for the dialog still current: a closed dialog reports it after the
+' next one (the keyboard after "Enter an address") has already opened.
+sub onConverterClosed(event as Object)
+    closed = event.GetRoSGNode()
+    if m.converterDialog <> invalid and m.converterDialog.IsSameNode(closed) then m.converterDialog = invalid
+end sub
+
+' Back while searching: stop waiting for it.
+sub onConverterSearchClosed(event as Object)
+    if m.converterDialog <> invalid and m.converterDialog.IsSameNode(event.GetRoSGNode())
+        m.converterDialog = invalid
+        m.converterSearching = false
+        m.converterSearchTimer.control = "stop"
+    end if
+end sub
+
+' "192.168.222.99", "http://pi:8790/" -> "192.168.222.99:8790", "pi:8790";
+' "" stays "" (off); anything else -> invalid.
+function converterAddressFrom(typed as String) as Dynamic
+    text = LCase(typed.Trim())
+    if Left(text, 7) = "http://" then text = Mid(text, 8)
+    while Right(text, 1) = "/"
+        text = Left(text, text.Len() - 1)
+    end while
+    if text = "" then return ""
+    if not CreateObject("roRegex", "^[a-z0-9.-]+(:[0-9]{1,5})?$", "").IsMatch(text) then return invalid
+    if Instr(1, text, ":") = 0 then text = text + ":8790"
+    return text
 end function
 
 function canPlayAudio(info as Object, codec as String) as Boolean

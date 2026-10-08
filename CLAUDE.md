@@ -10,7 +10,8 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
 - All saved state goes through StateStore; all HTTP goes through ApiTask.
   (Exceptions: the Video node fetches streams itself, Poster nodes load
   logos from their URL, and StreamRelay fetches live and archive playlists
-  and segments for streams it repairs.)
+  and segments for streams it repairs; the Dolby converter on the home
+  Raspberry Pi fetches streams it converts.)
 - Provider parsing rules are data, not code.
 - Screens talk only to MainScene (interface fields in, output fields out). They
   never call ApiTask or StateStore directly.
@@ -93,6 +94,13 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   and the time-zone rules used for timeshift URLs. `deploy.ps1` refuses a
   rules file that isn't valid JSON and warns about patterns that don't
   compile; the app skips those patterns (`rulesRegex()` in Utils).
+- `pi/dolby-converter/`: the Dolby converter, a Python service (stdlib only)
+  plus ffmpeg on the home Raspberry Pi (192.168.222.99:8790). TVs that take
+  stereo only play Dolby channels through it (`MainPlayback.brs`: Settings ->
+  Dolby converter, `convertStreams`); it serves its own live playlist so
+  provider session changes don't stall the player (requirements: "Dolby audio
+  converter on a home Raspberry Pi"). Settings finds it by a UDP broadcast
+  (port 8791) that StreamRelay sends and the Pi answers.
 
 ## Conventions
 
@@ -168,6 +176,11 @@ state (wiped, reinstalled) restores itself at launch:
 
     .\scripts\backup-roku.ps1 -Roku Basement
 
+Install or update the Dolby converter on the Pi (SSH host `iptv-pi`, a key
+without a passphrase; `$LocalPi` in `deploy.local.ps1` overrides):
+
+    .\scripts\pi-deploy.ps1
+
 Home-screen logo and splash: `.\scripts\make-icons.ps1` draws them into
 `images/` (colors and text at the top of the script); the manifest points at
 them.
@@ -218,6 +231,9 @@ optional record marks joined without a schema change).
   channels and network schedules, logos), Settings (per-device options,
   connections, account expiry, backup panel), manual backup and automatic
   restore.
+- Dolby converter on the home Raspberry Pi (Oct 8, 2026): ESPN 1080p played
+  through it on the Basement TV (with `converter_test`); not yet tried on
+  the Family Room and Deck TVs it's for, or with the archive.
 - Known limits: HD timeshift archives exceed this Roku's video buffer; some
   channels use an AAC variant no Roku decodes (Tennis Channel 2); this
   provider sends no episode descriptions for some series.
