@@ -257,7 +257,13 @@ class Admin:
                 shared["favorites"] = [r.get("name", "") for r in doc.get("favorites", []) if not r.get("deleted")]
             except (ValueError, KeyError):
                 shared["error"] = "couldn't be opened (another household key?)"
-        return {"tvs": tvs, "household": household, "shared": shared}
+        offsite = {}
+        try:
+            with open(os.path.join(self.store.root, "offsite.json")) as f:
+                offsite = json.loads(f.read())
+        except (OSError, ValueError):
+            pass        # the nightly copy hasn't run yet
+        return {"tvs": tvs, "household": household, "shared": shared, "offsite": offsite}
 
     def send_tv(self, h, device, day):
         if day:
@@ -324,10 +330,18 @@ class Admin:
                 if t.get("logo"):
                     team["logo"], team["logoFor"] = str(t["logo"]), str(t.get("logoFor", ""))
                 household["teams"].append(team)
+        # "Save and send to all TVs": accountAt tells the TVs already set up to
+        # switch to this account (each tries a login with it first). A plain
+        # save keeps the last one, so they don't switch.
+        if value.get("pushAccount"):
+            household["accountAt"] = household["updatedAt"]
+        else:
+            household["accountAt"] = int(self.read_household().get("accountAt", 0) or 0)
         if not household["credentials"]["server"].startswith(("http://", "https://")):
             raise ValueError("the server URL must start with http:// or https://")
         sealed = self.sealer.seal(household, "household", "Household setup")
         self.write_atomic(self.household_path(), json.dumps(sealed).encode())
-        self.log.info("household setup saved from the admin page (%d favorites, %d teams)",
-                      len(household["favorites"]), len(household["teams"]))
-        self.send(h, 200, {"ok": True})
+        self.log.info("household setup saved from the admin page (%d favorites, %d teams)%s",
+                      len(household["favorites"]), len(household["teams"]),
+                      "; account sent to all TVs" if value.get("pushAccount") else "")
+        self.send(h, 200, {"ok": True, "accountAt": household["accountAt"]})

@@ -60,6 +60,7 @@
 <main id="app" hidden>
   <section id="tvs" class="on">
     <p class="dim">Each TV backs itself up to this Raspberry Pi within a minute of a change. A TV that loses its saved data (a reinstall) offers to restore its backup when it starts.</p>
+    <div id="offsite" class="card"></div>
     <div id="tvList"></div>
     <div id="tvDetail"></div>
   </section>
@@ -81,6 +82,11 @@
       <label class="field"><span>Password</span>
         <div class="row"><input type="password" id="accountPassword" class="grow" autocomplete="off"><button class="small" id="showPassword">Show</button></div>
       </label>
+      <div class="row">
+        <button id="pushAccount">Save and send to all TVs</button>
+        <span id="pushNote" class="dim grow"></span>
+      </div>
+      <p class="dim">For a new provider password, server or account: every TV tries it within about 10 minutes (or when it starts or goes back to Home) and switches only if it logs in. A TV turned off for it in Settings &gt; Sharing between TVs keeps its own.</p>
     </div>
     <div class="card">
       <h2>Local stations</h2>
@@ -148,12 +154,22 @@ async function start() {
   $("signin").hidden = true; $("app").hidden = false; $("tabs").hidden = false;
   drawTvs(); drawSharing();
   household = Object.assign({ credentials: {}, favorites: [], teams: [], market: { key: "", label: "" }, settings: {} }, await api("GET", "household"));
-  fillCopyFrom(); drawHousehold();
+  fillCopyFrom(); drawHousehold(); drawPushNote();
   $("householdNote").textContent = state.household.exists ? "Last saved " + when(state.household.savedAt) : "Not set up yet.";
 }
 
 // ---- TVs ---------------------------------------------------------------
+function drawOffsite() {
+  const box = $("offsite"); box.replaceChildren(el("h2", "Off-site copy (OneDrive)"));
+  const o = state.offsite || {};
+  if (!o.lastTry) { box.append(el("div", "Not run yet. Every night at 3:30 AM the Pi copies its backups to OneDrive, DixieTV-backups.", "dim")); return; }
+  const day = 86400, age = Date.now() / 1000 - (o.lastOk || 0);
+  box.append(el("div", o.lastOk ? "Last copied " + when(o.lastOk) : "Never copied yet", age > 2 * day ? "warn" : ""));
+  if (!o.ok) box.append(el("div", "Last try " + when(o.lastTry) + ": " + o.message, "bad"));
+}
+
 function drawTvs() {
+  drawOffsite();
   const list = $("tvList"); list.replaceChildren();
   if (!state.tvs.length) { list.append(el("p", "No TV has backed up yet.", "dim")); return; }
   for (const tv of state.tvs) {
@@ -261,13 +277,23 @@ function listWithRemove(id, items, label) {
   });
 }
 
-async function saveHousehold() {
+function drawPushNote() {
+  $("pushNote").textContent = household.accountAt ? "Last sent to the TVs " + when(household.accountAt) : "Not sent to the TVs yet.";
+}
+
+async function pushAccount() {
+  if (!confirm("Send this account (server, username, password) to every TV? Each TV switches only if it can log in with it.")) return;
+  await saveHousehold(true);
+}
+
+async function saveHousehold(push) {
   household.credentials = { server: $("server").value.trim(), username: $("username").value.trim(), password: $("accountPassword").value };
   try {
-    await api("PUT", "household", household);
+    const reply = await api("PUT", "household", Object.assign({}, household, { pushAccount: push === true }));
+    household.accountAt = reply.accountAt; drawPushNote();
     state = await api("GET", "state");
     $("householdNote").textContent = "Saved " + when(state.household.savedAt) + ". A new TV starts from this.";
-    note("Household setup saved.");
+    note(push === true ? "Saved and sent. The TVs switch within about 10 minutes." : "Household setup saved.");
   } catch (e) { note("Not saved: " + e.message); }
 }
 
@@ -294,7 +320,8 @@ $("signinButton").onclick = signIn;
 $("password").onkeydown = (e) => { if (e.key === "Enter") signIn(); };
 $("signout").onclick = async () => { await api("POST", "logout").catch(() => {}); showSignIn(); };
 $("copyAll").onclick = copyAll;
-$("saveHousehold").onclick = saveHousehold;
+$("saveHousehold").onclick = () => saveHousehold(false);
+$("pushAccount").onclick = pushAccount;
 $("clearMarket").onclick = () => { household.market = { key: "", label: "" }; drawHousehold(); };
 $("showPassword").onclick = () => { const p = $("accountPassword"); p.type = p.type === "password" ? "text" : "password"; $("showPassword").textContent = p.type === "password" ? "Show" : "Hide"; };
 start().catch(() => showSignIn());

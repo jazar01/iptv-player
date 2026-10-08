@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly off-site copy of the Dixie TV backups
+
+[Timer]
+OnCalendar=*-*-* 03:30
+RandomizedDelaySec=10min
+# Missed while the Pi was off: run soon after it starts.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

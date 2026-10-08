@@ -229,6 +229,7 @@ sub initSharing()
     m.syncTries = 0
     m.lastSyncAt = 0
     m.syncNote = ""             ' Settings / Sharing page line
+    m.accountTry = invalid      ' an account sent from the admin page, being tried (onAccountTry)
     m.sharingScreen = invalid
     m.syncTimer = CreateObject("roSGNode", "Timer")
     m.syncTimer.duration = 600
@@ -255,7 +256,7 @@ end sub
 sub requestSync(reason as String)
     if not m.store.callFunc("isConfigured") then return
     share = m.store.callFunc("getShareSettings")
-    if not (share.favorites or share.teams or share.series or share.progress) then return
+    if not (share.favorites or share.teams or share.series or share.progress or share.account) then return
     if m.syncing
         m.syncAgain = true
         return
@@ -267,6 +268,10 @@ end sub
 
 sub onSyncResult(event as Object)
     r = event.GetData()
+    if asString(r.id) = "householdCheck"
+        checkHouseholdAccount(r)
+        return
+    end if
     if asString(r.id) = "household"
         onHouseholdFetched(r)
         return
@@ -301,6 +306,8 @@ sub finishSync(ok as Boolean, problem as String)
     if ok
         m.lastSyncAt = nowSeconds()
         m.syncNote = "last synced at " + formatClock(m.lastSyncAt)
+        ' An account sent from the admin page?
+        backupSend("syncRequest", { id: "householdCheck", op: "household" })
     else
         print "[main] sharing: "; problem
         m.syncNote = "NOT synced: " + problem
@@ -330,6 +337,7 @@ function sharingText() as String
     if share.teams then names.Push("teams")
     if share.series then names.Push("series and Watch List")
     if share.progress then names.Push("watch progress")
+    if share.account then names.Push("account changes")
     if names.Count() = 0 then return "off"
     text = joinStrings(names, ", ")
     if m.syncNote <> "" then text = text + "; " + m.syncNote
@@ -363,4 +371,66 @@ sub onShareToggled(event as Object)
     if turnOn then requestSync("setting")
     settings = m.sections.settings
     if settings <> invalid then settings.info = settingsInfo()
+end sub
+
+' ---------------------------------------------------------------------------
+' Account changes sent from the admin page ("Save and send to all TVs": the
+' household setup's accountAt). Checked after each sync. The TV logs in with
+' the new account first and switches only if that works; if the provider
+' refuses it, the TV keeps its own and doesn't try that one again (a newer
+' send is tried). Unreachable: tried again at the next sync. A TV with
+' Settings -> Sharing between TVs -> Account changes off keeps its own.
+
+sub checkHouseholdAccount(r as Object)
+    if not isTrue(r.ok) or asString(r.json) = "" or m.accountTry <> invalid or m.setup <> invalid then return
+    if not m.store.callFunc("getShareSettings").account then return
+    h = ParseJson(r.json, "i")
+    if type(h) <> "roAssociativeArray" or type(h.credentials) <> "roAssociativeArray" then return
+    at = toInt(h.accountAt)
+    if at <= 0 or at <= m.store.callFunc("getSettings").householdAccountAt then return
+    creds = { server: normalizeServer(asString(h.credentials.server)), username: asString(h.credentials.username), password: asString(h.credentials.password) }
+    if creds.server = "" then return
+    current = m.store.callFunc("getCredentials")
+    if current <> invalid and current.server = creds.server and current.username = creds.username and current.password = creds.password
+        m.store.callFunc("setSetting", "householdAccountAt", at)       ' already this one
+        return
+    end if
+    print "[main] the household setup has a new account; trying it"
+    m.accountTry = { creds: creds, at: at }
+    m.api.credentials = creds
+    sendRequest({ id: "accountTry", action: "" })
+end sub
+
+sub onAccountTry(res as Object)
+    t = m.accountTry
+    m.accountTry = invalid
+    if t = invalid then return
+    result = evaluateLogin(res)
+    if not result.ok
+        restoreSavedCredentials()
+        ' Any 4xx is a refusal too: this provider answers a wrong password with
+        ' HTTP 404 (Oct 8, 2026), which a login takes for a wrong server URL.
+        ' Only no answer, time-outs and server errors are tried again.
+        if result.rejected or (res.code >= 400 and res.code < 500)
+            ' Wrong password or account: not tried again until it's sent anew.
+            m.store.callFunc("setSetting", "householdAccountAt", t.at)
+            print "[main] the household account was refused ("; redact(result.message); "); kept this TV's"
+            showToast("The account sent from the admin page didn't log in, so this TV kept its own.")
+        else
+            print "[main] couldn't try the household account now ("; redact(result.message); "); trying again later"
+        end if
+        return
+    end if
+    values = { server: t.creds.server, username: t.creds.username, password: t.creds.password, deviceName: m.store.callFunc("getDevice").deviceName }
+    if not saveSetup(values)
+        restoreSavedCredentials()
+        print "[main] the household account couldn't be saved here"
+        return
+    end if
+    m.store.callFunc("setSetting", "householdAccountAt", t.at)
+    print "[main] account updated from the household setup"
+    showToast("Account updated from the household setup")
+    ' As after any login: account details, then the lists from the new account.
+    onLogin(res)
+    refreshHome()
 end sub

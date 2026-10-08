@@ -234,6 +234,7 @@ function getSettings() as Object
         showScores: isTrue(m.doc.settings.showScores)
         dolbyConverter: asString(m.doc.settings.dolbyConverter)     ' "address:port" of the Pi, "" = off
         serverTimezone: asString(m.doc.settings.serverTimezone)     ' last seen, for timeshift
+        householdAccountAt: toInt(m.doc.settings.householdAccountAt)    ' the household account last taken (or refused)
     }
 end function
 
@@ -1431,6 +1432,8 @@ end function
 '   teams      My Teams
 '   series     Favorite Series and the Watch List
 '   progress   resume points and watched episodes (series progress)
+'   account    account changes sent from the admin page (not merged: see
+'              MainBackup checkHouseholdAccount)
 ' Shared copy: { favorites: [], teams: [], watchlist: [], series: [{ seriesId,
 ' name, year, favorite, favoriteAt, watched, current, progressAt }],
 ' resume: [], resumeGone: [] }. Kinds a TV leaves out pass through as they are.
@@ -1439,7 +1442,7 @@ function getShareSettings() as Object
     share = m.doc.settings.share
     if type(share) <> "roAssociativeArray" then share = {}
     out = {}
-    for each kind in ["favorites", "teams", "series", "progress"]
+    for each kind in ["favorites", "teams", "series", "progress", "account"]
         out[kind] = (share[kind] = invalid or isTrue(share[kind]))
     end for
     return out

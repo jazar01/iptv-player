@@ -1,11 +1,12 @@
 sub init()
     m.list = m.top.FindNode("list")
-    m.kinds = ["favorites", "teams", "series", "progress"]
+    m.kinds = ["favorites", "teams", "series", "progress", "account"]
     m.labels = {
         favorites: "Favorites (live channels)"
         teams: "My Teams"
         series: "Favorite Series and Watch List"
         progress: "Watch progress (where you stopped, watched episodes)"
+        account: "Account changes from the admin page (server, password)"
     }
     m.list.ObserveField("itemSelected", "onSelected")
     m.top.ObserveField("focusedChild", "onFocusedChild")

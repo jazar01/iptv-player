@@ -3,9 +3,9 @@
   Settings -> Sharing between TVs: which kinds of saved data this TV shares
   with the household's other TVs (through the Raspberry Pi). All on by
   default; OK turns one on or off.
-  In:  share    { favorites, teams, series, progress } (booleans)
+  In:  share    { favorites, teams, series, progress, account } (booleans)
        status   a line about the last sync
-  Out: toggled  the kind chosen ("favorites" | "teams" | "series" | "progress")
+  Out: toggled  the kind chosen ("favorites" | "teams" | "series" | "progress" | "account")
 -->
 <component name="SharingScreen" extends="Group">
   <interface>
@@ -19,11 +19,11 @@
     <Label translation="[96,56]" width="1600" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" text="Sharing between TVs" />
     <Label translation="[96,120]" width="1500" wrap="true" font="font:SmallSystemFont" color="0x8C96A0FF"
       text="What this TV shares with your other TVs, through the Raspberry Pi: a change on one shows up on the others within a few minutes. Turn a kind off to keep it to this TV; what's already here stays. OK turns one on or off." />
-    <LabelList id="list" translation="[96,300]" itemSize="[1400,64]" numRows="4"
+    <LabelList id="list" translation="[96,300]" itemSize="[1400,64]" numRows="5"
       font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont"
       color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png"
       vertFocusAnimationStyle="floatingFocus" />
-    <Label id="status" translation="[96,600]" width="1500" wrap="true" font="font:SmallSystemFont" color="0xA0A8B0FF" />
+    <Label id="status" translation="[96,660]" width="1500" wrap="true" font="font:SmallSystemFont" color="0xA0A8B0FF" />
   </children>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />

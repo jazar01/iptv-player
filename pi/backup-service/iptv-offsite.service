@@ -1,0 +1,8 @@
+[Unit]
+Description=Dixie TV off-site copy of the backups (to OneDrive)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /opt/iptv-backup/offsite.sh

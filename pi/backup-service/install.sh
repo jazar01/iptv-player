@@ -22,7 +22,26 @@ chmod 0640 /etc/iptv-backup/key
 install -d /opt/iptv-backup
 install -m 0644 backup.py admin.py admin.html /opt/iptv-backup/
 install -m 0644 iptv-backup.service /etc/systemd/system/iptv-backup.service
+# Nightly off-site copy to OneDrive (offsite.sh; does nothing until the
+# rclone connection in /etc/iptv-backup/rclone.conf is set up).
+# A current rclone from rclone.org, checksum checked: Debian's (1.60) can list
+# OneDrive but uploads fail with "unauthenticated" (Microsoft changed the
+# upload interface; found Oct 8, 2026).
+rclone_minor=$(rclone version 2>/dev/null | sed -n 's/^rclone v1\.\([0-9]*\).*/\1/p')
+if [ -z "$rclone_minor" ] || [ "$rclone_minor" -lt 65 ]; then
+    work=$(mktemp -d)
+    version=$(curl -fsSL https://downloads.rclone.org/version.txt | awk '{print $2}')
+    deb="rclone-$version-linux-arm64.deb"
+    curl -fsSL "https://downloads.rclone.org/$version/$deb" -o "$work/$deb"
+    curl -fsSL "https://downloads.rclone.org/$version/SHA256SUMS" -o "$work/SHA256SUMS"
+    (cd "$work" && grep " $deb\$" SHA256SUMS | sha256sum -c - >/dev/null)
+    dpkg -i "$work/$deb" >/dev/null
+    rm -rf "$work"
+fi
+install -m 0755 offsite.sh /opt/iptv-backup/offsite.sh
+install -m 0644 iptv-offsite.service iptv-offsite.timer /etc/systemd/system/
 systemctl daemon-reload
+systemctl enable --now iptv-offsite.timer >/dev/null 2>&1
 systemctl enable iptv-backup >/dev/null 2>&1
 systemctl restart iptv-backup
 sleep 1

@@ -96,7 +96,11 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   (`components/screens/SharingScreen.*`) picks the kinds per TV. Stage 3:
   the admin page `http://<pi>:8792/admin` (`pi/backup-service/admin.*`,
   password `$AdminPassword` in `deploy.local.ps1`) shows the backups and edits
-  the household setup; a new TV starts from it (`applyHousehold`).
+  the household setup; a new TV starts from it (`applyHousehold`). Nightly
+  off-site copy to OneDrive (`offsite.sh`, rclone, `iptv-offsite.timer`;
+  requirements "Off-site copy"). Keep `$BackupKey` somewhere off this PC.
+  "Save and send to all TVs" on the admin page pushes the account: each TV
+  tries a login first (`checkHouseholdAccount`, `onAccountTry`).
 - `components/services/StateStore.*`: interface functions called via
   `callFunc`. Every mutation saves immediately and returns true only if it
   persisted.
@@ -253,7 +257,9 @@ is the final check.
 
 ## Status
 
-All of version 1 is built; the design and per-feature notes are in
+Version 2.0 (manifest 2.0.0, Oct 8, 2026): all of version 1, plus V2 backups,
+sharing between TVs, the household setup and admin page on the Pi, and the
+Dolby converter. The design and per-feature notes are in
 docs/requirements.md. Saved state is schema 8 (later per-device options and
 optional record marks joined without a schema change).
 
@@ -273,7 +279,10 @@ optional record marks joined without a schema change).
   through it on the Basement TV (with `converter_test`) and works on the
   Family Room TV; not yet tried on the Deck TV or with the archive.
 - Known limits: HD timeshift archives exceed this Roku's video buffer; some
-  channels use an AAC variant no Roku decodes (Tennis Channel 2); this
+  channels sometimes send an AAC variant no Roku decodes (Tennis Channel 2;
+  it played again on Oct 8, 2026, and the Pi converter, which re-encodes the
+  audio, may fix it when it comes back: untried, since the app sends only
+  Dolby failures there); this
   provider sends no episode descriptions for some series.
 - Not yet tried on a Roku: a real provider renumbering, reaching 90% of an
   episode, the connection-limit message, the usage-ordering effect.
