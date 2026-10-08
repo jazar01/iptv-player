@@ -221,6 +221,7 @@ function settingsInfo() as Object
         expires: accountExpiryText()
         audio: dolbyAudioText()
         converter: converterText()
+        backup: backupText()
         market: m.store.callFunc("getMarket").label
         showMyTeams: m.store.callFunc("getSettings").showMyTeams
         showNoGameTeams: m.store.callFunc("getSettings").showNoGameTeams

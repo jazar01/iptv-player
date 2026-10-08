@@ -27,23 +27,44 @@ sub init()
     m.MARKS_CAP = 40            ' per kind; about 20 bytes each
 
     m.backend = RegistryBackend("iptv_state")
-    m.doc = m.backend.read()
-    restored = false
+    ' restore_test=1 in the manifest: start as a TV with nothing saved, and
+    ' keep everything in memory only (persist() writes nothing), to try the
+    ' restore offer without touching this TV's saved state. Take it out after.
+    m.testMode = (CreateObject("roAppInfo").GetValue("restore_test") = "1")
+    if m.testMode
+        print "[state] RESTORE TEST: starting empty; nothing will be saved"
+        m.doc = invalid
+    else
+        m.doc = m.backend.read()
+    end if
     if m.doc = invalid
-        ' Nothing saved (fresh install, or wiped): use the restore bundle that
-        ' deploy.ps1 packaged from backups\, if there is one for this Roku.
-        m.doc = restoredDocument()
-        restored = (m.doc <> invalid)
-        if not restored
-            print "[state] no saved state; starting fresh"
-            m.doc = newDocument()
-        end if
+        ' Nothing saved (fresh install, or wiped). MainScene first offers the
+        ' Pi's backups (newer), then falls back to restoreFromBundle().
+        print "[state] no saved state; starting fresh"
+        m.doc = newDocument()
     end if
     normalizeDocument(m.doc)
     ' The last saved state: a failed save puts m.doc back to it (persist()).
     m.committed = copyDocument(m.doc)
-    if restored and not persist() then print "[state] WARNING: restored state couldn't be saved yet; it will be on the next change"
 end sub
+
+' The restore bundle deploy.ps1 packaged from backups\ (restoredDocument):
+' used when nothing is saved and the Pi has no backup for this TV. True if
+' one was found and saved.
+function restoreFromBundle() as Boolean
+    if isConfigured() then return false
+    doc = restoredDocument()
+    if doc = invalid then return false
+    previous = m.doc
+    m.doc = doc
+    normalizeDocument(m.doc)
+    if not persist()
+        m.doc = previous
+        print "[state] WARNING: the bundled backup couldn't be saved"
+        return false
+    end if
+    return true
+end function
 
 ' ---------------------------------------------------------------------------
 ' Manual backup and restore (until the V2 backup service).
@@ -52,6 +73,23 @@ end sub
 ' MainScene prints to the console for scripts\backup-roku.ps1.
 function exportDocument() as String
     return FormatJson(m.doc)
+end function
+
+' A backup from the Pi (BackupTask), as this TV's state: the TV becomes the
+' one backed up (same device ID and name). Only offered when nothing is
+' saved here. True if it was a usable document and was saved.
+function importDocument(json as String) as Boolean
+    doc = ParseJson(json, "i")     ' "i": see copyDocument
+    if type(doc) <> "roAssociativeArray" or type(doc.credentials) <> "roAssociativeArray" then return false
+    previous = m.doc
+    m.doc = doc
+    normalizeDocument(m.doc)
+    if not persist()
+        m.doc = previous
+        return false
+    end if
+    print "[state] restored from the Pi's backup of '"; asString(m.doc.deviceName); "'"
+    return true
 end function
 
 ' pkg:/data/restore.json (deploy.ps1): { devices: [{ ip, name, document? }],
@@ -1109,6 +1147,10 @@ end sub
 ' include one that was reported as failed.
 function persist() as Boolean
     maintain()
+    if m.testMode
+        m.committed = copyDocument(m.doc)
+        return true
+    end if
     result = m.backend.write(m.doc)
     if result = "nospace" then result = writeWithTrimming()
     if result <> "ok"
@@ -1117,6 +1159,7 @@ function persist() as Boolean
         return false
     end if
     m.committed = copyDocument(m.doc)
+    m.top.savedCount = m.top.savedCount + 1
     return true
 end function
 

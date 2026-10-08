@@ -225,6 +225,17 @@ try {
         $writer = New-Object System.IO.StreamWriter($entry.Open(), (New-Object System.Text.UTF8Encoding($false)))
         try { $writer.Write($restoreJson) } finally { $writer.Dispose() }
     }
+    # The household key for backups on the Pi (BackupTask), from $BackupKey in
+    # deploy.local.ps1; without it the app's backups are off.
+    if ($BackupKey -match '^[0-9a-fA-F]{64}$') {
+        $entry = $zip.CreateEntry('data/backup.json', 'Optimal')
+        $writer = New-Object System.IO.StreamWriter($entry.Open(), (New-Object System.Text.UTF8Encoding($false)))
+        try { $writer.Write('{"key":"' + $BackupKey.ToLower() + '"}') } finally { $writer.Dispose() }
+        Write-Host 'Backups: household key included'
+    }
+    else {
+        Write-Host 'Backups: off (no $BackupKey in deploy.local.ps1)'
+    }
     foreach ($name in $include) {
         $path = Join-Path $root $name
         if (-not (Test-Path $path)) { continue }

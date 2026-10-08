@@ -63,7 +63,7 @@ sub onInfo()
     if connections = "" then connections = "checking ..."
     expires = asString(info.expires)
     if expires = "" then expires = "no end date"
-    m.details.text = "Device name:  " + asString(info.deviceName) + nl + "Server:  " + asString(info.server) + nl + "Account expires:  " + expires + nl + "Connections:  " + connections + "  (all devices on this account)" + nl + "Audio:  " + asString(info.audio) + nl + "Dolby converter:  " + asString(info.converter) + nl + "Device ID:  " + asString(info.deviceId) + nl + "App version:  " + asString(info.version)
+    m.details.text = "Device name:  " + asString(info.deviceName) + nl + "Server:  " + asString(info.server) + nl + "Account expires:  " + expires + nl + "Connections:  " + connections + "  (all devices on this account)" + nl + "Audio:  " + asString(info.audio) + nl + "Dolby converter:  " + asString(info.converter) + nl + "Backup:  " + asString(info.backup) + nl + "Device ID:  " + asString(info.deviceId) + nl + "App version:  " + asString(info.version)
 end sub
 
 ' ---------------------------------------------------------------------------

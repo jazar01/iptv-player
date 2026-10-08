@@ -39,6 +39,7 @@ sub init()
     initChannelInfo()
     initMovies()
     initGuide()
+    initBackup()
 
     m.api.ObserveField("response", "onApiResponse")
     m.api.ObserveField("ready", "onApiReady")
@@ -66,6 +67,7 @@ sub init()
         login()
     else
         showSetup("")
+        offerRestore()      ' a backup on the Pi, if this TV is one of them
     end if
 end sub
 

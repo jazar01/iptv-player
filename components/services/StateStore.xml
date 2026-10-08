@@ -10,6 +10,8 @@
 -->
 <component name="StateStore" extends="Node">
   <interface>
+    <!-- Counts successful saves: MainScene observes it to back up (BackupTask). -->
+    <field id="savedCount" type="integer" value="0" />
     <function name="isConfigured" />
     <function name="getCredentials" />
     <function name="setAccount" />
@@ -70,6 +72,8 @@
     <function name="getRecentSearches" />
     <function name="addRecentSearch" />
     <function name="removeRecentSearch" />
+    <function name="importDocument" />
+    <function name="restoreFromBundle" />
     <function name="getStreamMarks" />
     <function name="setStreamMarks" />
   </interface>

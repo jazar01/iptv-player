@@ -11,7 +11,8 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   (Exceptions: the Video node fetches streams itself, Poster nodes load
   logos from their URL, and StreamRelay fetches live and archive playlists
   and segments for streams it repairs; the Dolby converter on the home
-  Raspberry Pi fetches streams it converts.)
+  Raspberry Pi fetches streams it converts; BackupTask talks to the backup
+  service on the Pi.)
 - Provider parsing rules are data, not code.
 - Screens talk only to MainScene (interface fields in, output fields out). They
   never call ApiTask or StateStore directly.
@@ -81,6 +82,13 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
 - `components/services/MyTeams.brs`: finds saved teams' games in event-channel
   names; runs in SearchTask (`gamesRequest` / `gamesResult`). MainTeams.brs
   asks for games, labels replays and wires the screens.
+- `components/services/BackupTask.*` and `components/MainBackup.brs`: V2
+  backups. Each TV's saved state goes to the backup service on the Pi
+  (`pi/backup-service/`, found by a UDP broadcast, port 8793), sealed with
+  the household key (`$BackupKey` in `deploy.local.ps1`, packaged as
+  `data/backup.json`): AES-256-CBC plus HMAC. A TV with nothing saved offers
+  to restore one. `restore_test=1` in the manifest starts empty and saves
+  nothing, to try the restore; take it out after.
 - `components/services/StateStore.*`: interface functions called via
   `callFunc`. Every mutation saves immediately and returns true only if it
   persisted.
@@ -113,6 +121,9 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
 - `end`, `next`, `stop` and `step` are reserved in BrightScript, even as AA
   keys with dot access: programs use `start`/`ends`, EPG entries
   `now`/`upcoming`.
+- In an object literal, unquoted keys are lower-cased in `FormatJson` output
+  (`{ savedAt: 1 }` gives `"savedat"`): quote keys that leave the app
+  (`{ "savedAt": 1 }`), as the sealed backups do.
 - Parse saved state with `ParseJson(text, "i")`. Without "i" the objects are
   case-sensitive, and a dot write (`doc.seenGames = x`) adds a second,
   lower-case key instead of replacing the parsed "seenGames" (Oct 2026).
@@ -185,7 +196,8 @@ state (wiped, reinstalled) restores itself at launch:
 
     .\scripts\backup-roku.ps1 -Roku Basement
 
-Install or update the Dolby converter on the Pi (SSH host `iptv-pi`, a key
+Install or update the services on the Pi, the Dolby converter and the backup
+service (`-Service converter|backup` for one; SSH host `iptv-pi`, a key
 without a passphrase; `$LocalPi` in `deploy.local.ps1` overrides):
 
     .\scripts\pi-deploy.ps1

@@ -16,3 +16,7 @@ $LocalRokus = @(
 # The home Raspberry Pi for .\scripts\pi-deploy.ps1 (an SSH host from ~\.ssh\config,
 # or user@address; key login, no password prompt). Default: iptv-pi.
 # $LocalPi = 'iptv-pi'
+
+# Household key for V2 backups on the Pi: 64 hex characters (32 random bytes).
+# Keep it secret; a new key makes existing backups unreadable.
+# $BackupKey = '<64 hex characters>'

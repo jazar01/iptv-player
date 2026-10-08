@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Backups on the home Raspberry Pi (pi/backup-service). Its own thread, so
+  nothing on screen waits for it, and not ApiTask's provider request slots.
+  Finds the service by a broadcast (UDP 8793), seals each backup with the
+  household key (pkg:/data/backup.json, from $BackupKey at deploy): AES-256-CBC,
+  then HMAC-SHA256, so the Pi only stores what it can't read. Off when the
+  package has no key.
+
+  In:  upload        { json, deviceId, name }  this TV's saved state (plain
+                     JSON: it holds the provider password; never printed)
+       listRequest   { id }  the backups on the Pi
+       fetchRequest  { id, deviceId }  one backup, opened
+  Out: listResult    { id, ok, devices: [{ id, name, savedAt }], error }
+       fetchResult   { id, ok, json, error }
+       status        { enabled, address, savedAt, error }  for Settings
+-->
+<component name="BackupTask" extends="Task">
+  <interface>
+    <field id="upload" type="assocarray" alwaysNotify="true" />
+    <field id="listRequest" type="assocarray" alwaysNotify="true" />
+    <field id="fetchRequest" type="assocarray" alwaysNotify="true" />
+    <field id="listResult" type="assocarray" alwaysNotify="true" />
+    <field id="fetchResult" type="assocarray" alwaysNotify="true" />
+    <field id="status" type="assocarray" alwaysNotify="true" />
+    <!-- True once the thread is listening: requests set before that are lost. -->
+    <field id="ready" type="boolean" value="false" />
+  </interface>
+
+  <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/components/services/BackupTask.brs" />
+</component>

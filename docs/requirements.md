@@ -348,7 +348,7 @@ Items within each row are ordered by a decaying score that combines recency and 
 
 ### Off-device backup and sync (V2)
 
-Planned for version 2; not started. Prompted by Oct 6, 2026, when a failed sideload removed the Basement Roku's dev app and with it all its saved state. Decisions so far:
+Version 2, in progress: stage 1 (automatic backups to the home Pi, restore) built Oct 8, 2026; see "Built" below. Prompted by Oct 6, 2026, when a failed sideload removed the Basement Roku's dev app and with it all its saved state. Decisions so far:
 
 **Service: interchangeable storage, nothing more.**
 
@@ -397,7 +397,17 @@ Planned for version 2; not started. Prompted by Oct 6, 2026, when a failed sidel
 - Access: Cloudflare Access (Zero Trust free plan, up to 50 users) asks for an email code or Google sign-in before the page loads. Its sign-up may ask for a card even on the free plan; confirm when setting up. Fallback: a password checked by the Worker. The Roku endpoints stay key-signed, with no sign-in.
 - Built and deployed from this repo with the rest of V2 (Worker, admin page, protocol test script).
 
-**Still open:** the host (Cloudflare, the home Pi, or both), the domain/hostname to use, and which records are shared.
+**Decided (Oct 8, 2026):** the home Raspberry Pi is the host, found by a network search (as the Dolby converter is), not a hostname; shared between TVs: favorites, My Teams, Favorite Series and the Watch List, and watch progress (resume points and watched episodes). Device name, local stations market, Recently Viewed, settings and usage ordering stay per TV.
+
+**Built, stage 1: automatic backups and restore (Oct 8, 2026).** Stages: 1 backups and restore; 2 sharing the chosen records between TVs; 3 the household configuration and admin page.
+
+- **Pi:** `pi/backup-service/backup.py` (Python standard library only) runs as the `iptv-backup` systemd service on port 8792 under its own no-login account, storing in `/var/lib/iptv-backup`: `devices/<id>.json`, the latest sealed backup per TV, and `history/<id>/<YYYY-MM-DD>.json`, the last copy of each day, 30 days kept. Protocol: `GET /devices` (id, name, savedAt), `GET`/`PUT /devices/<id>`, `GET /devices/<id>/history` and `/devices/<id>/<day>`, `GET /health`. It answers `IPTV-BACKUP?` on UDP 8793 with `IPTV-BACKUP <port> <version>`, home network only. `scripts\pi-deploy.ps1 -Service backup` installs it (no `-Service`: the converter too).
+- **Household key:** 32 random bytes, `$BackupKey` in `scripts\deploy.local.ps1` (git-ignored; a new key makes existing backups unreadable). `deploy.ps1` puts it into the package as `data/backup.json`; `pi-deploy.ps1` writes it to `/etc/iptv-backup/key` (root and the service only) over SSH's input. Keys derived from it: encryption = HMAC-SHA256(key, "enc"), signing = HMAC-SHA256(key, "mac").
+- **Sealed backup:** `{"v":1, "device", "name", "savedAt", "iv", "data", "mac"}`: the saved document encrypted with AES-256-CBC (random IV), base64; mac = HMAC-SHA256 over iv + data. The Pi checks the mac and refuses a mismatch, so other devices on the network can't overwrite a backup; it can't read one. Names and save times are in the clear, for the restore list. Basement's is about 7 KB.
+- **App:** BackupTask, its own thread (`components/services/BackupTask.*`), finds the service by the broadcast, seals and sends; MainBackup.brs sends this TV's state 20 s after launch and within a minute of any save (not pushed back by later saves, so movie progress every 30 s can't hold it off). Settings shows "Backup: saved to the Raspberry Pi at 2:09 PM", or why not. Nothing waits on the Pi.
+- **Restore:** a TV that starts with nothing saved asks the Pi for its backups and offers "Restore this TV?" with each TV's name and save time, plus "Set up as a new TV". Choosing one makes this TV that one again (same device ID and name), then Home and the login carry on as at a normal launch. No Pi, nothing on it, or "Set up as a new TV": the copy `deploy.ps1` bundled from `backups\` (this TV's by IP, else the household copy), as before; otherwise Setup. The bundle is no longer applied automatically at startup, since the Pi's copy is newer.
+- **Tested Oct 8, 2026 on the Basement TV:** backups found the Pi and were saved; one decrypted on the PC with the key (8 favorites, 3 teams, 2 series, 2 Watch List movies, the account); a forged upload was refused. With `restore_test=1` in the manifest (start empty, write nothing), the TV offered Basement's backup, restored it, and Home came back with favorites, My Teams and Continue Watching.
+- **Not yet:** a nightly copy off the Pi; an SSD.
 
 Later, the service could also compute results the Roku can't (full-guide search, e.g. for My Teams) and push parsing-rule updates.
 

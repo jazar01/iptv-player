@@ -1,0 +1,21 @@
+[Unit]
+Description=IPTV Player backup service (sealed backups of each TV's saved state)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=iptvbackup
+ExecStart=/usr/bin/python3 /opt/iptv-backup/backup.py --port 8792 --allow 192.168.222.0/24
+Restart=always
+RestartSec=3
+# Backups go in /var/lib/iptv-backup (StateDirectory); nothing else is written.
+StateDirectory=iptv-backup
+StateDirectoryMode=0750
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
