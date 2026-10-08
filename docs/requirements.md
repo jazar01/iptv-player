@@ -405,6 +405,17 @@ Not built; recorded Oct 7, 2026 as an option. The problem: a TV that accepts onl
 - **Home network (as of Oct 2026):** the Pi on wired gigabit Ethernet; some Rokus are wireless, on Ubiquiti UniFi AP SHDs (802.11ac Wave 2, 4x4, up to about 1.7 Gbit/s on 5 GHz), far more than a few streams need. A wireless Roku gets the same amount of data from the Pi as it does from the internet today, so one that streams well now will through the Pi; delivery may even be steadier, since provider hiccups no longer reach it directly. If one struggles, check in the UniFi controller (Clients): that it's on 5 GHz (the Ultras support it), its signal (about -65 dBm or better) and link rate (well above 50 Mbit/s), and whether it flips between APs (lock it to the nearest only if so).
 - **Alternative without code:** a soundbar or AV receiver with HDMI input between that Roku and its TV decodes Dolby itself (about $100 or more per TV). A Pi can't sit between Roku and TV instead: its two HDMI ports are outputs, and HDMI capture add-ons top out at 1080p30, are blocked by the Roku's HDCP, and add lag.
 
+### Computers and phones in this household (nice-to-have, not planned)
+
+Recorded Oct 7, 2026; no plans to build it. The Roku app is the main need, and its issues come first. The household also has Windows PCs, Macs and iPhones; a version for them may be considered later. If it is:
+
+- **Shape:** keep the Roku app as it is; a second app in Flutter covers Windows, Mac and iPhone/iPad from one codebase, in its own folder in this repository. Two codebases are practical with the changes made by the assistant; this document stays the single description of both.
+- **Shared, not copied:** `data/guide-rules.json` (guide tags, My Teams rules, search synonyms, scoreboard leagues), the saved-document format, and the V2 sync protocol, so favorites, teams and progress follow between TVs, computers and phones.
+- **Order:** Windows first (built, run and tested on the development PC), then Mac and iPhone (built on a Mac; iPhones need an Apple developer account at $99/year, or installs that expire every 7 days). Features: live TV with the guide and favorites, movies and series with resume, search, then My Teams and the rest.
+- **Costs that remain:** testing on each platform, Apple's signing, and each platform's own quirks.
+- **Accounts and connections:** the same household account, sharing its 3 connections with the TVs. Other households use their own provider accounts.
+- **Until then:** VLC on a PC or Mac can open the account's M3U playlist link, and IPTV apps in the App Store take an Xtream login.
+
 ## Open questions
 
 - [ ] Which Roku models are in use? Older models have much less memory, which limits catalog caching.
