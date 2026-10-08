@@ -171,12 +171,16 @@ sub onVideoState()
         ' stream will never play on this Roku, however often it's retried.
         audioUnsupported = (code = -5 and Instr(1, LCase(detail), "unsupported aac") > 0)
         message = friendlyError(code, httpStatus(detail))
+        ' Dolby audio that this TV connection doesn't take (a TV that accepts
+        ' stereo only over HDMI): no fix here, but another copy may not be Dolby.
+        dolbyUnsupported = (code = -5 and Instr(1, LCase(detail), "unsupported audio format: dolby") > 0)
         if audioUnsupported and m.play.kind = "live" then message = "This channel sends audio your Roku can't decode as it is. Trying to fix it ..."
+        if dolbyUnsupported and m.play.kind = "live" then message = "This channel's audio is Dolby, which this TV doesn't accept. Looking for another copy ..."
         m.errorMessage.text = message
         m.errorPanel.visible = true
         m.liveOverlay.visible = false
         m.saveTimer.control = "stop"
-        m.top.failed = { play: m.play, code: code, message: message, audioUnsupported: audioUnsupported }
+        m.top.failed = { play: m.play, code: code, message: message, audioUnsupported: audioUnsupported, dolbyUnsupported: dolbyUnsupported }
     else if state = "finished" and m.play.kind = "live" and not m.errored and m.playedSinceLoad
         ' (After an error the Video node also reports "finished", sometimes only
         ' once the next stream has loaded; reconnecting then would only repeat

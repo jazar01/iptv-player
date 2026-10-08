@@ -343,7 +343,9 @@ sub onPlayerFailed(event as Object)
         playLive({ streamId: id, name: m.playing.name, epgChannelId: m.playing.epgChannelId, archiveDays: m.playing.archiveDays, stepFrom: m.playing.stepFrom, direct: true, note: "This channel's audio is being repaired for Roku." })
         return
     end if
-    if m.playing <> invalid and m.playing.kind = "live" and (isTrue(failure.audioUnsupported) or isTrue(m.playing.relayed))
+    ' Dolby audio this TV doesn't accept, too: the relay can't help, but a
+    ' copy with other audio can (Family Room, Oct 2026).
+    if m.playing <> invalid and m.playing.kind = "live" and (isTrue(failure.audioUnsupported) or isTrue(failure.dolbyUnsupported) or isTrue(m.playing.relayed))
         ' Failed even through the audio fix (or the fix isn't running): mark
         ' it bad and go to a working copy.
         m.relayStreams.Delete(toInt(m.playing.id).ToStr())
@@ -424,7 +426,7 @@ sub onAutoCopies(result as Object)
     else
         ' No working copy: the error panel, with similar channels if any.
         print "[main] no playable copy of "; a.streamId
-        m.player.errorText = "This channel sends audio your Roku can't decode, and no other copy of it plays. The provider sometimes changes this; try again later."
+        m.player.errorText = "This channel's audio doesn't play on this TV, and no other copy of it does. The provider sometimes changes this; try again later."
         ' Similar channels by the name of the channel chosen, not of a copy
         ' ("LBW: FOX News" would only find other LBW channels).
         original = toInt(a.item.stepFrom)
