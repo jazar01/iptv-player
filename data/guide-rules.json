@@ -157,7 +157,19 @@
     },
     "guideAction": "get_simple_data_table",
     "guideListings": 30,
-    "guideMaxAgeMinutes": 60
+    "guideMaxAgeMinutes": 60,
+    "scores": {
+      "comment": "Live scores on game cards, from ESPN's public scoreboard JSON (no key; unofficial, so it may change or stop: then cards just show no score). Fetched only while Home shows a live game, every refreshSeconds, for that game's sport's leagues (our sport ID -> ESPN league paths, filled into url). groups=80 / 50 list every FBS football / Division I basketball game, not just the featured ones.",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/{league}/scoreboard",
+      "refreshSeconds": 45,
+      "leagues": {
+        "baseball": ["baseball/mlb"],
+        "football": ["football/nfl", "football/college-football?groups=80&limit=300"],
+        "basketball": ["basketball/nba", "basketball/wnba", "basketball/mens-college-basketball?groups=50&limit=300", "basketball/womens-college-basketball?groups=50&limit=300"],
+        "hockey": ["hockey/nhl"],
+        "soccer": ["soccer/usa.1", "soccer/eng.1", "soccer/uefa.champions"]
+      }
+    }
   },
   "episodeTitleComment": "Episode titles often repeat the series name and code ('The Last Kingdom (2015) - S01E01 - Episode 1'). In the episode list, everything up to and including a match of this pattern is dropped ('Episode 1'), unless that would leave nothing.",
   "episodeTitlePrefix": "^.*\\bS\\d{1,2}\\s?E\\d{1,3}\\b\\s*[-:|]?\\s*",

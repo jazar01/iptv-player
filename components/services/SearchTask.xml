@@ -31,6 +31,8 @@
   My Teams (MyTeams.brs):
   In:  gamesRequest { id, teams: [{ id, name, aliases[], exclusions[], sports[] }], withGuide, market }
        market: "GA|Atlanta" adds that market's local stations to the networks.
+  In:  scoresRequest { id, files: [cachefs: ESPN scoreboards], games: [{ key, names[], start }] }
+  Out: scoresResult  { id, scores: { "<game key>": "LAD 3 - ATL 1   Top 8th" } } (findScores)
   Out: gamesResult  { id, ready, games: [{ key, teamId, teamName, title, sport, sportLabel,
                       start, ends, live, replay, channels: [{ streamId, name, epgChannelId, network }] }],
                       networks: [{ label, streamId, name, epgChannelId, guideFile }] }
@@ -66,6 +68,8 @@
     <field id="selfTest" type="boolean" value="false" />
     <field id="gamesRequest" type="assocarray" alwaysNotify="true" />
     <field id="gamesResult" type="assocarray" alwaysNotify="true" />
+    <field id="scoresRequest" type="assocarray" alwaysNotify="true" />
+    <field id="scoresResult" type="assocarray" alwaysNotify="true" />
     <field id="marketsRequest" type="assocarray" alwaysNotify="true" />
     <field id="marketsResult" type="assocarray" alwaysNotify="true" />
     <field id="localsRequest" type="assocarray" alwaysNotify="true" />

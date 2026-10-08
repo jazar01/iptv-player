@@ -131,7 +131,7 @@ function setMarket(market as Object) as Boolean
 end function
 
 ' Per-device on/off options: { showMyTeams, showNoGameTeams,
-' showFavoritesInRecent, myTeamsFirst }. New options
+' showFavoritesInRecent, myTeamsFirst, showScores }. New options
 ' join this object with a default (normalizeDocument), so adding one doesn't
 ' change the document's shape.
 function getSettings() as Object
@@ -140,6 +140,7 @@ function getSettings() as Object
         showNoGameTeams: isTrue(m.doc.settings.showNoGameTeams)
         showFavoritesInRecent: isTrue(m.doc.settings.showFavoritesInRecent)
         myTeamsFirst: isTrue(m.doc.settings.myTeamsFirst)
+        showScores: isTrue(m.doc.settings.showScores)
         serverTimezone: asString(m.doc.settings.serverTimezone)     ' last seen, for timeshift
     }
 end function
@@ -1002,7 +1003,7 @@ function newDocument() as Object
         teams: []
         seenGames: []
         market: { key: "", label: "" }
-        settings: { showMyTeams: true, showNoGameTeams: true, showFavoritesInRecent: false, myTeamsFirst: false }
+        settings: { showMyTeams: true, showNoGameTeams: true, showFavoritesInRecent: false, myTeamsFirst: false, showScores: true }
     }
 end function
 
@@ -1054,6 +1055,7 @@ sub normalizeDocument(doc as Object)
     if doc.settings.showMyTeams = invalid then doc.settings.showMyTeams = true
     if doc.settings.showNoGameTeams = invalid then doc.settings.showNoGameTeams = true
     if doc.settings.showFavoritesInRecent = invalid then doc.settings.showFavoritesInRecent = false
+    if doc.settings.showScores = invalid then doc.settings.showScores = true
     if doc.settings.myTeamsFirst = invalid then doc.settings.myTeamsFirst = false
 
     ' Team names are shown capitalized ("Alabama Crimson Tide"); tidy any saved

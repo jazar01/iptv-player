@@ -18,6 +18,15 @@ sub initTeams()
     m.gamesTimer.repeat = true
     m.gamesTimer.ObserveField("fire", "onGamesTimer")
     m.gamesTimer.control = "start"
+
+    ' Live scores (Settings -> Live scores on My Teams): game key -> line.
+    m.scores = {}
+    m.scoresPending = 0
+    m.scoresFiles = []
+    m.scoresTimer = CreateObject("roSGNode", "Timer")
+    m.scoresTimer.repeat = true
+    m.scoresTimer.ObserveField("fire", "onScoresTimer")
+    m.top.AppendChild(m.scoresTimer)
 end sub
 
 ' Settings -> Show My Teams on Home. Off hides the row and skips the game
@@ -178,6 +187,7 @@ sub onGamesResult(event as Object)
     if started.Count() > 0 then m.store.callFunc("recordSeenGames", started)
     m.games = result.games
     refreshHome()
+    fetchScores()
     if type(result.networks) = "roArray" then fetchNetworkGuides(result.networks)
 end sub
 
@@ -435,5 +445,111 @@ sub toggleMyTeamsFirst()
     end if
     settings = m.sections.settings
     if settings <> invalid then settings.info = settingsInfo()
+    refreshHome()
+end sub
+
+' ---------------------------------------------------------------------------
+' Live scores on game cards, from ESPN's scoreboards (data/guide-rules.json
+' myTeams.scores). Only while Home is showing a live game that isn't a
+' replay, every refreshSeconds; each league's scoreboard goes to cachefs:
+' (saveOnly) and SearchTask matches it to the games (findScores). Anything
+' missing just means no score line.
+
+function scoresRules() as Dynamic
+    cfg = guideRules().myTeams
+    if type(cfg) <> "roAssociativeArray" or type(cfg.scores) <> "roAssociativeArray" then return invalid
+    return cfg.scores
+end function
+
+' The live games scores are wanted for: [{ key, sport, names, start }].
+function scoreGames() as Object
+    list = []
+    if not m.store.callFunc("getSettings").showScores then return list
+    aliases = {}
+    for each t in m.store.callFunc("getTeams")
+        names = [asString(t.name)]
+        if type(t.aliases) = "roArray" then names.Append(t.aliases)
+        aliases[asString(t.id)] = names
+    end for
+    for each g in m.games
+        if isTrue(g.live) and not isTrue(g.replay)
+            names = aliases[asString(g.teamId)]
+            if names = invalid then names = [asString(g.teamName)]
+            list.Push({ key: g.key, sport: asString(g.sport), names: names, start: toInt(g.start) })
+        end if
+    end for
+    return list
+end function
+
+sub fetchScores()
+    rules = scoresRules()
+    games = scoreGames()
+    if rules = invalid or games.Count() = 0
+        m.scoresTimer.control = "stop"
+        if m.scores.Count() > 0
+            m.scores = {}
+            refreshHome()
+        end if
+        return
+    end if
+    seconds = toInt(rules.refreshSeconds)
+    if seconds < 20 then seconds = 45
+    if m.scoresTimer.duration <> seconds then m.scoresTimer.duration = seconds
+    m.scoresTimer.control = "start"
+    if m.scoresPending > 0 then return
+    ' One request per league of the sports being played.
+    sports = {}
+    for each g in games
+        sports[g.sport] = true
+    end for
+    m.scoresFiles = []
+    requests = []
+    for each sport in sports
+        leagues = rules.leagues[sport]
+        if type(leagues) = "roArray"
+            for each league in leagues
+                file = "cachefs:/teams/scores_" + safeKey(asString(league)) + ".json"
+                m.scoresFiles.Push(file)
+                requests.Push({ id: "teamScores", url: asString(rules.url).Replace("{league}", asString(league)), cacheFile: file, saveOnly: true, timeoutMs: 20000 })
+            end for
+        end if
+    end for
+    m.scoresPending = requests.Count()
+    for each r in requests
+        sendRequest(r)
+    end for
+end sub
+
+sub onScoresTimer()
+    if m.section = "home" and m.overlays.Count() = 0 then fetchScores()
+end sub
+
+sub onTeamScores(res as Object)
+    if not res.ok then print "[main] couldn't get a scoreboard for live scores: "; res.error
+    m.scoresPending = m.scoresPending - 1
+    if m.scoresPending > 0 then return
+    games = scoreGames()
+    if games.Count() > 0 then searchSend("scoresRequest", { id: "home", files: m.scoresFiles, games: games })
+end sub
+
+sub onScoresResult(event as Object)
+    result = event.GetData()
+    if result.id <> "home" or type(result.scores) <> "roAssociativeArray" then return
+    m.scores = result.scores
+    refreshHome()
+end sub
+
+' Settings -> Live scores on My Teams.
+sub toggleScores()
+    show = not m.store.callFunc("getSettings").showScores
+    if m.store.callFunc("setSetting", "showScores", show)
+        if show then showToast("Live scores will show on My Teams game cards") else showToast("Live scores are hidden")
+    else
+        showToast("Couldn't save the change. Storage may be full.")
+    end if
+    settings = m.sections.settings
+    if settings <> invalid then settings.info = settingsInfo()
+    m.scores = {}
+    fetchScores()
     refreshHome()
 end sub

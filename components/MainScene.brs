@@ -107,6 +107,8 @@ sub onApiResponse(event as Object)
         onTeamLogo(res)
     else if res.id = "teamGuide"
         onTeamGuide(res)
+    else if res.id = "teamScores"
+        onTeamScores(res)
     end if
 end sub
 

@@ -178,6 +178,8 @@ sub drawGame(c as Object)
     detail = c.subtitle
     if detail = "" then detail = c.teamName
     if not live and c.nowStart > now then detail = detail + "   " + formatDayTime(c.nowStart)
+    ' A live score (My Teams, from ESPN) replaces the sport line while there is one.
+    if c.message <> "" then detail = c.message
     m.nowTitle.text = detail
     m.tags.text = UCase(c.nowFlags.Replace(",", "  "))
 

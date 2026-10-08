@@ -54,7 +54,7 @@ function sortFavorites(favorites as Object, usage as Dynamic) as Object
     return out
 end function
 
-' services: { store, epg, games, usage, launchTime, icons, missingMovies }
+' services: { store, epg, games, usage, launchTime, icons, missingMovies, scores }
 function buildHomeRows(services as Object) as Object
     rows = []
     for each module in homeRowModules(services)
@@ -142,6 +142,8 @@ function myTeamsRowItems(services as Object) as Object
     for each t in services.store.callFunc("getTeams")
         logos[t.id] = asString(t.logo)
     end for
+    scores = services.scores
+    if type(scores) <> "roAssociativeArray" then scores = {}
     for each o in ordered
         g = o.g
         flags = ""
@@ -161,6 +163,7 @@ function myTeamsRowItems(services as Object) as Object
             nowEnd: g.start + 12600
             nowFlags: flags
             channels: g.channels
+            message: asString(scores[g.key])     ' live score line, "" when there's none
         })
     end for
 

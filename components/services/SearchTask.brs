@@ -14,6 +14,7 @@ sub runLoop()
     m.top.ObserveField("query", port)
     m.top.ObserveField("matchRequest", port)
     m.top.ObserveField("gamesRequest", port)
+    m.top.ObserveField("scoresRequest", port)
     m.top.ObserveField("marketsRequest", port)
     m.top.ObserveField("localsRequest", port)
     m.top.ObserveField("infoRequest", port)
@@ -30,6 +31,8 @@ sub runLoop()
                 m.top.matchResult = matchSaved(msg.GetData())
             else if msg.GetField() = "gamesRequest"
                 m.top.gamesResult = findGames(msg.GetData())
+            else if msg.GetField() = "scoresRequest"
+                m.top.scoresResult = findScores(msg.GetData())
             else if msg.GetField() = "guideRequest"
                 m.top.guideResult = guideChannels(msg.GetData())
             else if msg.GetField() = "iconsRequest"

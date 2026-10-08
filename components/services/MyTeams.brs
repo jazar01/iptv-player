@@ -596,3 +596,80 @@ function asArray(value as Dynamic) as Object
     if type(value) = "roArray" then return value
     return []
 end function
+
+' ---------------------------------------------------------------------------
+' Live scores (ESPN scoreboards saved by ApiTask; rules: myTeams.scores).
+' req: { id, files: [paths], games: [{ key, names: [team name, aliases...], start }] }
+' -> { id, scores: { "<game key>": "LAD 3 - ATL 1   Top 8th" } }. A game is
+' matched by a competitor's name (display name, short name, or location plus
+' nickname) and a start within 12 hours of the listing's. Games not found,
+' or not started, get no line: the card keeps its usual text.
+function findScores(req as Object) as Object
+    result = { id: req.id, scores: {} }
+    if type(req.games) <> "roArray" or type(req.files) <> "roArray" then return result
+    for each file in req.files
+        board = ParseJson(ReadAsciiFile(asString(file)))
+        if type(board) = "roAssociativeArray" and type(board.events) = "roArray"
+            for each ev in board.events
+                line = scoreLine(ev)
+                if line.text <> ""
+                    for each g in req.games
+                        if not result.scores.DoesExist(g.key) and Abs(line.start - toInt(g.start)) < 12 * 3600 and namesMatch(g.names, line.names)
+                            result.scores[g.key] = line.text
+                        end if
+                    end for
+                end if
+            end for
+        end if
+    end for
+    return result
+end function
+
+' One ESPN event -> { text, start, names }; text "" before it starts.
+function scoreLine(ev as Dynamic) as Object
+    out = { text: "", start: 0, names: [] }
+    if type(ev) <> "roAssociativeArray" or type(ev.competitions) <> "roArray" or ev.competitions.Count() = 0 then return out
+    comp = ev.competitions[0]
+    if type(comp) <> "roAssociativeArray" or type(comp.competitors) <> "roArray" then return out
+    status = comp.status
+    if type(status) <> "roAssociativeArray" then status = ev.status
+    if type(status) <> "roAssociativeArray" or type(status.type) <> "roAssociativeArray" then return out
+    state = asString(status.type.state)       ' pre | in | post
+    detail = asString(status.type.shortDetail)
+    dt = CreateObject("roDateTime")
+    iso = asString(ev.date)
+    if Len(iso) = 17 then iso = Left(iso, 16) + ":00Z"     ' "2026-10-07T22:00Z"
+    dt.FromISO8601String(iso)
+    out.start = dt.AsSeconds()
+    away = invalid
+    home = invalid
+    for each c in comp.competitors
+        if type(c) = "roAssociativeArray" and type(c.team) = "roAssociativeArray"
+            t = c.team
+            out.names.Push(LCase(asString(t.displayName)))
+            out.names.Push(LCase(asString(t.shortDisplayName)))
+            full = asString(t.location) + " " + asString(t.name)     ' "Atlanta Braves"
+            out.names.Push(LCase(full.Trim()))
+            side = { abbr: asString(t.abbreviation), score: asString(c.score) }
+            if asString(c.homeAway) = "home" then home = side else away = side
+        end if
+    end for
+    if away = invalid or home = invalid then return out
+    if state = "in" or state = "post"
+        out.text = away.abbr + " " + away.score + " - " + home.abbr + " " + home.score + "   " + detail
+    end if
+    return out
+end function
+
+function namesMatch(ours as Dynamic, theirs as Object) as Boolean
+    if type(ours) <> "roArray" then return false
+    for each n in ours
+        mine = LCase(asString(n)).Trim()
+        if mine <> ""
+            for each t in theirs
+                if t = mine then return true
+            end for
+        end if
+    end for
+    return false
+end function

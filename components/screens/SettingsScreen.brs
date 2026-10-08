@@ -1,7 +1,7 @@
 sub init()
     m.menu = m.top.FindNode("menu")
     m.details = m.top.FindNode("details")
-    m.actions = ["teams", "teamsRow", "teamsPosition", "noGameTeams", "market", "recentFavorites", "account"]
+    m.actions = ["teams", "teamsRow", "teamsPosition", "noGameTeams", "scores", "market", "recentFavorites", "account"]
     m.backupPanel = m.top.FindNode("backupPanel")
     m.top.FindNode("backupText").text = backupExplanation()
     buildMenu({})
@@ -23,6 +23,7 @@ sub buildMenu(info as Object)
         "Show My Teams on Home:   " + onOff(showMyTeams)
         "My Teams on Home:   " + teamsPosition
         "Show teams with no game:   " + onOff(showNoGameTeams)
+        "Live scores on My Teams:   " + onOff(info.showScores = invalid or isTrue(info.showScores))
         "Local stations:   " + marketLabel
         "Favorites in Recently Viewed:   " + onOff(isTrue(info.showFavoritesInRecent))
         "Account and device name"

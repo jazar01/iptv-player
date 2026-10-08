@@ -14,7 +14,7 @@ installing and backing up.
 - Favorites with what's on now and next, plus channel logos.
 - My Teams: upcoming and live games for teams you follow, found in event
   channels and the schedules of the national sports networks and your local
-  ABC/CBS/NBC/FOX stations, with team logos.
+  ABC/CBS/NBC/FOX stations, with team logos and live scores.
 - Continue Watching (movies and the next episode of a series), Watch List
   (movies to watch later), Favorite Series,
   and Recently Viewed channels.

@@ -295,6 +295,7 @@ A home-screen row of my favorite teams' games in the next 24 hours, for only the
 - **Matching:** title and description, title matches ranked higher. Only the sports categories I select are scanned.
 - **Sport mapping:** an editable rule table maps provider wording ("Volleyball:", "NCAAF", "College Football :") to one fixed sport list.
 - **Duplicates:** one card per game; other channels showing it are listed as fallbacks.
+- **Live scores:** a live game card (not a replay) shows the score and game state in place of the sport line ("LAD 3 - ATL 1   Mid 8th"), from ESPN's public scoreboard JSON (no key; unofficial, so it may change or stop, and then cards just show the sport line). Fetched through ApiTask to cachefs:/teams/ (saveOnly) only while Home shows a live game, every 45 s, one scoreboard per league of the sports being played (`myTeams.scores` in data/guide-rules.json: our sport ID -> ESPN league paths; college football with every FBS game is about 1 MB); SearchTask matches games by team name or alias and a start within 12 hours (`findScores`). Settings -> Live scores on My Teams turns it off (per device, `settings.showScores`, on by default), for watching on a delay.
 - **Replays:** a matchup already seen 6 to 15 hours earlier is labeled Replay (rebroadcasts air that night or the next morning; the next game of a series is about 17 hours or more later).
 - **No channel:** a game found with no playable channel still shows, with the network and a note.
 - **Refresh:** on launch and about every 30 minutes while the home screen is showing.
