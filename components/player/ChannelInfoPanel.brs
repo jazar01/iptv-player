@@ -6,11 +6,13 @@ sub init()
     m.copiesKey = ""
     ' Top to bottom, in this order, below the logo and name.
     m.stack = []
-    for each id in ["facts", "playbackHead", "playbackLines", "programsHead", "programs", "nowDesc", "copiesHead", "copies"]
+    for each id in ["actionList", "facts", "playbackHead", "playbackLines", "programsHead", "programs", "nowDesc", "copiesHead", "copies"]
         m.stack.Push(m.top.FindNode(id))
     end for
     m.logo.ObserveField("loadStatus", "onLogoStatus")
     m.copies.ObserveField("itemSelected", "onCopySelected")
+    m.actionList = m.top.FindNode("actionList")
+    m.actionList.ObserveField("itemSelected", "onActionSelected")
     m.top.ObserveField("focusedChild", "onFocusedChild")
 end sub
 
@@ -18,11 +20,45 @@ sub onDim()
     m.top.FindNode("shade").visible = m.top.dim
 end sub
 
-' The copies list takes focus when there is one; otherwise the panel keeps it
-' (Back closes it either way).
+' The favorites action takes focus when shown, else the copies list when
+' there is one; otherwise the panel keeps it (Back closes it either way).
 sub onFocusedChild()
-    if m.top.HasFocus() and m.copyList.Count() > 0 then m.copies.SetFocus(true)
+    if not m.top.HasFocus() then return
+    if m.actionList.visible
+        m.actionList.SetFocus(true)
+    else if m.copyList.Count() > 0
+        m.copies.SetFocus(true)
+    end if
 end sub
+
+sub drawActions()
+    m.actionList.visible = m.top.actions
+    content = CreateObject("roSGNode", "ContentNode")
+    item = content.CreateChild("ContentNode")
+    if m.top.favorite then item.title = "Remove from Favorites" else item.title = "Add to Favorites"
+    m.actionList.content = content
+    if m.top.HasFocus() and m.actionList.visible then m.actionList.SetFocus(true)
+    layout()
+end sub
+
+sub onActionSelected()
+    m.top.action = "favorite"
+end sub
+
+' Down from the action to the copies, Up from the first copy back to it.
+function onKeyEvent(key as String, press as Boolean) as Boolean
+    if not press then return false
+    if key = "down" and m.actionList.HasFocus() and m.copies.visible
+        m.actionList.SetFocus(false)
+        m.copies.SetFocus(true)
+        return true
+    else if key = "up" and m.copies.HasFocus() and m.copies.itemFocused = 0 and m.actionList.visible
+        m.copies.SetFocus(false)
+        m.actionList.SetFocus(true)
+        return true
+    end if
+    return false
+end function
 
 sub onLogoStatus()
     m.logo.visible = (m.logo.loadStatus = "ready")
@@ -93,7 +129,7 @@ sub drawCopies(copies as Dynamic)
     m.copies.content = content
     m.copies.visible = (list.Count() > 0)
     m.top.FindNode("copiesHead").visible = m.copies.visible
-    if m.top.IsInFocusChain() and list.Count() > 0 then m.copies.SetFocus(true)
+    if m.top.IsInFocusChain() and list.Count() > 0 and not m.actionList.visible then m.copies.SetFocus(true)
 end sub
 
 ' Stack the visible sections below the header; the copies list gets what

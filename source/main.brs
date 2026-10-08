@@ -7,8 +7,10 @@ sub Main()
     screen.SetMessagePort(port)
 
     scene = screen.CreateScene("MainScene")
-    scene.ObserveField("exitApp", port)
     screen.Show()
+    ' After Show: observed before it, the change never arrived and Exit did
+    ' nothing (Oct 2026).
+    scene.ObserveField("exitApp", port)
 
     while true
         msg = wait(0, port)

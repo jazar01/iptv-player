@@ -151,6 +151,7 @@ end sub
 sub taskStateChanged(task as Object, newState as String)
     state = LCase(newState)
     if state <> "stop" and state <> "done" then return
+    if isTrue(m.exiting) then return
     name = task.Subtype()
     now = nowSeconds()
     recent = []
@@ -271,6 +272,29 @@ sub pushOverlay(node as Object)
     m.overlayHost.AppendChild(node)
     m.overlays.Push(node)
     node.SetFocus(true)
+    ' A list whose itemSelected opened this takes focus back when its key
+    ' handling ends; hidden behind the overlay, it then gets the keys (*,
+    ' Up/Down and OK did nothing in a channel played from Search, Oct 2026).
+    ' So look again a moment later.
+    if m.focusCheck = invalid
+        m.focusCheck = CreateObject("roSGNode", "Timer")
+        m.focusCheck.duration = 0.2
+        m.focusCheck.ObserveField("fire", "onFocusCheck")
+        m.top.AppendChild(m.focusCheck)
+    end if
+    m.focusCheck.control = "stop"
+    m.focusCheck.control = "start"
+end sub
+
+sub onFocusCheck()
+    if m.overlays.Count() = 0 then return
+    ' A dialog showing has the keys on purpose.
+    dlg = m.top.dialog
+    if dlg <> invalid and dlg.IsInFocusChain() then return
+    top = m.overlays.Peek()
+    if top.IsInFocusChain() then return
+    print "[main] focus was taken back from "; top.Subtype(); "; returned to it"
+    focusContent()
 end sub
 
 sub removeOverlay(node as Object)
@@ -360,6 +384,7 @@ sub onExitChoice()
     dlg.close = true
     if choice = 0
         print "[main] exit chosen"
+        m.exiting = true        ' threads stop as the app closes: not restarted
         m.top.exitApp = true
     end if
 end sub

@@ -8,7 +8,12 @@
                    nowDescription, copies: [{ streamId, name, epgChannelId, archiveDays }] }
        playback  { lines: [line] }  live stream details, while watching
        dim       true to darken the screen behind (over Live TV)
+       actions   true to offer Add to / Remove from Favorites at the top (over
+                 the player: Roku takes * there on channels with captions or
+                 extra audio tracks, so favorites need another way in)
+       favorite  whether the channel is a favorite (the action's wording)
   Out: chosen    the copy picked from Other copies
+       action    "favorite" when that action is chosen
 -->
 <component name="ChannelInfoPanel" extends="Group">
   <interface>
@@ -16,6 +21,9 @@
     <field id="playback" type="assocarray" onChange="draw" />
     <field id="dim" type="boolean" value="false" onChange="onDim" />
     <field id="chosen" type="assocarray" alwaysNotify="true" />
+    <field id="actions" type="boolean" value="false" onChange="drawActions" />
+    <field id="favorite" type="boolean" value="false" onChange="drawActions" />
+    <field id="action" type="string" alwaysNotify="true" />
   </interface>
 
   <children>
@@ -26,6 +34,9 @@
       font="font:MediumBoldSystemFont" color="0xFFFFFFFF" />
 
     <!-- Stacked top to bottom by draw(); empty ones are hidden. -->
+    <LabelList id="actionList" itemSize="[680,52]" numRows="1" visible="false"
+      font="font:SmallBoldSystemFont" focusedFont="font:SmallBoldSystemFont"
+      color="0xFFD36BFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png" />
     <Label id="facts" width="680" wrap="true" font="font:SmallSystemFont" color="0xD0D6DCFF" lineSpacing="2" />
     <Label id="playbackHead" width="680" font="font:SmallBoldSystemFont" color="0x4DA3FFFF" text="Playing now" />
     <Label id="playbackLines" width="680" wrap="true" font="font:SmallSystemFont" color="0xD0D6DCFF" lineSpacing="2" />

@@ -28,6 +28,8 @@ sub init()
     m.startTimer.ObserveField("fire", "onStartTimeout")
     m.infoPanel = m.top.FindNode("infoPanel")
     m.infoPanel.ObserveField("chosen", "onInfoCopyChosen")
+    m.infoPanel.ObserveField("action", "onInfoAction")
+    m.infoPanel.actions = true      ' Add to / Remove from Favorites (Roku takes * on some channels)
     m.statsTimer = m.top.FindNode("statsTimer")
     m.statsTimer.ObserveField("fire", "updatePlaybackInfo")
     m.bufferCount = 0       ' buffering spells on this channel after it played
@@ -449,6 +451,13 @@ sub onChannelInfo()
     if m.infoPanel.visible then m.infoPanel.info = m.top.channelInfo
 end sub
 
+' Add to / Remove from Favorites in the channel info panel: the same as *
+' (MainScene saves it and sends back channelLabel, which relabels it).
+sub onInfoAction()
+    if m.play = invalid or m.play.kind <> "live" or m.infoPanel.action <> "favorite" then return
+    m.top.toggleFavorite = { streamId: m.play.id, name: m.play.name, epgChannelId: asString(m.play.epgChannelId) }
+end sub
+
 sub onInfoCopyChosen()
     m.top.copyChosen = m.infoPanel.chosen
 end sub
@@ -820,6 +829,7 @@ end sub
 ' "Favorite 3 of 12" changes when * adds or removes this channel.
 sub onChannelLabel()
     if m.liveOverlay.visible then m.channelPos.text = m.top.channelLabel
+    m.infoPanel.favorite = (m.top.channelLabel <> "")     ' "Favorite 3 of 8", or "" when not one
 end sub
 
 sub showOverlay()
@@ -856,9 +866,9 @@ sub drawOverlay()
     if m.mode = "timeshift"
         m.hints.text = "Play/Pause, Rewind, Fast-forward: move through the archive     Back: return to live"
     else if canRewind()
-        m.hints.text = "Up/Down: change favorite    *: favorite    Play/Pause: pause    Rewind: go back    Replay: start this program over    OK again: channel info    Back: close"
+        m.hints.text = "Up/Down: change favorite    Play/Pause: pause    Rewind: go back    Replay: start this program over    OK again: channel info and favorites    Back: close"
     else
-        m.hints.text = "Up / Down: change favorite     *: add/remove favorite     OK again: channel info     Back: close"
+        m.hints.text = "Up / Down: change favorite     OK again: channel info and favorites     Back: close"
     end if
 
     m.channelName.text = localizeName(asString(m.play.name))

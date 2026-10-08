@@ -140,6 +140,13 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   Up/Down this way. Don't change focus inside a list's `itemSelected`
   handler either; the list takes focus back when its key handling ends
   (defer it with a short Timer).
+- While video plays, Roku itself takes `*` on channels with captions or
+  extra audio tracks: the key never reaches the app, whatever has focus.
+  Anything `*` does in the player needs another way in (favorites: OK
+  twice, channel info). An overlay opened from a list's selection is
+  checked 0.2 s later (`pushOverlay`): the list can take focus back.
+- `main.brs` observes the scene's `exitApp` after `screen.Show()`;
+  observed before it, the change never arrived and Exit did nothing.
 - List item components are recycled: observe content fields with
   `ObserveFieldScoped` and unobserve the old content when `itemContent` changes.
 - On a sideloaded Roku, an uncaught runtime error in any thread opens the
