@@ -239,7 +239,7 @@ All saved state is one versioned JSON document per device, shaped so it can late
 }
 ```
 
-Schema 3 added `recent`, the Recently Viewed channels (newest `updatedAt` first, at most 15). Schema 4 added `teams` (My Teams) and `seenGames`, games already seen in the last 4 days, one entry per matchup and start (at most 20, newest kept, per device), used to label replays. Schema 5 added `market`, the device's local TV market for My Teams. Schema 6 added `settings`, per-device on/off options (`showMyTeams`, `showNoGameTeams`, both on by default; later `showFavoritesInRecent`, off). New options join `settings` with a default when missing, without a schema change. Teams can also carry `logo` and `logoFor` (team logos); both are optional and missing means "not looked up yet", so they needed no schema change. Schema 7 added `watchlist`, the Watch List movies (see Home, Watch List).
+Schema 3 added `recent`, the Recently Viewed channels (newest `updatedAt` first, at most 15). Schema 4 added `teams` (My Teams) and `seenGames`, games already seen in the last 4 days, one entry per matchup and start (at most 20, newest kept, per device), used to label replays. Schema 5 added `market`, the device's local TV market for My Teams. Schema 6 added `settings`, per-device on/off options (`showMyTeams`, `showNoGameTeams`, both on by default; later `showFavoritesInRecent`, off). New options join `settings` with a default when missing, without a schema change. Teams can also carry `logo` and `logoFor` (team logos); both are optional and missing means "not looked up yet", so they needed no schema change. Schema 7 added `watchlist`, the Watch List movies (see Home, Watch List). Schema 8 (V2 sharing) added `resumeGone`, removed resume points `[{ kind, id, at }]` (at most 40, 28 days), so another TV's copy can't bring them back, and `favoriteAt` and `progressAt` on series, since a series' favorite and its progress are shared separately; per-TV `settings.share` (`favorites`, `teams`, `series`, `progress`, all on when missing) says what this TV shares.
 
 Schema 2 (milestone 3) added `name` and `ext` to resume entries and the episode details to `series.current`, so Continue Watching draws and plays without the network. `series.current` is the episode to continue (in progress or next unwatched); its position lives in the matching `resume` entry. A series whose last episode is watched has `current: null` and leaves Continue Watching.
 
@@ -348,7 +348,7 @@ Items within each row are ordered by a decaying score that combines recency and 
 
 ### Off-device backup and sync (V2)
 
-Version 2, in progress: stage 1 (automatic backups to the home Pi, restore) built Oct 8, 2026; see "Built" below. Prompted by Oct 6, 2026, when a failed sideload removed the Basement Roku's dev app and with it all its saved state. Decisions so far:
+Version 2, in progress: stage 1 (automatic backups to the home Pi, restore) and stage 2 (sharing between TVs) built Oct 8, 2026; see "Built" below. Prompted by Oct 6, 2026, when a failed sideload removed the Basement Roku's dev app and with it all its saved state. Decisions so far:
 
 **Service: interchangeable storage, nothing more.**
 
@@ -408,6 +408,14 @@ Version 2, in progress: stage 1 (automatic backups to the home Pi, restore) buil
 - **Restore:** a TV that starts with nothing saved asks the Pi for its backups and offers "Restore this TV?" with each TV's name and save time, plus "Set up as a new TV". Choosing one makes this TV that one again (same device ID and name), then Home and the login carry on as at a normal launch. No Pi, nothing on it, or "Set up as a new TV": the copy `deploy.ps1` bundled from `backups\` (this TV's by IP, else the household copy), as before; otherwise Setup. The bundle is no longer applied automatically at startup, since the Pi's copy is newer.
 - **Tested Oct 8, 2026 on the Basement TV:** backups found the Pi and were saved; one decrypted on the PC with the key (8 favorites, 3 teams, 2 series, 2 Watch List movies, the account); a forged upload was refused. With `restore_test=1` in the manifest (start empty, write nothing), the TV offered Basement's backup, restored it, and Home came back with favorites, My Teams and Continue Watching.
 - **Not yet:** a nightly copy off the Pi; an SSD.
+
+**Built, stage 2: sharing between TVs (Oct 8, 2026).**
+
+- **What's shared:** favorites (with pinning), My Teams, Favorite Series and the Watch List, and watch progress (resume points and watched episodes). Each TV chooses in Settings → Sharing between TVs, all on by default; a kind turned off stops going both ways, and what the TV has stays. Device name, local stations market, Recently Viewed, settings and usage ordering stay per TV.
+- **Shared copy:** one sealed document on the Pi, `/shared` (`{ favorites, teams, watchlist, series, resume, resumeGone }`), with a version number. A save names the version it was merged from; if another TV saved in between, the Pi refuses it (HTTP 409) and the TV fetches, merges and saves again (up to 3 times), so no TV's changes are lost. Daily copies are kept as for backups.
+- **Merging (StateStore `mergeShared`):** record by record, the newer `updatedAt` wins, deletions included (tombstones; ones older than 28 days are dropped on both sides). Series: the favorite and the progress each go by their own time (`favoriteAt`, `progressAt`), and watched episodes are joined, so marking one unwatched on one TV doesn't carry to the others. Resume points: the newest of each unless removed since (`resumeGone`); the shared copy holds the newest 25, each TV up to 50. The TV redraws Home and My Teams when anything came in.
+- **When:** 10 s after launch, with each backup (within a minute of a change), every 10 minutes, and on coming back to Home 2 minutes or more after the last sync. Nothing waits on it; Settings shows the last sync, or why not.
+- **Tested Oct 8, 2026** on the Basement TV, with the PC as a second TV (`fake-tv.ps1` in the session scratchpad): a favorite the PC added appeared on the TV on going back to Home; one removed on the TV was a tombstone in the shared copy within a minute. A real second TV is still to try.
 
 Later, the service could also compute results the Roku can't (full-guide search, e.g. for My Teams) and push parsing-rule updates.
 

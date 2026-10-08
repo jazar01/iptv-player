@@ -11,8 +11,12 @@
                      JSON: it holds the provider password; never printed)
        listRequest   { id }  the backups on the Pi
        fetchRequest  { id, deviceId }  one backup, opened
+       syncRequest   { id, op: "fetch" }  the shared copy (V2 stage 2), opened
+                     { id, op: "put", json, baseVersion, name }  save it
   Out: listResult    { id, ok, devices: [{ id, name, savedAt }], error }
        fetchResult   { id, ok, json, error }
+       syncResult    fetch: { id, op, ok, json ("" when there is none yet), version }
+                     put: { id, op, ok, conflict (another TV saved first), version }
        status        { enabled, address, savedAt, error }  for Settings
 -->
 <component name="BackupTask" extends="Task">
@@ -22,6 +26,8 @@
     <field id="fetchRequest" type="assocarray" alwaysNotify="true" />
     <field id="listResult" type="assocarray" alwaysNotify="true" />
     <field id="fetchResult" type="assocarray" alwaysNotify="true" />
+    <field id="syncRequest" type="assocarray" alwaysNotify="true" />
+    <field id="syncResult" type="assocarray" alwaysNotify="true" />
     <field id="status" type="assocarray" alwaysNotify="true" />
     <!-- True once the thread is listening: requests set before that are lost. -->
     <field id="ready" type="boolean" value="false" />

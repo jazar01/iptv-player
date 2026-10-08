@@ -2,12 +2,13 @@
 ' docs/requirements.md). Records carry updatedAt; deletions are tombstones.
 
 sub init()
-    m.SCHEMA = 7
+    m.SCHEMA = 8
     m.WATCHLIST_CAP = 20         ' about 115 bytes each (2.3 KB at most)
     m.RECENT_CAP = 15
     m.SEEN_CAP = 20
     m.SEEN_DAYS = 4
     m.RESUME_CAP = 50
+    m.RESUME_GONE_CAP = 40       ' removed resume points remembered for sharing
     m.TOMBSTONE_DAYS = 28
     m.STALE_SERIES_DAYS = 30
 
@@ -621,6 +622,7 @@ function setSeriesFavorite(entry as Object, favorite as Boolean) as Boolean
     if s.name = invalid then s.name = ""
     if s.year = invalid then s.year = 0
     s.favorite = favorite
+    s.favoriteAt = nowSeconds()     ' shared apart from progress (mergeShared)
     s.deleted = false
     s.updatedAt = nowSeconds()
     return persist()
@@ -811,8 +813,19 @@ function removeResume(kind as String, id as Integer) as Boolean
     end for
     if kept.Count() = m.doc.resume.Count() then return false
     m.doc.resume = kept
+    noteResumeGone(kind, id)
     return true
 end function
+
+' Remembered for sharing (mergeShared): a removed resume point must not come
+' back from another TV's older copy. The newest RESUME_GONE_CAP are kept.
+sub noteResumeGone(kind as String, id as Integer)
+    kept = [{ kind: kind, id: id, at: nowSeconds() }]
+    for each g in m.doc.resumeGone
+        if not (g.kind = kind and toInt(g.id) = id) and kept.Count() < m.RESUME_GONE_CAP then kept.Push(g)
+    end for
+    m.doc.resumeGone = kept
+end sub
 
 function findResume(kind as String, id as Integer) as Dynamic
     for each r in m.doc.resume
@@ -879,9 +892,14 @@ function removeFromContinue(entry as Object) as Boolean
         end if
         kept = []
         for each r in m.doc.resume
-            if not (r.kind = "episode" and toInt(r.seriesId) = seriesId) then kept.Push(r)
+            if r.kind = "episode" and toInt(r.seriesId) = seriesId
+                noteResumeGone("episode", toInt(r.id))
+            else
+                kept.Push(r)
+            end if
         end for
         m.doc.resume = kept
+        if s <> invalid then s.progressAt = nowSeconds()
     end if
     return persist()
 end function
@@ -895,6 +913,7 @@ function markUnwatched(entry as Object) as Boolean
     if episodes = invalid then return true
     episodes.Delete(toInt(entry.episode).ToStr())
     s.watched = formatWatched(seasons)
+    s.progressAt = nowSeconds()
     s.updatedAt = nowSeconds()
     return persist()
 end function
@@ -950,6 +969,7 @@ function touchSeries(entry as Object, current as Dynamic) as Object
     if s.name = invalid then s.name = ""
     if s.year = invalid then s.year = 0
     s.current = current
+    s.progressAt = nowSeconds()     ' shared apart from the favorite (mergeShared)
     s.deleted = false
     s.updatedAt = nowSeconds()
     return s
@@ -1046,6 +1066,7 @@ function newDocument() as Object
         series: []
         watchlist: []
         resume: []
+        resumeGone: []      ' removed resume points, so sharing doesn't bring them back
         recent: []
         teams: []
         seenGames: []
@@ -1063,7 +1084,7 @@ sub normalizeDocument(doc as Object)
     ' Every list present, holding only records: a hand-made or older document
     ' (household.json, a restored backup) must not stop the app in a loop
     ' over it.
-    for each key in ["favorites", "series", "resume", "recent", "teams", "seenGames", "watchlist"]
+    for each key in ["favorites", "series", "resume", "resumeGone", "recent", "teams", "seenGames", "watchlist"]
         records = []
         if type(doc[key]) = "roArray"
             for each r in doc[key]
@@ -1135,6 +1156,19 @@ sub normalizeDocument(doc as Object)
     if toInt(doc.schema) < 7
         doc.schema = 7
         print "[state] migrated saved state to schema 7"
+    end if
+
+    ' Schema 8 (V2 sharing): `resumeGone`, removed resume points
+    ' [{ kind, id, at }], so another TV's copy can't bring them back; series
+    ' carry `favoriteAt` and `progressAt`, since the favorite and the progress
+    ' are shared separately (until now both went by updatedAt).
+    if toInt(doc.schema) < 8
+        for each s in doc.series
+            if s.favoriteAt = invalid then s.favoriteAt = toInt(s.updatedAt)
+            if s.progressAt = invalid then s.progressAt = toInt(s.updatedAt)
+        end for
+        doc.schema = 8
+        print "[state] migrated saved state to schema 8"
     end if
 end sub
 
@@ -1233,6 +1267,11 @@ sub purgeTombstones(cutoff as Integer)
         end for
         m.doc[key] = kept
     end for
+    gone = []
+    for each g in m.doc.resumeGone
+        if toInt(g.at) >= cutoff then gone.Push(g)
+    end for
+    m.doc.resumeGone = gone
 end sub
 
 ' ---------------------------------------------------------------------------
@@ -1334,4 +1373,272 @@ function setStreamMarks(marks as Object) as Boolean
         return false
     end if
     return true
+end function
+
+' ---------------------------------------------------------------------------
+' Sharing between TVs (V2 stage 2). One shared copy on the Pi holds the
+' records the TVs share; each TV merges it with its own, record by record,
+' the newer one winning (deletions are kept as tombstones for that). Which
+' kinds this TV takes part in is a per-TV setting, all on by default:
+'   favorites  live channel favorites (and pinning)
+'   teams      My Teams
+'   series     Favorite Series and the Watch List
+'   progress   resume points and watched episodes (series progress)
+' Shared copy: { favorites: [], teams: [], watchlist: [], series: [{ seriesId,
+' name, year, favorite, favoriteAt, watched, current, progressAt }],
+' resume: [], resumeGone: [] }. Kinds a TV leaves out pass through as they are.
+
+function getShareSettings() as Object
+    share = m.doc.settings.share
+    if type(share) <> "roAssociativeArray" then share = {}
+    out = {}
+    for each kind in ["favorites", "teams", "series", "progress"]
+        out[kind] = (share[kind] = invalid or isTrue(share[kind]))
+    end for
+    return out
+end function
+
+function setShare(kind as String, on as Boolean) as Boolean
+    share = getShareSettings()
+    share[kind] = on
+    m.doc.settings.share = share
+    return persist()
+end function
+
+' json: the shared copy ("" when the Pi has none yet). Merges what this TV
+' shares into its own state (saved if anything changed) and returns
+' { changed, upload, json }: changed = this TV's state changed (redraw);
+' upload = the shared copy should be replaced with json.
+function mergeShared(json as String) as Object
+    shared = invalid
+    if json <> "" then shared = ParseJson(json, "i")
+    if type(shared) <> "roAssociativeArray" then shared = {}
+    for each key in ["favorites", "teams", "watchlist", "series", "resume", "resumeGone"]
+        if type(shared[key]) <> "roArray" then shared[key] = []
+    end for
+    share = getShareSettings()
+    result = { changed: false, upload: (json = "") }
+
+    if share.favorites then shared.favorites = mergeRecords(m.doc.favorites, shared.favorites, "streamId", result)
+    if share.teams then shared.teams = mergeRecords(m.doc.teams, shared.teams, "id", result)
+    if share.series then shared.watchlist = mergeRecords(m.doc.watchlist, shared.watchlist, "id", result)
+    if share.series or share.progress then shared.series = mergeSeries(shared.series, share, result)
+    if share.progress then mergeResume(shared, result)
+
+    if result.changed and not persist()
+        print "[state] shared changes couldn't be saved here"
+        result.changed = false
+    end if
+    return { changed: result.changed, upload: result.upload, json: FormatJson(shared) }
+end function
+
+' Record lists with updatedAt (and deleted): the newer copy of each wins.
+' Updates mine in place; returns the list for the shared copy.
+function mergeRecords(mine as Object, theirs as Object, keyField as String, result as Object) as Object
+    index = {}
+    for each r in mine
+        index[asString(r[keyField])] = r
+    end for
+    seen = {}
+    for each t in theirs
+        if type(t) = "roAssociativeArray"
+            key = asString(t[keyField])
+            seen[key] = true
+            r = index[key]
+            if r = invalid and isTrue(t.deleted) and toInt(t.updatedAt) < nowSeconds() - m.TOMBSTONE_DAYS * 86400
+                result.upload = true        ' an old deletion: dropped here and from the shared copy
+            else if r = invalid
+                copy = {}
+                copy.Append(t)
+                mine.Push(copy)
+                index[key] = copy
+                result.changed = true
+            else if toInt(t.updatedAt) > toInt(r.updatedAt)
+                r.Clear()
+                r.Append(t)
+                result.changed = true
+            else if toInt(r.updatedAt) > toInt(t.updatedAt)
+                result.upload = true
+            end if
+        end if
+    end for
+    for each key in index
+        if not seen.DoesExist(key) then result.upload = true
+    end for
+    out = []
+    for each r in mine
+        copy = {}
+        copy.Append(r)
+        out.Push(copy)
+    end for
+    return out
+end function
+
+' Series: the favorite part (share.series) and the progress part
+' (share.progress) each go by their own time; watched episodes are joined
+' (so marking one unwatched on one TV doesn't carry to the others).
+function mergeSeries(theirs as Object, share as Object, result as Object) as Object
+    index = {}
+    for each s in m.doc.series
+        index[toInt(s.seriesId).ToStr()] = s
+    end for
+    out = {}
+    for each t in theirs
+        if type(t) = "roAssociativeArray" then out[toInt(t.seriesId).ToStr()] = t
+    end for
+    for each key in out
+        t = out[key]
+        s = index[key]
+        if s = invalid
+            s = { seriesId: toInt(t.seriesId), name: asString(t.name), year: toInt(t.year), watched: "", current: invalid, favorite: false, favoriteAt: 0, progressAt: 0, updatedAt: 0 }
+            m.doc.series.Push(s)
+            index[key] = s
+        end if
+        if share.series and toInt(t.favoriteAt) > toInt(s.favoriteAt)
+            s.favorite = isTrue(t.favorite)
+            s.favoriteAt = toInt(t.favoriteAt)
+            if isTrue(t.favorite) then s.deleted = false
+            result.changed = true
+        end if
+        if share.progress
+            joined = joinWatched(asString(s.watched), asString(t.watched))
+            if joined <> asString(s.watched)
+                s.watched = joined
+                result.changed = true
+            end if
+            if toInt(t.progressAt) > toInt(s.progressAt)
+                s.current = t.current
+                s.progressAt = toInt(t.progressAt)
+                result.changed = true
+            end if
+        end if
+        if toInt(s.favoriteAt) > toInt(s.updatedAt) then s.updatedAt = s.favoriteAt
+        if toInt(s.progressAt) > toInt(s.updatedAt) then s.updatedAt = s.progressAt
+    end for
+    ' The shared copy: theirs, with my newer parts.
+    for each key in index
+        s = index[key]
+        t = out[key]
+        if t = invalid
+            t = { seriesId: toInt(s.seriesId), name: asString(s.name), year: toInt(s.year), favorite: false, favoriteAt: 0, watched: "", current: invalid, progressAt: 0 }
+            out[key] = t
+        end if
+        if share.series and toInt(s.favoriteAt) > toInt(t.favoriteAt)
+            t.favorite = isTrue(s.favorite)
+            t.favoriteAt = toInt(s.favoriteAt)
+            result.upload = true
+        end if
+        if share.progress
+            joined = joinWatched(asString(t.watched), asString(s.watched))
+            if joined <> asString(t.watched)
+                t.watched = joined
+                result.upload = true
+            end if
+            if toInt(s.progressAt) > toInt(t.progressAt)
+                t.current = s.current
+                t.progressAt = toInt(s.progressAt)
+                result.upload = true
+            end if
+        end if
+    end for
+    list = []
+    for each key in out
+        list.Push(out[key])
+    end for
+    return list
+end function
+
+function joinWatched(a as String, b as String) as String
+    if b = "" or a = b then return a
+    if a = "" then return b
+    seasons = parseWatched(a)
+    other = parseWatched(b)
+    for each season in other
+        if seasons[season] = invalid then seasons[season] = {}
+        mine = seasons[season]
+        mine.Append(other[season])
+    end for
+    return formatWatched(seasons)
+end function
+
+' Resume points: the newest of each, unless removed (resumeGone) since.
+' This TV keeps up to RESUME_CAP, the shared copy the newest 25 (the
+' registry has room for only so much).
+sub mergeResume(shared as Object, result as Object)
+    gone = {}
+    for each list in [m.doc.resumeGone, shared.resumeGone]
+        for each g in list
+            if type(g) = "roAssociativeArray"
+                key = asString(g.kind) + ":" + toInt(g.id).ToStr()
+                fresh = toInt(g.at) >= nowSeconds() - m.TOMBSTONE_DAYS * 86400
+                if fresh and (gone[key] = invalid or toInt(g.at) > toInt(gone[key].at)) then gone[key] = { kind: asString(g.kind), id: toInt(g.id), at: toInt(g.at) }
+            end if
+        end for
+    end for
+    best = {}
+    for each list in [m.doc.resume, shared.resume]
+        for each r in list
+            if type(r) = "roAssociativeArray"
+                key = asString(r.kind) + ":" + toInt(r.id).ToStr()
+                if best[key] = invalid or toInt(r.updatedAt) > toInt(best[key].updatedAt) then best[key] = r
+            end if
+        end for
+    end for
+    merged = []
+    for each key in best
+        g = gone[key]
+        if g = invalid or toInt(best[key].updatedAt) > g.at then merged.Push(best[key])
+    end for
+    merged.SortBy("updatedAt", "r")
+    goneList = []
+    for each key in gone
+        goneList.Push(gone[key])
+    end for
+    goneList.SortBy("at", "r")
+    while goneList.Count() > m.RESUME_GONE_CAP
+        goneList.Pop()
+    end while
+
+    mineBefore = resumeSignature(m.doc.resume)
+    sharedBefore = resumeSignature(shared.resume) + "|" + goneSignature(shared.resumeGone)
+    kept = []
+    for each r in merged
+        if kept.Count() < m.RESUME_CAP
+            copy = {}
+            copy.Append(r)
+            kept.Push(copy)
+        end if
+    end for
+    m.doc.resume = kept
+    m.doc.resumeGone = goneList
+    if resumeSignature(m.doc.resume) <> mineBefore then result.changed = true
+    out = []
+    for each r in merged
+        if out.Count() < 25
+            copy = {}
+            copy.Append(r)
+            out.Push(copy)
+        end if
+    end for
+    shared.resume = out
+    shared.resumeGone = goneList
+    if resumeSignature(shared.resume) + "|" + goneSignature(shared.resumeGone) <> sharedBefore then result.upload = true
+end sub
+
+function resumeSignature(list as Object) as String
+    keys = []
+    for each r in list
+        if type(r) = "roAssociativeArray" then keys.Push(asString(r.kind) + ":" + toInt(r.id).ToStr() + "@" + toInt(r.updatedAt).ToStr() + "=" + toInt(r.position).ToStr())
+    end for
+    keys.Sort()
+    return keys.Join(",")
+end function
+
+function goneSignature(list as Object) as String
+    keys = []
+    for each g in list
+        if type(g) = "roAssociativeArray" then keys.Push(asString(g.kind) + ":" + toInt(g.id).ToStr() + "@" + toInt(g.at).ToStr())
+    end for
+    keys.Sort()
+    return keys.Join(",")
 end function

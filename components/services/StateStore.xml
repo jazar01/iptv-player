@@ -76,6 +76,9 @@
     <function name="restoreFromBundle" />
     <function name="getStreamMarks" />
     <function name="setStreamMarks" />
+    <function name="getShareSettings" />
+    <function name="setShare" />
+    <function name="mergeShared" />
   </interface>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />

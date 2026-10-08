@@ -22,6 +22,7 @@ sub initBackup()
     m.restoreDevices = []
     m.backup.control = "RUN"
     scheduleBackup(20)
+    initSharing()
 end sub
 
 sub backupSend(field as String, value as Object)
@@ -58,6 +59,8 @@ sub sendBackup()
     if not m.store.callFunc("isConfigured") then return
     device = m.store.callFunc("getDevice")
     backupSend("upload", { json: m.store.callFunc("exportDocument"), deviceId: device.deviceId, name: device.deviceName })
+    ' The change goes to the other TVs too.
+    requestSync("change")
 end sub
 
 sub onBackupStatus(event as Object)
@@ -163,4 +166,152 @@ sub finishRestore(message as String)
     login()
     showToast(message)
     scheduleBackup(20)
+end sub
+
+' ---------------------------------------------------------------------------
+' Sharing between TVs (V2 stage 2; merging is StateStore's mergeShared). A
+' sync fetches the shared copy from the Pi, merges it with this TV's state
+' (redrawing if anything came in), and saves the shared copy back when this
+' TV had something newer. If another TV saved in between, the Pi refuses
+' that (conflict) and the sync starts over, up to 3 times. Syncs run 10 s
+' after launch, with each backup (a minute after a change), every 10
+' minutes, and on coming back to Home after 2 minutes or more.
+
+sub initSharing()
+    m.backup.ObserveField("syncResult", "onSyncResult")
+    m.syncing = false
+    m.syncAgain = false
+    m.syncTries = 0
+    m.lastSyncAt = 0
+    m.syncNote = ""             ' Settings / Sharing page line
+    m.sharingScreen = invalid
+    m.syncTimer = CreateObject("roSGNode", "Timer")
+    m.syncTimer.duration = 600
+    m.syncTimer.repeat = true
+    m.syncTimer.ObserveField("fire", "onSyncTimer")
+    m.top.AppendChild(m.syncTimer)
+    m.syncTimer.control = "start"
+    m.syncSoon = CreateObject("roSGNode", "Timer")
+    m.syncSoon.duration = 10
+    m.syncSoon.ObserveField("fire", "onSyncTimer")
+    m.top.AppendChild(m.syncSoon)
+    m.syncSoon.control = "start"
+end sub
+
+sub onSyncTimer()
+    requestSync("timer")
+end sub
+
+' Back on Home: catch up with the other TVs if it's been a while.
+sub syncIfStale()
+    if nowSeconds() - m.lastSyncAt >= 120 then requestSync("home")
+end sub
+
+sub requestSync(reason as String)
+    if not m.store.callFunc("isConfigured") then return
+    share = m.store.callFunc("getShareSettings")
+    if not (share.favorites or share.teams or share.series or share.progress) then return
+    if m.syncing
+        m.syncAgain = true
+        return
+    end if
+    m.syncing = true
+    m.syncTries = 0
+    backupSend("syncRequest", { id: "sync", op: "fetch" })
+end sub
+
+sub onSyncResult(event as Object)
+    r = event.GetData()
+    if asString(r.id) <> "sync" then return
+    if r.op = "fetch"
+        if not isTrue(r.ok)
+            finishSync(false, "couldn't reach the Raspberry Pi")
+            return
+        end if
+        merged = m.store.callFunc("mergeShared", r.json)
+        if isTrue(merged.changed) then onSharedChanges()
+        if isTrue(merged.upload)
+            backupSend("syncRequest", { id: "sync", op: "put", json: merged.json, baseVersion: r.version, name: m.store.callFunc("getDevice").deviceName })
+            return
+        end if
+        finishSync(true, "")
+    else if r.op = "put"
+        if isTrue(r.conflict) and m.syncTries < 3
+            ' Another TV saved first: merge with theirs and try again.
+            m.syncTries = m.syncTries + 1
+            print "[main] shared copy changed meanwhile; merging again"
+            backupSend("syncRequest", { id: "sync", op: "fetch" })
+            return
+        end if
+        if isTrue(r.ok) then finishSync(true, "") else finishSync(false, "the Raspberry Pi didn't take the changes")
+    end if
+end sub
+
+sub finishSync(ok as Boolean, problem as String)
+    m.syncing = false
+    if ok
+        m.lastSyncAt = nowSeconds()
+        m.syncNote = "last synced at " + formatClock(m.lastSyncAt)
+    else
+        print "[main] sharing: "; problem
+        m.syncNote = "NOT synced: " + problem
+    end if
+    if m.sharingScreen <> invalid then m.sharingScreen.status = sharingStatus()
+    settings = m.sections.settings
+    if settings <> invalid then settings.info = settingsInfo()
+    if m.syncAgain
+        m.syncAgain = false
+        requestSync("again")
+    end if
+end sub
+
+' Records from other TVs arrived: redraw what shows them.
+sub onSharedChanges()
+    print "[main] shared changes from other TVs applied"
+    refreshHome()
+    requestGames()
+    catalog = m.sections.live
+    if catalog <> invalid and m.section = "live" then onCatalogShown(catalog)
+end sub
+
+function sharingText() as String
+    share = m.store.callFunc("getShareSettings")
+    names = []
+    if share.favorites then names.Push("favorites")
+    if share.teams then names.Push("teams")
+    if share.series then names.Push("series and Watch List")
+    if share.progress then names.Push("watch progress")
+    if names.Count() = 0 then return "off"
+    text = joinStrings(names, ", ")
+    if m.syncNote <> "" then text = text + "; " + m.syncNote
+    return text
+end function
+
+function sharingStatus() as String
+    if m.syncNote = "" then return "Not synced yet since the app started."
+    return "Sharing: " + m.syncNote + "."
+end function
+
+' Settings -> Sharing between TVs.
+sub openSharing()
+    m.sharingScreen = CreateObject("roSGNode", "SharingScreen")
+    m.sharingScreen.share = m.store.callFunc("getShareSettings")
+    m.sharingScreen.status = sharingStatus()
+    m.sharingScreen.ObserveField("toggled", "onShareToggled")
+    pushOverlay(m.sharingScreen)
+end sub
+
+sub onShareToggled(event as Object)
+    kind = event.GetData()
+    share = m.store.callFunc("getShareSettings")
+    turnOn = not share[kind]
+    if not m.store.callFunc("setShare", kind, turnOn)
+        showToast("Couldn't save the change. Storage may be full.")
+        return
+    end if
+    if m.sharingScreen <> invalid then m.sharingScreen.share = m.store.callFunc("getShareSettings")
+    ' Turned on: what the other TVs have comes in now.
+    if turnOn then requestSync("setting")
+    settings = m.sections.settings
+    if settings <> invalid then settings.info = settingsInfo()
 end sub

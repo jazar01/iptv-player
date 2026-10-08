@@ -222,6 +222,7 @@ function settingsInfo() as Object
         audio: dolbyAudioText()
         converter: converterText()
         backup: backupText()
+        sharing: sharingText()
         market: m.store.callFunc("getMarket").label
         showMyTeams: m.store.callFunc("getSettings").showMyTeams
         showNoGameTeams: m.store.callFunc("getSettings").showNoGameTeams
@@ -249,6 +250,8 @@ sub onSettingsChosen(event as Object)
         toggleFavoritesInRecent()
     else if choice = "teamsPosition"
         toggleMyTeamsFirst()
+    else if choice = "sharing"
+        openSharing()
     else if choice = "converter"
         editConverter()
     else if choice = "backup"

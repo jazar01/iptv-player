@@ -12,6 +12,9 @@ nothing else on the network can overwrite a TV's backup.
     GET  /devices/<id>/history   [{day, savedAt, size}] dated copies
     GET  /devices/<id>/<day>     the copy from that day (YYYY-MM-DD)
     PUT  /devices/<id>           store a sealed backup (body below)
+    GET  /shared                 the shared copy (V2 stage 2), with its "version"
+    PUT  /shared                 save it; header X-Base-Version names the version it
+                                 was merged from: 409 if another TV saved since
     UDP 8793                     answers "IPTV-BACKUP?" with "IPTV-BACKUP <port> <version>"
 
 Sealed backup (JSON): {"v": 1, "device": id, "name": TV name, "savedAt":
@@ -39,7 +42,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.0"
+VERSION = "1.1"
 DISCOVERY_PORT = 8793
 DISCOVERY_ASK = b"IPTV-BACKUP?"
 MAX_BODY = 256 * 1024        # a TV's state is a few KB
@@ -109,6 +112,34 @@ class Store:
         days = sorted(f for f in os.listdir(folder) if f.endswith(".json"))
         for name in days[:-HISTORY_DAYS]:
             os.unlink(os.path.join(folder, name))
+
+    # The shared copy (V2 stage 2): the records the TVs share, sealed like a
+    # backup (device "shared"). Each save names the version it was merged
+    # from; if another TV saved in between, it's refused (409) and that TV
+    # merges again, so no TV's changes are lost.
+    def shared_path(self):
+        return os.path.join(self.root, "shared.json")
+
+    def shared_version(self):
+        try:
+            with open(self.shared_path(), "rb") as f:
+                return int(json.loads(f.read()).get("version", 0))
+        except (FileNotFoundError, ValueError):
+            return 0
+
+    def save_shared(self, base, sealed):
+        """(code, reply): 200 with the new version, or 409 when it changed."""
+        with write_lock:
+            current = self.shared_version()
+            if base != current:
+                return 409, {"error": "changed since", "version": current}
+            sealed["version"] = current + 1
+            body = json.dumps(sealed).encode()
+            write_atomic(self.shared_path(), body)
+            day = time.strftime("%Y-%m-%d", time.gmtime())
+            write_atomic(os.path.join(self.history_dir("shared"), day + ".json"), body)
+            self.trim_history("shared")
+            return 200, {"ok": True, "version": current + 1}
 
     def devices(self):
         folder = os.path.join(self.root, "devices")
@@ -184,7 +215,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         store = self.server.store
         parts = self.parts()
-        if parts == ["health"]:
+        if parts == ["shared"]:
+            self.send_file(store.shared_path())
+        elif parts == ["health"]:
             self.send_json(200, {"ok": True, "version": VERSION, "devices": len(store.devices())})
         elif parts == ["devices"]:
             self.send_json(200, store.devices())
@@ -202,7 +235,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(403, {"error": "not on the home network"})
             return
         parts = self.parts()
-        if len(parts) != 2 or parts[0] != "devices" or not DEVICE_ID.match(parts[1]):
+        shared = parts == ["shared"]
+        if not shared and (len(parts) != 2 or parts[0] != "devices" or not DEVICE_ID.match(parts[1])):
             self.send_json(404, {"error": "not found"})
             return
         length = int(self.headers.get("Content-Length") or 0)
@@ -215,10 +249,22 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             self.send_json(400, {"error": "not JSON"})
             return
-        problem = self.server.store.check(parts[1], sealed)
+        target = "shared" if shared else parts[1]
+        problem = self.server.store.check(target, sealed)
         if problem:
-            log.info("refused a backup for %s from %s: %s", parts[1], self.client_address[0], problem)
+            log.info("refused a backup for %s from %s: %s", target, self.client_address[0], problem)
             self.send_json(400, {"error": problem})
+            return
+        if shared:
+            try:
+                base = int(self.headers.get("X-Base-Version") or 0)
+            except ValueError:
+                base = -1
+            code, reply = self.server.store.save_shared(base, sealed)
+            if code == 200:
+                log.info("shared copy saved by %s (%s), version %d", sealed.get("name", ""),
+                         self.client_address[0], reply["version"])
+            self.send_json(code, reply)
             return
         self.server.store.save(parts[1], body)
         log.info("saved %s (%s), %d bytes", parts[1], sealed.get("name", ""), len(body))

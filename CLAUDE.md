@@ -88,7 +88,11 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   the household key (`$BackupKey` in `deploy.local.ps1`, packaged as
   `data/backup.json`): AES-256-CBC plus HMAC. A TV with nothing saved offers
   to restore one. `restore_test=1` in the manifest starts empty and saves
-  nothing, to try the restore; take it out after.
+  nothing, to try the restore; take it out after. Stage 2, sharing between
+  TVs: a versioned shared copy on the Pi (`/shared`, 409 when another TV
+  saved first), merged by StateStore `mergeShared` (newer record wins,
+  tombstones, `resumeGone`); Settings -> Sharing between TVs
+  (`components/screens/SharingScreen.*`) picks the kinds per TV.
 - `components/services/StateStore.*`: interface functions called via
   `callFunc`. Every mutation saves immediately and returns true only if it
   persisted.
@@ -237,7 +241,7 @@ is the final check.
 ## Status
 
 All of version 1 is built; the design and per-feature notes are in
-docs/requirements.md. Saved state is schema 7 (later per-device options and
+docs/requirements.md. Saved state is schema 8 (later per-device options and
 optional record marks joined without a schema change).
 
 - Built and checked on the Basement Roku: setup, login (retried in the

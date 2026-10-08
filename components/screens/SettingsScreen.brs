@@ -1,7 +1,7 @@
 sub init()
     m.menu = m.top.FindNode("menu")
     m.details = m.top.FindNode("details")
-    m.actions = ["teams", "teamsRow", "teamsPosition", "noGameTeams", "scores", "market", "recentFavorites", "converter", "account"]
+    m.actions = ["teams", "teamsRow", "teamsPosition", "noGameTeams", "scores", "market", "recentFavorites", "converter", "sharing", "account"]
     m.backupPanel = m.top.FindNode("backupPanel")
     m.top.FindNode("backupText").text = backupExplanation()
     buildMenu({})
@@ -29,6 +29,7 @@ sub buildMenu(info as Object)
         "Local stations:   " + marketLabel
         "Favorites in Recently Viewed:   " + onOff(isTrue(info.showFavoritesInRecent))
         "Dolby converter:   " + converterLabel
+        "Sharing between TVs"
         "Account and device name"
     ]
     focus = m.menu.itemFocused
@@ -63,7 +64,7 @@ sub onInfo()
     if connections = "" then connections = "checking ..."
     expires = asString(info.expires)
     if expires = "" then expires = "no end date"
-    m.details.text = "Device name:  " + asString(info.deviceName) + nl + "Server:  " + asString(info.server) + nl + "Account expires:  " + expires + nl + "Connections:  " + connections + "  (all devices on this account)" + nl + "Audio:  " + asString(info.audio) + nl + "Dolby converter:  " + asString(info.converter) + nl + "Backup:  " + asString(info.backup) + nl + "Device ID:  " + asString(info.deviceId) + nl + "App version:  " + asString(info.version)
+    m.details.text = "Device name:  " + asString(info.deviceName) + nl + "Server:  " + asString(info.server) + nl + "Account expires:  " + expires + nl + "Connections:  " + connections + "  (all devices on this account)" + nl + "Audio:  " + asString(info.audio) + nl + "Dolby converter:  " + asString(info.converter) + nl + "Backup:  " + asString(info.backup) + nl + "Sharing:  " + asString(info.sharing) + nl + "Device ID:  " + asString(info.deviceId) + nl + "App version:  " + asString(info.version)
 end sub
 
 ' ---------------------------------------------------------------------------

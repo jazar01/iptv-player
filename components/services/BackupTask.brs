@@ -12,7 +12,7 @@ sub backupLoop()
     m.savedAt = 0
     m.lastError = ""
     m.keys = loadKeys()
-    for each f in ["upload", "listRequest", "fetchRequest"]
+    for each f in ["upload", "listRequest", "fetchRequest", "syncRequest"]
         m.top.ObserveField(f, m.port)
     end for
     m.top.ready = true
@@ -41,6 +41,8 @@ sub backupLoop()
                     upload(req)
                 else if field = "listRequest"
                     m.top.listResult = listBackups(req)
+                else if field = "syncRequest"
+                    m.top.syncResult = sync(req)
                 else if field = "fetchRequest"
                     m.top.fetchResult = fetchBackup(req)
                 end if
@@ -48,6 +50,7 @@ sub backupLoop()
                 print "[backup] ERROR handling "; field; " (recovered): "; redact(e.message)
                 if field = "listRequest" then m.top.listResult = { id: asString(req.id), ok: false, devices: [], error: "error" }
                 if field = "fetchRequest" then m.top.fetchResult = { id: asString(req.id), ok: false, json: "", error: "error" }
+                if field = "syncRequest" then m.top.syncResult = { id: asString(req.id), op: asString(req.op), ok: false, conflict: false, json: "", version: 0 }
             end try
         end if
     end while
@@ -166,14 +169,54 @@ function fetchBackup(req as Dynamic) as Object
     return { id: id, ok: true, json: json, error: "" }
 end function
 
+' The shared copy (see BackupTask.xml). Sealed like a backup, as device
+' "shared"; the Pi refuses a save made from an older version (409: another
+' TV saved first), and MainBackup merges again.
+function sync(req as Dynamic) as Object
+    if type(req) <> "roAssociativeArray" then req = {}
+    out = { id: asString(req.id), op: asString(req.op), ok: false, conflict: false, json: "", version: 0 }
+    if m.keys = invalid then return out
+    if out.op = "fetch"
+        r = request("GET", "/shared", "")
+        if r.code = 404
+            out.ok = true       ' none yet: this TV's records start it
+            return out
+        end if
+        if r.code <> 200 then return out
+        sealed = ParseJson(r.body)
+        json = unseal(sealed)
+        if json = ""
+            print "[backup] the shared copy couldn't be opened (another household key?)"
+            return out
+        end if
+        out.ok = true
+        out.json = json
+        out.version = toInt(sealed.version)
+    else if out.op = "put"
+        body = seal(asString(req.json), "shared", asString(req.name))
+        if body = "" then return out
+        r = request("PUT", "/shared", body, { "X-Base-Version": toInt(req.baseVersion).ToStr() })
+        if r.code = 200
+            reply = ParseJson(r.body)
+            out.ok = true
+            if type(reply) = "roAssociativeArray" then out.version = toInt(reply.version)
+        else if r.code = 409
+            out.conflict = true
+        else
+            print "[backup] shared copy not saved: "; r.error
+        end if
+    end if
+    return out
+end function
+
 ' One HTTP request to the service: { code, body, error }. Finds the service
 ' first if needed, and once more if it doesn't answer where it was (the Pi
 ' got a new address).
-function request(method as String, path as String, body as String) as Object
+function request(method as String, path as String, body as String, headers = invalid as Dynamic) as Object
     for attempt = 1 to 2
         if m.address = "" then m.address = findService()
         if m.address = "" then return { code: 0, body: "", error: "no backup service found on the home network" }
-        r = httpCall(method, "http://" + m.address + path, body)
+        r = httpCall(method, "http://" + m.address + path, body, headers)
         if r.code > 0 then return r
         print "[backup] the service at "; m.address; " didn't answer ("; r.error; "); looking again"
         m.address = ""
@@ -181,13 +224,17 @@ function request(method as String, path as String, body as String) as Object
     return r
 end function
 
-function httpCall(method as String, url as String, body as String) as Object
+function httpCall(method as String, url as String, body as String, headers as Dynamic) as Object
     xfer = CreateObject("roUrlTransfer")
     port = CreateObject("roMessagePort")
     xfer.SetMessagePort(port)
     xfer.SetUrl(url)
     xfer.RetainBodyOnError(true)
     xfer.AddHeader("Content-Type", "application/json")
+    if headers = invalid then headers = {}
+    for each name in headers
+        xfer.AddHeader(name, asString(headers[name]))
+    end for
     if method = "PUT"
         xfer.SetRequest("PUT")
         started = xfer.AsyncPostFromString(body)
