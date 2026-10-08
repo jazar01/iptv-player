@@ -287,20 +287,39 @@ function Install-Roku([string]$Ip, [string]$DevPassword) {
 }
 
 
-# A failed install removes the dev app and its saved data; the restore bundle
-# only brings it back if that Roku has a recent backup. Warns, doesn't stop.
+# A failed install removes the dev app and its saved data; it comes back only
+# from a recent backup: the TV's own on the Pi (V2, it offers to restore it),
+# or backups\<name>.json from backup-roku.ps1 (bundled). Warns, doesn't stop.
+$script:piBackups = $null
+function Get-PiBackups {
+    if ($null -ne $script:piBackups) { return $script:piBackups }
+    $script:piBackups = @()
+    $piHost = if ($LocalPi) { $LocalPi } else { 'iptv-pi' }
+    $address = (& ssh -G $piHost 2>$null | Select-String '^hostname ' | ForEach-Object { ($_ -split ' ')[1] } | Select-Object -First 1)
+    if ($address) {
+        # Through the pipeline: Windows PowerShell 5.1 returns a JSON array as
+        # one item holding the array.
+        try { $script:piBackups = @(Invoke-RestMethod -Uri "http://${address}:8792/devices" -TimeoutSec 4 | ForEach-Object { $_ }) }
+        catch { Write-Host "  (The Pi's backup service didn't answer; checking backups\ only.)" }
+    }
+    return $script:piBackups
+}
+
 function Test-Backup([string]$Ip) {
     $roku = @($LocalRokus) | Where-Object { $_ -and $_.Ip -eq $Ip } | Select-Object -First 1
     if (-not $roku -or -not $roku.Name) { return }
+    $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $onPi = @(Get-PiBackups) | Where-Object { $_.name -eq $roku.Name } | Sort-Object savedAt -Descending | Select-Object -First 1
+    if ($onPi -and ($now - [long]$onPi.savedAt) -lt 14 * 86400) { return }
     $file = Join-Path (Join-Path $root 'backups') "$($roku.Name).json"
-    $how = "back it up first: .\scripts\backup-roku.ps1 -Roku '$($roku.Name)'"
-    if (-not (Test-Path $file)) {
-        Write-Warning "$($roku.Name) has no backup in backups\. If this install failed, its saved data would be lost; $how"
-        return
+    if ((Test-Path $file) -and ((Get-Date) - (Get-Item $file).LastWriteTime).TotalDays -lt 14) { return }
+    $how = "open the app on it for a minute (it backs up to the Pi), or run .\scripts\backup-roku.ps1 -Roku '$($roku.Name)'"
+    if ($onPi) {
+        $days = [int](($now - [long]$onPi.savedAt) / 86400)
+        Write-Warning "$($roku.Name)'s backup on the Pi is $days days old. A failed install would restore it as it was then; $how"
     }
-    $days = [int]((Get-Date) - (Get-Item $file).LastWriteTime).TotalDays
-    if ($days -ge 14) {
-        Write-Warning "$($roku.Name)'s backup is $days days old. A failed install would restore it as it was then; $how"
+    else {
+        Write-Warning "$($roku.Name) has no recent backup (none named '$($roku.Name)' on the Pi or in backups\). If this install failed, its saved data would be lost; $how"
     }
 }
 

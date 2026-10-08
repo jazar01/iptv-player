@@ -142,7 +142,8 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   sideload removes the installed dev app together with its registry**: all
   saved state on that Roku is lost (happened Oct 6, 2026). `deploy.ps1` now
   checks for both before uploading (also after `then`/`else`), and warns
-  when the Roku has no backup or one 14+ days old. A method's result is
+  when the Roku has no backup under its name on the Pi or in `backups`
+  younger than 14 days. A method's result is
   fine: `m.top.FindNode("x").visible = true` compiles.
 - A field's onChange doesn't fire when it's set to the value it already
   holds. Fields that hide initial XML text by being set to "" (status

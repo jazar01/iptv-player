@@ -388,9 +388,25 @@ sub onExitChoice()
     dlg.close = true
     if choice = 0
         print "[main] exit chosen"
-        m.exiting = true        ' threads stop as the app closes: not restarted
-        m.top.exitApp = true
+        ' A backup still waiting (a change in the last minute, a new device
+        ' name, say) goes first: closed now, the Pi would keep the old one.
+        if m.backupDue
+            showToast("Saving a backup ...")
+            sendBackup()
+            m.exitTimer = CreateObject("roSGNode", "Timer")
+            m.exitTimer.duration = 2.5
+            m.exitTimer.ObserveField("fire", "exitNow")
+            m.top.AppendChild(m.exitTimer)
+            m.exitTimer.control = "start"
+            return
+        end if
+        exitNow()
     end if
+end sub
+
+sub exitNow()
+    m.exiting = true        ' threads stop as the app closes: not restarted
+    m.top.exitApp = true
 end sub
 
 ' ---------------------------------------------------------------------------
