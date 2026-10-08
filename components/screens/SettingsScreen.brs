@@ -17,7 +17,7 @@ sub buildMenu(info as Object)
     showMyTeams = (info.showMyTeams = invalid or isTrue(info.showMyTeams))
     showNoGameTeams = (info.showNoGameTeams = invalid or isTrue(info.showNoGameTeams))
     converterLabel = "Off"
-    if Left(asString(info.converter), 3) <> "off" and asString(info.converter) <> "" then converterLabel = asString(info.converter).Split(" ")[0]
+    if Left(asString(info.converter), 3) <> "off" and asString(info.converter) <> "" then converterLabel = asString(info.converter).Split(" ")[0].Replace(":8790", "")
     teamsPosition = "After Favorites"
     if isTrue(info.myTeamsFirst) then teamsPosition = "First"
     titles = [
@@ -28,7 +28,7 @@ sub buildMenu(info as Object)
         "Live scores on My Teams:   " + onOff(info.showScores = invalid or isTrue(info.showScores))
         "Local stations:   " + marketLabel
         "Favorites in Recently Viewed:   " + onOff(isTrue(info.showFavoritesInRecent))
-        "Dolby converter (Raspberry Pi):   " + converterLabel
+        "Dolby converter:   " + converterLabel
         "Account and device name"
     ]
     focus = m.menu.itemFocused

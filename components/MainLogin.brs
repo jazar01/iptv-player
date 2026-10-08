@@ -308,7 +308,12 @@ function dolbyAudioText() as String
     ddPlus = canPlayAudio(info, "eac3")
     print "[main] audio this Roku can play: Dolby Digital="; dd; ", Dolby Digital Plus="; ddPlus; ", AAC="; canPlayAudio(info, "aac"); " ("; FormatJson(info.GetAudioDecodeInfo()); ")"
     if dd and ddPlus then return "Dolby Digital and Dolby Digital Plus: yes"
-    if not dd and not ddPlus then return "Dolby audio: NO (this TV connection takes stereo only; Dolby channels won't play)"
+    if not dd and not ddPlus
+        ' What happens to Dolby channels on this TV depends on the converter.
+        if converterAddress() = "" then return "Dolby audio: NO (this TV connection takes stereo only). Dolby channels play another copy where there is one; a Dolby converter plays them in full."
+        if Left(asString(m.converterStatus), 7) = "working" then return "Dolby audio: NO (this TV connection takes stereo only). Dolby channels are converted to stereo by the Dolby converter and play in full."
+        return "Dolby audio: NO (this TV connection takes stereo only). Dolby channels play through the Dolby converter when it answers, else another copy."
+    end if
     if dd then return "Dolby Digital: yes   Dolby Digital Plus: NO"
     return "Dolby Digital: NO   Dolby Digital Plus: yes"
 end function
@@ -337,6 +342,7 @@ sub onConverterCheck(res as Object)
     if asString(res.context.address) <> converterAddress() then return
     if res.ok and type(res.data) = "roAssociativeArray"
         m.converterStatus = "working, version " + asString(res.data.version)
+        m.converterDownUntil = 0        ' it's back: no need to wait out the pause
     else
         m.converterStatus = "NOT answering; Dolby channels use other copies"
     end if
@@ -380,6 +386,17 @@ sub saveConverter(address as String)
         return
     end if
     if address = "" then showToast("Dolby converter off") else showToast("Dolby converter: " + address)
+    if address <> ""
+        ' Channels marked as not playing here (Dolby, before there was a
+        ' converter) get to try it; any that fail for other reasons are
+        ' marked again on their next failure.
+        m.converterDownUntil = 0
+        if m.badStreams.Count() > 0
+            print "[main] Dolby converter set: "; m.badStreams.Count(); " channel(s) marked as not playing here will try it"
+            m.badStreams = {}
+            saveStreamMarks()
+        end if
+    end if
     checkConverter()
     settings = m.sections.settings
     if settings <> invalid then settings.info = settingsInfo()
@@ -393,23 +410,28 @@ sub editConverter()
     dlg.ObserveField("wasClosed", "onConverterSearchClosed")
     m.converterDialog = dlg
     m.top.dialog = dlg
-    m.converterSearching = true
+    m.converterSearchFor = "settings"
     m.converterSearchTimer.control = "start"     ' in case the relay doesn't answer
     m.relay.discover = { id: "settings" }
 end sub
 
 sub onConverterFound(event as Object)
     result = event.GetData()
-    if not isTrue(m.converterSearching) or asString(result.id) <> "settings" then return
+    if asString(result.id) <> m.converterSearchFor then return
+    if m.converterSearchFor = "playback"
+        converterSearchDone(result)
+        return
+    end if
     showConverterChoice(result)
 end sub
 
 sub onConverterSearchTimeout()
-    if isTrue(m.converterSearching) then showConverterChoice({ found: false })
+    if m.converterSearchFor = "settings" then showConverterChoice({ found: false })
+    if m.converterSearchFor = "playback" then converterSearchDone({ found: false })
 end sub
 
 sub showConverterChoice(result as Object)
-    m.converterSearching = false
+    m.converterSearchFor = ""
     m.converterSearchTimer.control = "stop"
     searching = m.converterDialog
     m.converterDialog = invalid
@@ -479,7 +501,7 @@ end sub
 sub onConverterSearchClosed(event as Object)
     if m.converterDialog <> invalid and m.converterDialog.IsSameNode(event.GetRoSGNode())
         m.converterDialog = invalid
-        m.converterSearching = false
+        m.converterSearchFor = ""
         m.converterSearchTimer.control = "stop"
     end if
 end sub
@@ -495,6 +517,8 @@ function converterAddressFrom(typed as String) as Dynamic
     if text = "" then return ""
     if not CreateObject("roRegex", "^[a-z0-9.-]+(:[0-9]{1,5})?$", "").IsMatch(text) then return invalid
     if Instr(1, text, ":") = 0 then text = text + ":8790"
+    port = Val(Mid(text, Instr(1, text, ":") + 1), 10)
+    if port < 1 or port > 65535 then return invalid
     return text
 end function
 

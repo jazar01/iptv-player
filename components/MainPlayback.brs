@@ -37,6 +37,10 @@ sub initPlayback()
     ' converter): streams whose Dolby audio this TV refused play through it,
     ' streamId -> until (7 days, kept with the other marks).
     m.convertStreams = marks.convert
+    m.converterDownUntil = 0    ' UTC seconds: converter not answering until then (converterDown)
+    m.converterRetry = invalid  ' a converted channel that failed, while the converter is looked for
+    m.converterSearchFor = ""   ' "settings" | "playback": who a converter search is for
+    m.playingStarted = 0        ' live stream ID that has started playing (onLivePlaying)
     m.relay = CreateObject("roSGNode", "StreamRelay")
     ' It also searches the home network for a Dolby converter (MainLogin:
     ' Settings -> Dolby converter); the timer covers a relay that never answers.
@@ -74,7 +78,7 @@ sub playLive(item as Object)
     id = toInt(item.streamId)
     ' Chosen anywhere but Up/Down: a new starting point for Up/Down.
     if not isTrue(item.fromStep) then m.stepOrigin = invalid
-    if isStreamBad(id) and not isTrue(item.direct)
+    if isStreamBad(id) and not isTrue(item.direct) and not needsConverter(id)
         findPlayableCopy(item, false)
         return
     end if
@@ -95,6 +99,7 @@ sub playLive(item as Object)
     if archiveDays > 0 then play.timeshift = timeshiftInfo(id)
     if needsConverter(id)
         convertPlay(play)
+        pingConverter(id)
     else if needsRelay(id)
         relayPlay(play)
     end if
@@ -361,7 +366,15 @@ sub onPlayerFailed(event as Object)
     m.failCode = toInt(failure.code)
     live = m.playing <> invalid and m.playing.kind = "live"
     ' Dolby this TV doesn't take, and a Dolby converter is set up: play it
-    ' again through the converter (full quality, stereo AAC).
+    ' again through the converter (full quality, stereo AAC). If the
+    ' converter was just found not answering, a copy plays straight away,
+    ' without marking the channel (it goes through the converter again once
+    ' that answers).
+    if live and isTrue(failure.dolbyUnsupported) and not isTrue(m.playing.converted) and converterAddress() <> "" and converterDown()
+        print "[main] stream "; m.playing.id; " has Dolby audio; the Dolby converter isn't answering, so a copy plays"
+        findPlayableCopy({ streamId: m.playing.id, name: m.playing.name, epgChannelId: m.playing.epgChannelId, archiveDays: m.playing.archiveDays, stepFrom: m.playing.stepFrom }, true)
+        return
+    end if
     if live and isTrue(failure.dolbyUnsupported) and not isTrue(m.playing.converted) and converterAddress() <> ""
         id = toInt(m.playing.id)
         m.convertStreams[id.ToStr()] = nowSeconds() + m.MARK_SECONDS
@@ -370,15 +383,13 @@ sub onPlayerFailed(event as Object)
         playLive({ streamId: id, name: m.playing.name, epgChannelId: m.playing.epgChannelId, archiveDays: m.playing.archiveDays, stepFrom: m.playing.stepFrom, replaceFor: m.playing.replaceFor, direct: true, note: "This channel's Dolby audio is converted to stereo by the Raspberry Pi." })
         return
     end if
-    ' Failed through the converter (the Pi off, or the channel itself): its
-    ' mark goes, so the next play tries the converter again only after a
-    ' fresh Dolby failure, and a copy plays now. Not marked bad: with the Pi
-    ' back, this channel plays at full quality again.
+    ' Failed through the converter: the Pi off or moved, or the channel
+    ' itself. A quick search of the home network tells which (onConverter-
+    ' SearchDone): the Pi at a new address plays it again from there; no
+    ' answer pauses the converter for 10 minutes; the Pi where it was means
+    ' the channel itself failed. Either way but the first, a copy plays.
     if live and isTrue(m.playing.converted)
-        print "[main] stream "; m.playing.id; " failed through the Dolby converter (code "; m.failCode; "); trying a copy"
-        m.convertStreams.Delete(toInt(m.playing.id).ToStr())
-        saveStreamMarks()
-        findPlayableCopy({ streamId: m.playing.id, name: m.playing.name, epgChannelId: m.playing.epgChannelId, archiveDays: m.playing.archiveDays, stepFrom: m.playing.stepFrom }, true)
+        converterFailed("code " + m.failCode.ToStr())
         return
     end if
     ' Audio this Roku can't decode: remember the stream and go straight to a
@@ -439,11 +450,87 @@ end function
 ' Marked for the converter (or, with converter_test in the manifest, every
 ' live channel, to try it on a TV that plays Dolby itself).
 function needsConverter(streamId as Dynamic) as Boolean
-    if converterAddress() = "" then return false
+    if converterAddress() = "" or converterDown() then return false
     if CreateObject("roAppInfo").GetValue("converter_test") = "1" then return true
     until = m.convertStreams[toInt(streamId).ToStr()]
     return until <> invalid and nowSeconds() < until
 end function
+
+' The converter didn't answer a search lately: Dolby channels use copies
+' until converterDownUntil (10 minutes), or until Settings finds it working.
+function converterDown() as Boolean
+    return nowSeconds() < m.converterDownUntil
+end function
+
+' The channel playing through the converter failed (or the converter didn't
+' answer its check): look for the converter, then converterSearchDone.
+sub converterFailed(reason as String)
+    p = m.playing
+    if p = invalid then return
+    r = m.converterRetry
+    if r <> invalid and toInt(r.streamId) = toInt(p.id) then return      ' already looking
+    print "[main] stream "; p.id; " failed through the Dolby converter ("; reason; "); looking for the converter"
+    m.converterRetry = { streamId: p.id, name: p.name, epgChannelId: p.epgChannelId, archiveDays: p.archiveDays, stepFrom: p.stepFrom, replaceFor: p.replaceFor, address: converterAddress() }
+    if m.player <> invalid then m.player.errorText = "The Dolby converter didn't play this channel. Checking it ..."
+    m.converterSearchFor = "playback"
+    m.converterSearchTimer.control = "stop"
+    m.converterSearchTimer.control = "start"
+    m.relay.discover = { id: "playback" }
+end sub
+
+' Each play through the converter also asks its /health page: a converter
+' that's off makes Roku's player wait at "Loading" (25 s, the start limit)
+' instead of failing, and this finds out in about 2 s.
+sub pingConverter(streamId as Integer)
+    m.playingStarted = 0
+    address = converterAddress()
+    sendRequest({ id: "converterPing", url: "http://" + address + "/health", context: { streamId: streamId, address: address }, timeoutMs: 2000 })
+end sub
+
+sub onConverterPing(res as Object)
+    if res.ok then return
+    id = toInt(res.context.streamId)
+    p = m.playing
+    ' Only for the channel still loading through that converter.
+    if p = invalid or toInt(p.id) <> id or not isTrue(p.converted) or m.playingStarted = id then return
+    if asString(res.context.address) <> converterAddress() then return
+    converterFailed("no answer from it")
+end sub
+
+' The search after a converted channel failed (see onPlayerFailed).
+sub converterSearchDone(result as Object)
+    m.converterSearchFor = ""
+    m.converterSearchTimer.control = "stop"
+    r = m.converterRetry
+    m.converterRetry = invalid
+    if r = invalid then return
+    id = toInt(r.streamId)
+    stillOn = m.player <> invalid and m.playing <> invalid and toInt(m.playing.id) = id
+    found = asString(result.address)
+    if isTrue(result.found) and found <> r.address
+        ' The Pi moved (a new address from the router): use it from now on.
+        print "[main] Dolby converter found at a new address, "; found; " (was "; r.address; ")"
+        m.store.callFunc("setSetting", "dolbyConverter", found)
+        m.converterStatus = ""
+        if stillOn
+            r.direct = true
+            r.note = "The Dolby converter moved to " + found + "; playing through it there."
+            playLive(r)
+        end if
+        return
+    end if
+    if isTrue(result.found)
+        ' The Pi answered where it was: this channel failed by itself.
+        print "[main] the Dolby converter answers; stream "; id; " failed through it, so a copy plays"
+        m.convertStreams.Delete(id.ToStr())
+        saveStreamMarks()
+    else
+        print "[main] the Dolby converter isn't answering; Dolby channels use copies for 10 minutes"
+        m.converterDownUntil = nowSeconds() + 600
+        m.converterStatus = "NOT answering; Dolby channels use other copies"
+    end if
+    if stillOn then findPlayableCopy(r, true)
+end sub
 
 ' http://host:port/path -> http://<pi>/x/http/host:port/path. Placeholders
 ' in the path ({start}, {duration} in archive URLs) pass through.
@@ -662,6 +749,7 @@ end function
 ' plays: asked once the stand-in has played for a few seconds.
 
 sub onLivePlaying(event as Object)
+    m.playingStarted = toInt(event.GetData().streamId)     ' for onConverterPing
     m.swapTimer.control = "stop"
     if m.playing = invalid or m.playing.kind <> "live" or toInt(m.playing.replaceFor) = 0 then return
     if toInt(event.GetData().streamId) <> toInt(m.playing.id) then return

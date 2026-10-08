@@ -128,6 +128,8 @@ sub routeApiResponse(res as Object)
         onTeamGuide(res)
     else if res.id = "teamScores"
         onTeamScores(res)
+    else if res.id = "converterPing"
+        onConverterPing(res)
     else if res.id = "converterCheck"
         onConverterCheck(res)
     end if

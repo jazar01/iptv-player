@@ -100,7 +100,9 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   Dolby converter, `convertStreams`); it serves its own live playlist so
   provider session changes don't stall the player (requirements: "Dolby audio
   converter on a home Raspberry Pi"). Settings finds it by a UDP broadcast
-  (port 8791) that StreamRelay sends and the Pi answers.
+  (port 8791) that StreamRelay sends and the Pi answers; playback searches
+  the same way when the converter fails (new address saved, or 10 minutes
+  of copies when it's off).
 
 ## Conventions
 
@@ -232,8 +234,8 @@ optional record marks joined without a schema change).
   connections, account expiry, backup panel), manual backup and automatic
   restore.
 - Dolby converter on the home Raspberry Pi (Oct 8, 2026): ESPN 1080p played
-  through it on the Basement TV (with `converter_test`); not yet tried on
-  the Family Room and Deck TVs it's for, or with the archive.
+  through it on the Basement TV (with `converter_test`) and works on the
+  Family Room TV; not yet tried on the Deck TV or with the archive.
 - Known limits: HD timeshift archives exceed this Roku's video buffer; some
   channels use an AAC variant no Roku decodes (Tennis Channel 2); this
   provider sends no episode descriptions for some series.
