@@ -168,13 +168,23 @@ end function
 ' A copy picked from Other copies: watch it.
 sub onInfoCopyChosen(event as Object)
     copy = event.GetData()
+    ' Chosen in the player (error panel, or channel info's other copies): it
+    ' stands in for the channel being watched, so Up/Down and the favorite
+    ' label go by that channel's place.
+    stepFrom = 0
+    if m.infoPanel = invalid and m.playing <> invalid and m.playing.kind = "live"
+        stepFrom = toInt(m.playing.stepFrom)
+        if stepFrom = 0 then stepFrom = toInt(m.playing.id)
+    end if
     if m.infoPanel <> invalid
         panel = m.infoPanel
         m.infoPanel = invalid
         removeOverlay(panel)
     end if
     m.infoFor = invalid
-    playLive({ streamId: copy.streamId, name: copy.name, epgChannelId: copy.epgChannelId, archiveDays: copy.archiveDays })
+    replaceFor = 0
+    if isTrue(copy.fromError) then replaceFor = stepFrom
+    playLive({ streamId: copy.streamId, name: copy.name, epgChannelId: copy.epgChannelId, archiveDays: copy.archiveDays, stepFrom: stepFrom, replaceFor: replaceFor })
 end sub
 
 sub onPlayerInfoRequested(event as Object)

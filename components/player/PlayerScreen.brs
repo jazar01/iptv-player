@@ -48,9 +48,30 @@ sub init()
     m.top.ObserveField("focusedChild", "onFocusedChild")
 end sub
 
-' The Video node needs focus for its own pause/seek controls.
+' Movies, episodes and the archive (timeshift) use the Video node's own
+' pause/seek controls, so it has focus there. Live keeps focus on this
+' screen: the Video node takes * for its own audio and captions menu when a
+' stream has extra tracks (LBW: SEC Network, Oct 2026), and live * adds a
+' favorite.
 sub onFocusedChild()
-    if m.top.HasFocus() then m.video.SetFocus(true)
+    if m.top.HasFocus() and videoKeepsFocus() then m.video.SetFocus(true)
+end sub
+
+function videoKeepsFocus() as Boolean
+    return m.mode = "vod" or m.mode = "timeshift"
+end function
+
+' Focus to whichever should have it now (see onFocusedChild); nothing changes
+' while a panel or list over the video has it.
+sub focusPlayer()
+    if m.infoPanel.visible or m.errorCopyList.HasFocus() then return
+    if not m.top.IsInFocusChain() then return
+    if videoKeepsFocus()
+        m.video.SetFocus(true)
+    else
+        m.video.SetFocus(false)
+        m.top.SetFocus(true)
+    end if
 end sub
 
 sub onContent()
@@ -90,6 +111,7 @@ sub onContent()
         ' The Video node's own controls: pause, rewind, fast-forward, seek.
         m.video.enableTrickPlay = true
         loadVideo(play.url, asString(play.streamFormat), false, toInt(play.startPosition))
+        focusPlayer()
         m.saveTimer.control = "start"
     end if
 end sub
@@ -205,7 +227,10 @@ sub watchStall(state as String)
         if waited >= 1 and m.livePlayed then print "[player] buffered "; Int(waited); " s ("; m.mode; ", ended "; state; ")"
         m.bufferingSince = -1
     end if
-    if state = "playing" and m.mode = "live" then m.livePlayed = true
+    if state = "playing" and m.mode = "live" and not m.livePlayed
+        m.livePlayed = true
+        m.top.livePlaying = { streamId: m.play.id }
+    end if
 end sub
 
 sub onStall()
@@ -273,7 +298,9 @@ sub hideInfo()
     if m.infoPanel = invalid or not m.infoPanel.visible then return
     m.statsTimer.control = "stop"
     m.infoPanel.visible = false
-    m.video.SetFocus(true)
+    m.infoPanel.SetFocus(false)
+    m.top.SetFocus(true)
+    focusPlayer()
 end sub
 
 sub onChannelInfo()
@@ -353,12 +380,19 @@ sub hideErrorCopies()
     m.top.FindNode("copiesHead").visible = false
     m.top.FindNode("errorBg").height = 420
     m.top.FindNode("errorBack").translation = [420, 680]
-    if m.errorCopyList.HasFocus() then m.video.SetFocus(true)
+    if m.errorCopyList.HasFocus()
+        m.errorCopyList.SetFocus(false)
+        m.top.SetFocus(true)
+        focusPlayer()
+    end if
 end sub
 
 sub onErrorCopySelected()
     i = m.errorCopyList.itemSelected
-    if i >= 0 and i < m.errorCopyItems.Count() then m.top.copyChosen = m.errorCopyItems[i]
+    if i < 0 or i >= m.errorCopyItems.Count() then return
+    chosen = m.errorCopyItems[i]
+    chosen.fromError = true     ' a stand-in for the channel that failed (MainScene may offer to swap the favorite)
+    m.top.copyChosen = chosen
 end sub
 
 ' Diagnostics for audio errors ("Unsupported AAC stream"): the stream's audio
@@ -465,6 +499,7 @@ sub startLive()
     m.video.enableTrickPlay = false     ' our keys, not the Video node's
     loadVideo(m.play.url, asString(m.play.streamFormat), true, 0)
     showOverlay()
+    focusPlayer()
 end sub
 
 function canRewind() as Boolean
@@ -582,6 +617,7 @@ sub startTimeshift(startUtc as Integer, playStart as Integer)
     m.timeshiftTimeout.control = "stop"
     m.timeshiftTimeout.control = "start"
     showOverlay()
+    focusPlayer()
 end sub
 
 sub onTimeshiftTimeout()

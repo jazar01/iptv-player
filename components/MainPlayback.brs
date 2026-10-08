@@ -29,6 +29,15 @@ sub initPlayback()
     ' loads only once the presses stop, so skipping through channels
     ' doesn't open (and leave counting against the account) a stream each.
     m.stepTarget = invalid      ' favorite the presses have reached
+    m.stepOrigin = invalid      ' the non-favorite channel Up/Down started from (onChannelStep)
+
+    ' A favorite that failed and a stand-in that plays: offer to swap them.
+    m.swapDeclined = {}         ' favorite IDs answered "Not now" this session
+    m.swapDialog = invalid
+    m.swapTimer = CreateObject("roSGNode", "Timer")
+    m.swapTimer.duration = 6
+    m.swapTimer.ObserveField("fire", "onSwapTimer")
+    m.top.AppendChild(m.swapTimer)
     m.stepTimer = CreateObject("roSGNode", "Timer")
     m.stepTimer.duration = 0.6
     m.stepTimer.ObserveField("fire", "onStepTimer")
@@ -41,6 +50,8 @@ end sub
 ' instead (unless direct). note: shown on the live overlay once it starts.
 sub playLive(item as Object)
     id = toInt(item.streamId)
+    ' Chosen anywhere but Up/Down: a new starting point for Up/Down.
+    if not isTrue(item.fromStep) then m.stepOrigin = invalid
     if isStreamBad(id) and not isTrue(item.direct)
         findPlayableCopy(item, false)
         return
@@ -57,6 +68,7 @@ sub playLive(item as Object)
         archiveDays: archiveDays
         note: asString(item.note)
         stepFrom: toInt(item.stepFrom)     ' a copy played for this channel: Up/Down and the label go by it
+        replaceFor: toInt(item.replaceFor)  ' a favorite that failed, this standing in for it (onSwapTimer)
     }
     if archiveDays > 0 then play.timeshift = timeshiftInfo(id)
     if needsRelay(id) then relayPlay(play)
@@ -226,6 +238,7 @@ sub startPlayer(play as Object, position as Integer)
         m.player.ObserveField("failed", "onPlayerFailed")
         m.player.ObserveField("channelStep", "onChannelStep")
         m.player.ObserveField("liveViewed", "onLiveViewed")
+        m.player.ObserveField("livePlaying", "onLivePlaying")
         m.player.ObserveField("liveWatched", "onLiveWatched")
         m.player.channelViewSeconds = m.store.callFunc("getChannelViewSeconds")
         m.player.ObserveField("toggleFavorite", "onPlayerToggleFavorite")
@@ -401,7 +414,7 @@ sub onAutoCopies(result as Object)
         print "[main] playing copy "; copy.streamId; " instead of "; a.streamId
         stepFrom = toInt(a.item.stepFrom)
         if stepFrom = 0 then stepFrom = a.streamId
-        playLive({ streamId: copy.streamId, name: copy.name, epgChannelId: copy.epgChannelId, archiveDays: copy.archiveDays, direct: true, stepFrom: stepFrom, note: "Playing " + localizeName(asString(copy.name)) + ": another copy's audio doesn't play on Roku." })
+        playLive({ streamId: copy.streamId, name: copy.name, epgChannelId: copy.epgChannelId, archiveDays: copy.archiveDays, direct: true, stepFrom: stepFrom, replaceFor: stepFrom, note: "Playing " + localizeName(asString(copy.name)) + ": another copy's audio doesn't play on Roku." })
     else if not a.afterFailure
         ' Known bad, but no other copy: try it anyway (the provider may have
         ' changed it since).
@@ -485,14 +498,20 @@ sub onChannelStep(event as Object)
     current = m.playing.id
     if toInt(m.playing.stepFrom) > 0 then current = m.playing.stepFrom
     if m.stepTarget <> invalid then current = m.stepTarget.streamId
-    index = favoriteIndex(favorites, current)
-    if index < 0
-        if direction > 0 then index = 0 else index = count - 1
-    else
-        index = (index + direction + count) mod count
+    ' A channel that isn't a favorite joins the loop just before the first
+    ' favorite, so Up then Down comes back to it.
+    if m.stepOrigin = invalid and favoriteIndex(favorites, current) < 0
+        m.stepOrigin = { streamId: toInt(current), name: m.playing.name, epgChannelId: asString(m.playing.epgChannelId), archiveDays: m.playing.archiveDays }
     end if
-    f = favorites[index]
-    m.stepTarget = { streamId: f.streamId, name: f.name, epgChannelId: f.epgChannelId }
+    ring = []
+    if m.stepOrigin <> invalid then ring.Push(m.stepOrigin)
+    ring.Append(favorites)
+    count = ring.Count()
+    index = favoriteIndex(ring, current)
+    if index < 0 then index = 0
+    index = (index + direction + count) mod count
+    f = ring[index]
+    m.stepTarget = { streamId: f.streamId, name: f.name, epgChannelId: f.epgChannelId, archiveDays: f.archiveDays, fromStep: true }
     m.player.preview = { name: f.name, label: favoriteLabel(f.streamId) }
     m.stepTimer.control = "stop"
     m.stepTimer.control = "start"
@@ -524,3 +543,70 @@ function favoriteLabel(streamId as Dynamic) as String
     position = index + 1
     return "Favorite " + position.ToStr() + " of " + favorites.Count().ToStr()
 end function
+
+' ---------------------------------------------------------------------------
+' Swapping a favorite that failed for the copy (or similar channel) that
+' plays: asked once the stand-in has played for a few seconds.
+
+sub onLivePlaying(event as Object)
+    m.swapTimer.control = "stop"
+    if m.playing = invalid or m.playing.kind <> "live" or toInt(m.playing.replaceFor) = 0 then return
+    if toInt(event.GetData().streamId) <> toInt(m.playing.id) then return
+    m.swapTimer.control = "start"
+end sub
+
+sub onSwapTimer()
+    if m.player = invalid or m.playing = invalid or m.playing.kind <> "live" then return
+    oldId = toInt(m.playing.replaceFor)
+    if oldId = 0 or m.swapDeclined.DoesExist(oldId.ToStr()) then return
+    if not m.store.callFunc("isFavorite", oldId) or m.store.callFunc("isFavorite", m.playing.id) then return
+    old = invalid
+    for each f in m.store.callFunc("getFavorites")
+        if toInt(f.streamId) = oldId then old = f
+    end for
+    if old = invalid then return
+    oldName = localizeName(asString(old.name))
+    newName = localizeName(asString(m.playing.name))
+    dlg = CreateObject("roSGNode", "StandardMessageDialog")
+    dlg.title = "Replace favorite?"
+    dlg.message = [oldName + " didn't play here, but " + newName + " does. Put " + newName + " in its place in your Favorites?"]
+    dlg.buttons = ["Replace", "Not now"]
+    dlg.ObserveField("buttonSelected", "onSwapChosen")
+    dlg.ObserveField("wasClosed", "onSwapClosed")
+    m.swapDialog = { dialog: dlg, oldId: oldId, oldName: oldName, newName: newName, channel: { streamId: toInt(m.playing.id), name: m.playing.name, epgChannelId: asString(m.playing.epgChannelId) } }
+    m.top.dialog = dlg
+end sub
+
+sub onSwapChosen()
+    d = m.swapDialog
+    if d = invalid then return
+    m.swapDialog = invalid
+    choice = d.dialog.buttonSelected
+    d.dialog.close = true
+    if choice <> 0
+        m.swapDeclined[d.oldId.ToStr()] = true
+        return
+    end if
+    ' The same remapping as a provider renumbering: same place, pin and
+    ' Recently Viewed entry, new channel.
+    map = {}
+    map[d.oldId.ToStr()] = d.channel
+    if m.store.callFunc("remapChannels", map)
+        showToast("Replaced " + d.oldName + " with " + d.newName + " in Favorites")
+        if m.playing <> invalid and toInt(m.playing.id) = d.channel.streamId
+            m.playing.stepFrom = 0
+            m.playing.replaceFor = 0
+            if m.player <> invalid then m.player.channelLabel = favoriteLabel(d.channel.streamId)
+        end if
+        refreshHome()
+        updateCatalogTags()
+    else
+        showToast("Couldn't save the change. Storage may be full.")
+    end if
+end sub
+
+sub onSwapClosed()
+    d = m.swapDialog
+    if d <> invalid then m.swapDeclined[d.oldId.ToStr()] = true
+    m.swapDialog = invalid
+end sub
