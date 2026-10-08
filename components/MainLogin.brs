@@ -210,6 +210,7 @@ function settingsInfo() as Object
         version: CreateObject("roAppInfo").GetVersion()
         connections: connectionsText()
         expires: accountExpiryText()
+        audio: dolbyAudioText()
         market: m.store.callFunc("getMarket").label
         showMyTeams: m.store.callFunc("getSettings").showMyTeams
         showNoGameTeams: m.store.callFunc("getSettings").showNoGameTeams
@@ -277,4 +278,27 @@ end sub
 function accountExpiryText() as String
     if m.accountExpires <= 0 then return ""
     return formatDate(m.accountExpires)
+end function
+
+' What this Roku, as connected to its TV (or soundbar), can play of the two
+' Dolby formats channels use: Dolby Digital (AC-3) and Dolby Digital Plus
+' (E-AC-3). Roku players mostly pass Dolby on over HDMI for the TV to
+' decode; a TV that reports stereo only makes every Dolby channel fail
+' ("Unsupported audio format: Dolby Digital", Family Room, Oct 2026).
+' Checked each time Settings opens: changing the TV's settings or HDMI
+' port (and restarting the Roku) can change the answer.
+function dolbyAudioText() as String
+    info = CreateObject("roDeviceInfo")
+    dd = canPlayAudio(info, "ac3")
+    ddPlus = canPlayAudio(info, "eac3")
+    print "[main] audio this Roku can play: Dolby Digital="; dd; ", Dolby Digital Plus="; ddPlus; ", AAC="; canPlayAudio(info, "aac"); " ("; FormatJson(info.GetAudioDecodeInfo()); ")"
+    if dd and ddPlus then return "Dolby Digital and Dolby Digital Plus: yes"
+    if not dd and not ddPlus then return "Dolby audio: NO (this TV connection takes stereo only; Dolby channels won't play)"
+    if dd then return "Dolby Digital: yes   Dolby Digital Plus: NO"
+    return "Dolby Digital: NO   Dolby Digital Plus: yes"
+end function
+
+function canPlayAudio(info as Object, codec as String) as Boolean
+    answer = info.CanDecodeAudio({ Codec: codec })
+    return type(answer) = "roAssociativeArray" and isTrue(answer.result)
 end function
