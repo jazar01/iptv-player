@@ -340,7 +340,7 @@ sub onPlayerFailed(event as Object)
         id = toInt(m.playing.id)
         m.relayStreams[id.ToStr()] = nowSeconds() + 4 * 3600
         print "[main] stream "; id; " has audio Roku rejects; playing it through the audio fix"
-        playLive({ streamId: id, name: m.playing.name, epgChannelId: m.playing.epgChannelId, archiveDays: m.playing.archiveDays, stepFrom: m.playing.stepFrom, direct: true, note: "This channel's audio is being repaired for Roku." })
+        playLive({ streamId: id, name: m.playing.name, epgChannelId: m.playing.epgChannelId, archiveDays: m.playing.archiveDays, stepFrom: m.playing.stepFrom, replaceFor: m.playing.replaceFor, direct: true, note: "This channel's audio is being repaired for Roku." })
         return
     end if
     ' Dolby audio this TV doesn't accept, too: the relay can't help, but a
