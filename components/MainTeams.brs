@@ -6,10 +6,12 @@ sub initTeams()
     m.games = []                ' last SearchTask result (see MyTeams.brs)
     m.guideReady = false        ' network guides saved to cachefs: at least once
     m.guideFetchedAt = 0
-    m.guidePending = 0
+    m.guidePending = 0          ' network guides still to arrive in this batch
+    m.guideBatch = 0            ' numbers each batch; replies from an abandoned one are ignored
+    m.guideSentAt = 0
     m.teamsScreen = invalid
     m.teamEditScreen = invalid
-    m.logoPending = {}          ' team ID -> true while its logo is being looked up
+    m.logoPending = {}          ' team ID -> when its logo lookup was sent
     m.marketScreen = invalid
     m.gameDialog = invalid
     ' Refresh every 30 minutes while Home is showing (requirements).
@@ -22,6 +24,7 @@ sub initTeams()
     ' Live scores (Settings -> Live scores on My Teams): game key -> line.
     m.scores = {}
     m.scoresPending = 0
+    m.scoresBatch = 0           ' as m.guideBatch
     m.scoresAt = 0              ' when the scoreboards were last asked for
     m.scoresFiles = []
     m.scoresTimer = CreateObject("roSGNode", "Timer")
@@ -118,7 +121,15 @@ end sub
 ' through ApiTask (saveOnly) for SearchTask to read. Refetched when older than
 ' guideMaxAgeMinutes; when all are in, games are found again with them.
 sub fetchNetworkGuides(networks as Object)
-    if networks.Count() = 0 or m.guidePending > 0 then return
+    if networks.Count() = 0 then return
+    ' A batch still arriving waits, but not forever: replies can be lost
+    ' (ApiTask restarted), and then the guides would never refresh.
+    if m.guidePending > 0
+        if nowSeconds() - m.guideSentAt < 180 then return
+        print "[main] My Teams network guides: a batch never finished; asking again"
+        m.guidePending = 0
+        m.guideFetchedAt = 0
+    end if
     cfg = guideRules().myTeams
     if type(cfg) <> "roAssociativeArray" then cfg = {}
     maxAge = toInt(cfg.guideMaxAgeMinutes) * 60
@@ -131,6 +142,8 @@ sub fetchNetworkGuides(networks as Object)
     action = asString(cfg.guideAction)
     if action = "" then action = "get_short_epg"
     m.guideFetchedAt = nowSeconds()
+    m.guideSentAt = nowSeconds()
+    m.guideBatch = m.guideBatch + 1
     m.guidePending = networks.Count()
     for each n in networks
         params = { stream_id: n.streamId }
@@ -140,6 +153,7 @@ sub fetchNetworkGuides(networks as Object)
             priority: "low"
             action: action
             params: params
+            context: { batch: m.guideBatch }
             cacheFile: n.guideFile
             saveOnly: true
             maxAgeSeconds: maxAge
@@ -149,6 +163,7 @@ sub fetchNetworkGuides(networks as Object)
 end sub
 
 sub onTeamGuide(res as Object)
+    if type(res.context) <> "roAssociativeArray" or toInt(res.context.batch) <> m.guideBatch then return
     if not res.ok then print "[main] couldn't get a network guide for My Teams: "; res.error
     m.guidePending = m.guidePending - 1
     if m.guidePending > 0 then return
@@ -295,7 +310,7 @@ sub openTeamEdit(team as Dynamic)
     m.teamEditScreen.ObserveField("lookupLogo", "onTeamLogoAgain")
     if team <> invalid then m.teamEditScreen.team = team
     if team <> invalid
-        if m.logoPending.DoesExist(team.id)
+        if logoPendingFor(team.id)
             m.teamEditScreen.logoStatus = "looking"
         else if asString(team.logoFor) = team.name
             m.teamEditScreen.logoStatus = logoStatusFor(asString(team.logo))
@@ -346,21 +361,28 @@ end sub
 ' first result in one of the team's sports. The card's Poster loads the
 ' image itself.
 
+' A logo lookup under way (sent less than 2 minutes ago: a lost reply
+' mustn't block the team for the session).
+function logoPendingFor(teamId as String) as Boolean
+    sent = m.logoPending[teamId]
+    return sent <> invalid and nowSeconds() - sent < 120
+end function
+
 ' Teams never looked up, or renamed since.
 sub lookupTeamLogos()
     for each t in m.store.callFunc("getTeams")
-        if asString(t.logoFor) <> t.name and not m.logoPending.DoesExist(t.id) then lookupTeamLogo(t)
+        if asString(t.logoFor) <> t.name and not logoPendingFor(t.id) then lookupTeamLogo(t)
     end for
 end sub
 
 sub lookupTeamLogo(team as Object)
     cfg = logoRules()
     if cfg = invalid then return
-    names = [team.name]
-    for each alias in team.aliases
+    names = [asString(team.name)]
+    for each alias in asArray(team.aliases)
         names.Push(alias)
     end for
-    m.logoPending[team.id] = true
+    m.logoPending[team.id] = nowSeconds()
     if m.teamEditScreen <> invalid then m.teamEditScreen.logoStatus = "looking"
     requestTeamLogo({ teamId: team.id, teamName: team.name, sports: team.sports, names: names, index: 0 })
 end sub
@@ -409,7 +431,7 @@ function pickTeamLogo(data as Dynamic, sports as Object) as String
     if type(data) <> "roAssociativeArray" or type(data.teams) <> "roArray" then return ""
     cfg = logoRules()
     wanted = {}
-    for each s in sports
+    for each s in asArray(sports)
         name = cfg.sports[s]
         if name <> invalid then wanted[LCase(name)] = true
     end for
@@ -431,7 +453,7 @@ end function
 sub onTeamLogoAgain(event as Object)
     teamId = event.GetData()
     for each t in m.store.callFunc("getTeams")
-        if t.id = teamId and not m.logoPending.DoesExist(t.id) then lookupTeamLogo(t)
+        if t.id = teamId and not logoPendingFor(t.id) then lookupTeamLogo(t)
     end for
 end sub
 
@@ -497,7 +519,8 @@ sub fetchScores()
     if seconds < 20 then seconds = 45
     if m.scoresTimer.duration <> seconds then m.scoresTimer.duration = seconds
     m.scoresTimer.control = "start"
-    if m.scoresPending > 0 then return
+    ' A round still arriving waits, but only so long (replies can be lost).
+    if m.scoresPending > 0 and nowSeconds() - m.scoresAt < 90 then return
     ' One request per league of the sports being played.
     sports = {}
     for each g in games
@@ -511,11 +534,12 @@ sub fetchScores()
             for each league in leagues
                 file = "cachefs:/teams/scores_" + safeKey(asString(league)) + ".json"
                 m.scoresFiles.Push(file)
-                requests.Push({ id: "teamScores", url: asString(rules.url).Replace("{league}", asString(league)), cacheFile: file, saveOnly: true, timeoutMs: 20000 })
+                requests.Push({ id: "teamScores", url: asString(rules.url).Replace("{league}", asString(league)), cacheFile: file, saveOnly: true, timeoutMs: 20000, context: { batch: m.scoresBatch + 1 } })
             end for
         end if
     end for
     m.scoresAt = nowSeconds()
+    m.scoresBatch = m.scoresBatch + 1
     m.scoresPending = requests.Count()
     for each r in requests
         sendRequest(r)
@@ -527,6 +551,7 @@ sub onScoresTimer()
 end sub
 
 sub onTeamScores(res as Object)
+    if type(res.context) <> "roAssociativeArray" or toInt(res.context.batch) <> m.scoresBatch then return
     if not res.ok then print "[main] couldn't get a scoreboard for live scores: "; res.error
     m.scoresPending = m.scoresPending - 1
     if m.scoresPending > 0 then return

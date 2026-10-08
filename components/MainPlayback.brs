@@ -17,6 +17,12 @@ sub initPlayback()
     ' hours it's tried again.
     m.badStreams = {}
     m.autoCopyFor = invalid     ' { streamId, name, item, afterFailure } waiting for its copies
+    ' SearchTask answers about copies; when it's busy (indexing, a scoreboard)
+    ' or not answering, don't leave the viewer with nothing (onAutoCopyTimeout).
+    m.autoCopyTimer = CreateObject("roSGNode", "Timer")
+    m.autoCopyTimer.duration = 4
+    m.autoCopyTimer.ObserveField("fire", "onAutoCopyTimeout")
+    m.top.AppendChild(m.autoCopyTimer)
 
     ' The audio fix (StreamRelay): streams that failed with "Unsupported AAC
     ' stream" play through it, streamId -> until (UTC seconds). Only if the
@@ -399,12 +405,15 @@ end function
 sub findPlayableCopy(item as Object, afterFailure as Boolean)
     m.autoCopyFor = { streamId: toInt(item.streamId), name: asString(item.name), item: item, afterFailure: afterFailure }
     searchSend("infoRequest", { id: "autocopy", streamId: toInt(item.streamId), market: m.store.callFunc("getMarket").key })
+    m.autoCopyTimer.control = "stop"
+    m.autoCopyTimer.control = "start"
 end sub
 
 sub onAutoCopies(result as Object)
     a = m.autoCopyFor
     if a = invalid or toInt(result.streamId) <> a.streamId then return
     m.autoCopyFor = invalid
+    m.autoCopyTimer.control = "stop"
     if a.afterFailure and (m.player = invalid or m.playing = invalid or toInt(m.playing.id) <> a.streamId) then return
     copy = invalid
     if type(result.copies) = "roArray"
@@ -432,6 +441,22 @@ sub onAutoCopies(result as Object)
         original = toInt(a.item.stepFrom)
         if original = 0 then original = a.streamId
         searchSend("infoRequest", { id: "failed", streamId: original, market: m.store.callFunc("getMarket").key, similar: true })
+    end if
+end sub
+
+' No answer about copies in time: play the channel itself (it may play
+' now), or, after a failure, say so on the error panel.
+sub onAutoCopyTimeout()
+    a = m.autoCopyFor
+    if a = invalid then return
+    m.autoCopyFor = invalid
+    print "[main] no answer about copies of "; a.streamId; " in time (search busy or not answering)"
+    if not a.afterFailure
+        item = a.item
+        item.direct = true
+        playLive(item)
+    else if m.player <> invalid and m.playing <> invalid and toInt(m.playing.id) = a.streamId
+        m.player.errorText = "This channel didn't play here, and the app couldn't look for another copy just now. Try again in a moment, or choose another channel."
     end if
 end sub
 

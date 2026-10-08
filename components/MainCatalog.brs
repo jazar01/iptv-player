@@ -121,7 +121,7 @@ end sub
 function catalogState(kind as String) as Object
     state = m.catalogState[kind]
     if state = invalid
-        state = { requested: false, categoriesShown: false, itemsShown: {} }
+        state = { requested: false, requestedAt: 0, categoriesShown: false, itemsShown: {} }
         m.catalogState[kind] = state
     end if
     return state
@@ -155,8 +155,11 @@ sub onCatalogShown(screen as Object)
     if kind = "live" then requestLocalStations("tags")
     screen.tags = catalogTags(kind)
     state = catalogState(kind)
-    if state.requested then return
+    ' Asked already: wait for it, unless it was over 90 s ago and nothing came
+    ' (a lost reply would otherwise leave the categories empty for good).
+    if state.requested and (state.categoriesShown or nowSeconds() - state.requestedAt < 90) then return
     state.requested = true
+    state.requestedAt = nowSeconds()
     sendRequest({
         id: "catalogCategories"
         action: catalogActions(kind).categories
@@ -657,7 +660,7 @@ function categoryOrderRules() as Object
     cfg = guideRules().categoryOrder
     if type(cfg) = "roAssociativeArray"
         if toInt(cfg.topUsed) > 0 then rules.topUsed = toInt(cfg.topUsed)
-        if asString(cfg.countryPattern) <> "" then rules.regex = CreateObject("roRegex", asString(cfg.countryPattern), "")
+        rules.regex = rulesRegex(cfg.countryPattern, "")
         info = CreateObject("roDeviceInfo")
         country = UCase(info.GetUserCountryCode())
         if country = "" then country = UCase(info.GetCountryCode())

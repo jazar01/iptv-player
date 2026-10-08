@@ -44,13 +44,13 @@ function teamRules() as Object
         localCategories: invalid
         localName: invalid
     }
-    if asString(cfg.localCategories) <> "" then rules.localCategories = CreateObject("roRegex", cfg.localCategories, "i")
-    if asString(cfg.localName) <> "" then rules.localName = CreateObject("roRegex", cfg.localName, "")
+    rules.localCategories = rulesRegex(cfg.localCategories, "i")
+    rules.localName = rulesRegex(cfg.localName, "")
     if rules.guideListings <= 0 then rules.guideListings = 30
     if rules.guideMaxAgeSeconds <= 0 then rules.guideMaxAgeSeconds = 1500
     if type(cfg.networks) = "roArray"
         for each n in cfg.networks
-            if asString(n.epg) <> "" then rules.networks.Push({ epg: asString(n.epg), label: asString(n.label) })
+            if type(n) = "roAssociativeArray" and asString(n.epg) <> "" then rules.networks.Push({ epg: asString(n.epg), label: asString(n.label) })
         end for
     end if
     ' Guide titles: base64 and superscript tags, as for now/next (EpgService).
@@ -58,18 +58,21 @@ function teamRules() as Object
         if type(json.epg) = "roAssociativeArray" and json.epg.base64Titles <> invalid then rules.base64Titles = isTrue(json.epg.base64Titles)
         if type(json.titleTags) = "roArray"
             for each tag in json.titleTags
-                if asString(tag.text) <> "" then rules.titleTags.Push({ text: asString(tag.text), flag: asString(tag.flag) })
+                if type(tag) = "roAssociativeArray" and asString(tag.text) <> "" then rules.titleTags.Push({ text: asString(tag.text), flag: asString(tag.flag) })
             end for
         end if
     end if
     if type(cfg.sportRules) = "roArray"
         for each r in cfg.sportRules
-            rules.sportRules.Push({ regex: CreateObject("roRegex", asString(r.pattern), "i"), sport: asString(r.sport) })
+            if type(r) = "roAssociativeArray"
+                re = rulesRegex(r.pattern, "i")
+                if re <> invalid then rules.sportRules.Push({ regex: re, sport: asString(r.sport) })
+            end if
         end for
     end if
     if type(cfg.sports) = "roArray"
         for each s in cfg.sports
-            rules.sportLabels[asString(s.id)] = asString(s.label)
+            if type(s) = "roAssociativeArray" then rules.sportLabels[asString(s.id)] = asString(s.label)
         end for
     end if
     m.teamRules = rules
@@ -80,15 +83,15 @@ function regexList(patterns as Dynamic) as Object
     list = []
     if type(patterns) = "roArray"
         for each p in patterns
-            list.Push(CreateObject("roRegex", asString(p), "i"))
+            re = rulesRegex(p, "i")
+            if re <> invalid then list.Push(re)
         end for
     end if
     return list
 end function
 
 function optionalRegex(pattern as Dynamic) as Dynamic
-    if asString(pattern) = "" then return invalid
-    return CreateObject("roRegex", asString(pattern), "i")
+    return rulesRegex(pattern, "i")
 end function
 
 function joinPatterns(patterns as Dynamic) as String
@@ -590,11 +593,6 @@ function sortChannels(channels as Object) as Object
     networks.Append(first)
     networks.Append(rest)
     return networks
-end function
-
-function asArray(value as Dynamic) as Object
-    if type(value) = "roArray" then return value
-    return []
 end function
 
 ' ---------------------------------------------------------------------------

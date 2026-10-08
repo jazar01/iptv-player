@@ -22,39 +22,81 @@ sub runLoop()
     m.top.ObserveField("guideRequest", port)
     m.top.ready = true
 
+    ' One message at a time. A runtime error while handling one (unexpected
+    ' data, say) is caught and logged, and an empty "not ready" answer goes
+    ' back, so the thread carries on: on a sideloaded Roku an uncaught error
+    ' opens the debugger, which suspends every thread and freezes the app.
     while true
         msg = wait(0, port)
         if type(msg) = "roSGNodeEvent"
-            if msg.GetField() = "load"
-                loadKind(msg.GetData())
-            else if msg.GetField() = "matchRequest"
-                m.top.matchResult = matchSaved(msg.GetData())
-            else if msg.GetField() = "gamesRequest"
-                m.top.gamesResult = findGames(msg.GetData())
-            else if msg.GetField() = "scoresRequest"
-                m.top.scoresResult = findScores(msg.GetData())
-            else if msg.GetField() = "guideRequest"
-                m.top.guideResult = guideChannels(msg.GetData())
-            else if msg.GetField() = "iconsRequest"
-                m.top.iconsResult = channelIcons(msg.GetData())
-            else if msg.GetField() = "infoRequest"
-                m.top.infoResult = channelDetails(msg.GetData())
-            else if msg.GetField() = "localsRequest"
-                m.top.localsResult = listLocalStations(msg.GetData())
-            else if msg.GetField() = "marketsRequest"
-                m.top.marketsResult = { id: msg.GetData().id, ready: m.index.live.Count() > 0 and liveCategories() <> invalid, markets: listMarkets() }
-            else
-                ' Typing sends a query per pause; answer only the newest.
-                latest = msg.GetData()
-                pending = port.PeekMessage()
-                while pending <> invalid and type(pending) = "roSGNodeEvent" and pending.GetField() = "query"
-                    latest = port.GetMessage().GetData()
-                    pending = port.PeekMessage()
-                end while
-                answer(latest)
-            end if
+            try
+                handleMessage(msg, port)
+            catch e
+                print "[search] ERROR handling "; msg.GetField(); " (recovered): "; redact(e.message)
+                sendErrorAnswer(msg.GetField(), msg.GetData())
+            end try
         end if
     end while
+end sub
+
+sub handleMessage(msg as Object, port as Object)
+    field = msg.GetField()
+    if field = "load"
+        loadKind(msg.GetData())
+    else if field = "matchRequest"
+        m.top.matchResult = matchSaved(msg.GetData())
+    else if field = "gamesRequest"
+        m.top.gamesResult = findGames(msg.GetData())
+    else if field = "scoresRequest"
+        m.top.scoresResult = findScores(msg.GetData())
+    else if field = "guideRequest"
+        m.top.guideResult = guideChannels(msg.GetData())
+    else if field = "iconsRequest"
+        m.top.iconsResult = channelIcons(msg.GetData())
+    else if field = "infoRequest"
+        m.top.infoResult = channelDetails(msg.GetData())
+    else if field = "localsRequest"
+        m.top.localsResult = listLocalStations(msg.GetData())
+    else if field = "marketsRequest"
+        req = msg.GetData()
+        m.top.marketsResult = { id: req.id, ready: m.index.live.Count() > 0 and liveCategories() <> invalid, markets: listMarkets() }
+    else if field = "query"
+        ' Typing sends a query per pause; answer only the newest.
+        latest = msg.GetData()
+        pending = port.PeekMessage()
+        while pending <> invalid and type(pending) = "roSGNodeEvent" and pending.GetField() = "query"
+            latest = port.GetMessage().GetData()
+            pending = port.PeekMessage()
+        end while
+        m.latestQuery = latest      ' what an error answer must reply to
+        answer(latest)
+    end if
+end sub
+
+' After a caught error: an empty answer in the usual shape, marked not
+' ready, so whatever MainScene is waiting for (a copy, logos, a list) moves
+' on instead of waiting for good. Index loads and game/score searches keep
+' what they had.
+sub sendErrorAnswer(field as String, req as Dynamic)
+    if type(req) <> "roAssociativeArray" then req = {}
+    if field = "infoRequest"
+        m.top.infoResult = { id: req.id, streamId: toInt(req.streamId), found: false, copies: [], similar: [] }
+    else if field = "iconsRequest"
+        m.top.iconsResult = { id: req.id, ready: false, icons: {} }
+    else if field = "guideRequest"
+        m.top.guideResult = { id: req.id, categoryId: asString(req.categoryId), ready: false, categories: [], channels: [] }
+    else if field = "localsRequest"
+        m.top.localsResult = { id: req.id, market: asString(req.market), ready: false, items: [] }
+    else if field = "marketsRequest"
+        m.top.marketsResult = { id: req.id, ready: false, markets: [] }
+    else if field = "matchRequest"
+        m.top.matchResult = { id: req.id, liveReady: false, seriesReady: false, movieReady: false, channels: {}, series: {}, movies: {}, missingMovies: [], unmatched: [] }
+    else if field = "query"
+        ' The newest query, which may have replaced this message's: the
+        ' search screen ignores answers to text that has since changed.
+        if type(m.latestQuery) = "roAssociativeArray" then req = m.latestQuery
+        m.top.results = { id: req.id, text: asString(req.text), items: [] }
+    end if
 end sub
 
 ' ---------------------------------------------------------------------------
@@ -258,7 +300,8 @@ function liveCategoryName(id as String) as String
         if cats = invalid then return ""
         m.categoryNames = {}
         for each c in cats
-            m.categoryNames[asString(c.category_id)] = asString(c.category_name)
+            ' Skip anything that isn't a category object (malformed provider data).
+            if type(c) = "roAssociativeArray" then m.categoryNames[asString(c.category_id)] = asString(c.category_name)
         end for
     end if
     return asString(m.categoryNames[id])

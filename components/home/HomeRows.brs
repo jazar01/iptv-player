@@ -178,7 +178,7 @@ function myTeamsRowItems(services as Object) as Object
         for each t in services.store.callFunc("getTeams")
             if not playing.DoesExist(t.id)
                 sports = ""
-                for each s in t.sports
+                for each s in asArray(t.sports)
                     if sports <> "" then sports += ", "
                     sports += asString(labels[s])
                 end for

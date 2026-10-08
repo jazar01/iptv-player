@@ -16,17 +16,25 @@ sub runLoop()
     ' Requests set before this point are lost, so callers wait for `ready`.
     m.top.ready = true
 
+    ' A runtime error while handling one request or reply is caught and
+    ' logged, and the loop carries on (that reply is lost; callers time out).
+    ' Uncaught, it would open the debugger on a sideloaded Roku, which
+    ' suspends every thread and freezes the app.
     while true
-        startQueued()
-        msg = wait(waitMs(), m.port)
-        t = type(msg)
-        if t = "roSGNodeEvent"
-            req = msg.GetData()
-            if type(req) = "roAssociativeArray" then accept(req)
-        else if t = "roUrlEvent"
-            onUrlEvent(msg)
-        end if
-        expireTimeouts()
+        try
+            startQueued()
+            msg = wait(waitMs(), m.port)
+            t = type(msg)
+            if t = "roSGNodeEvent"
+                req = msg.GetData()
+                if type(req) = "roAssociativeArray" then accept(req)
+            else if t = "roUrlEvent"
+                onUrlEvent(msg)
+            end if
+            expireTimeouts()
+        catch e
+            print "[api] ERROR (recovered): "; redact(e.message)
+        end try
     end while
 end sub
 

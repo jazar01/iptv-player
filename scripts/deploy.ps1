@@ -107,6 +107,37 @@ if (-not $SkipCheck) {
     Write-Host 'Code check passed.'
 }
 
+# --- Rules files ---------------------------------------------------------------
+
+# data\*.json must parse: a broken guide-rules.json would quietly switch off
+# every rule (guide tags, My Teams, search synonyms, time zones). Patterns are
+# also compiled here; .NET's regex dialect differs a little from the Roku's,
+# so a pattern that fails only warns (the app skips one that won't compile).
+function Get-RulePatterns($rules) {
+    $list = @()
+    foreach ($t in @($rules.nameTimes)) { if ($t.pattern) { $list += $t.pattern } }
+    $teams = $rules.myTeams
+    if ($teams) {
+        $list += @($teams.eventCategories) + @($teams.skipCategories) + @($teams.separators)
+        foreach ($r in @($teams.sportRules)) { if ($r.pattern) { $list += $r.pattern } }
+        $list += @($teams.replayWords, $teams.laterLanguages, $teams.localCategories, $teams.localName, $teams.networkAvoid)
+    }
+    if ($rules.categoryOrder) { $list += $rules.categoryOrder.countryPattern }
+    if ($rules.channelMatching) { $list += @($rules.channelMatching.ignorePatterns) }
+    $list += $rules.episodeTitlePrefix
+    return @($list | Where-Object { $_ })
+}
+foreach ($file in Get-ChildItem (Join-Path $root 'data') -Filter *.json) {
+    try { $rules = Get-Content $file.FullName -Raw | ConvertFrom-Json -ErrorAction Stop }
+    catch { throw "data\$($file.Name) isn't valid JSON, so nothing was packaged: $($_.Exception.Message)" }
+    if ($file.Name -eq 'guide-rules.json') {
+        foreach ($pattern in Get-RulePatterns $rules) {
+            try { [void][regex]::new($pattern) }
+            catch { Write-Warning "data\$($file.Name): a pattern may not compile on the Roku (it will be skipped there): $pattern" }
+        }
+    }
+}
+
 # --- Package -----------------------------------------------------------------
 
 New-Item -ItemType Directory -Force $outDir | Out-Null

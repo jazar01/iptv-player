@@ -10,6 +10,7 @@ sub initHome()
     m.usageScores = m.store.callFunc("getUsageScores")
     m.channelIcons = {}         ' streamId -> logo URL ("" = none), from SearchTask
     m.iconsPending = false
+    m.iconsAskedAt = 0
 end sub
 
 sub refreshHome()
@@ -29,7 +30,9 @@ end sub
 ' are rebuilt when new ones arrive. Until the channel list is indexed the
 ' answer is empty and the next refresh asks again.
 sub requestChannelIcons(rows as Object)
-    if m.iconsPending or m.searchTask = invalid then return
+    ' One request at a time, but a lost reply (SearchTask restarted) only
+    ' blocks for 30 s.
+    if m.searchTask = invalid or (m.iconsPending and nowSeconds() - m.iconsAskedAt < 30) then return
     missing = []
     for each row in rows
         for each item in row.items
@@ -38,6 +41,7 @@ sub requestChannelIcons(rows as Object)
     end for
     if missing.Count() = 0 then return
     m.iconsPending = true
+    m.iconsAskedAt = nowSeconds()
     searchSend("iconsRequest", { id: "home", streamIds: missing })
 end sub
 

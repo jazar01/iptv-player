@@ -1,6 +1,6 @@
 sub init()
     m.cache = {}        ' streamId -> { now, upcoming, validUntil }
-    m.inflight = {}
+    m.inflight = {}         ' streamId -> when its guide was asked for
     m.wanted = []           ' channels on screen (want); pump() fetches from these
     m.MAX_INFLIGHT = 6
     m.deferred = invalid    ' wanted before ApiTask was listening
@@ -41,12 +41,17 @@ sub pump()
     api = m.top.api
     if api = invalid or type(m.wanted) <> "roArray" then return
     now = nowSeconds()
+    ' A request unanswered after 90 s (ApiTask gives up well before) is
+    ' forgotten: a lost reply mustn't stop that channel's guide for good.
+    for each key in m.inflight.Keys()
+        if now - m.inflight[key] > 90 then m.inflight.Delete(key)
+    end for
     for each id in m.wanted
         if m.inflight.Count() >= m.MAX_INFLIGHT then return
         key = toInt(id).ToStr()
         entry = m.cache[key]
         if key <> "0" and m.inflight[key] = invalid and (entry = invalid or entry.validUntil <= now)
-            m.inflight[key] = true
+            m.inflight[key] = now
             api.request = { id: "epg:" + key, action: "get_short_epg", params: { stream_id: key, limit: 4 } }
         end if
     end for

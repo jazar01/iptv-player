@@ -89,7 +89,9 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   `toInt`, `isTrue`, `nowSeconds`, `formatClock`, `normalizeServer`). Each
   component must include Utils with its own `<script>` tag.
 - `data/`: editable provider rules, packaged with the app: guide title tags
-  and the time-zone rules used for timeshift URLs.
+  and the time-zone rules used for timeshift URLs. `deploy.ps1` refuses a
+  rules file that isn't valid JSON and warns about patterns that don't
+  compile; the app skips those patterns (`rulesRegex()` in Utils).
 
 ## Conventions
 
@@ -127,6 +129,13 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   (defer it with a short Timer).
 - List item components are recycled: observe content fields with
   `ObserveFieldScoped` and unobserve the old content when `itemContent` changes.
+- On a sideloaded Roku, an uncaught runtime error in any thread opens the
+  debugger and suspends every thread: the whole app freezes (found Oct 7,
+  2026). The service loops (ApiTask, SearchTask, StreamRelay) and
+  `onApiResponse` catch errors per message with `try`/`catch` and carry on;
+  put new message handling inside them. MainScene restarts a service thread
+  that stops anyway (at most 3 times in 10 minutes). Anything waiting for a
+  reply needs a time limit: a lost reply must not block it for the session.
 - Saved document shape and record rules (updatedAt, tombstones, UTC) are in the
   requirements' Data model section. Bump `m.SCHEMA` and migrate in
   `normalizeDocument()` when the shape changes.

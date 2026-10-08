@@ -23,6 +23,27 @@ function isTrue(v as Dynamic) as Boolean
     return (t = "Boolean" or t = "roBoolean") and v
 end function
 
+' A list as is, anything else (invalid, a missing field) as an empty list, so
+' `for each` over saved or provider data can't stop the app.
+function asArray(value as Dynamic) as Object
+    if type(value) = "roArray" then return value
+    return []
+end function
+
+' A regex from data/guide-rules.json, or invalid (logged) when the pattern is
+' empty or doesn't compile: a typo in the rules file must not stop the app,
+' only that rule. Callers skip invalid.
+function rulesRegex(pattern as Dynamic, flags as String) as Dynamic
+    text = asString(pattern)
+    if text = "" then return invalid
+    re = CreateObject("roRegex", text, flags)
+    if type(re) <> "roRegex"
+        print "[rules] WARNING: skipped a pattern in data/guide-rules.json that doesn't compile: "; text
+        return invalid
+    end if
+    return re
+end function
+
 ' UTC seconds; used for every updatedAt.
 function nowSeconds() as Integer
     return CreateObject("roDateTime").AsSeconds()
@@ -186,7 +207,8 @@ function loadNameTimeRules() as Object
             if zone = invalid then zone = { standard: 0, daylight: 0, dst: "" }
             display = true
             if r.display <> invalid then display = isTrue(r.display)
-            rules.Push({ regex: CreateObject("roRegex", r.pattern, "i"), order: r.order, zone: zone, display: display })
+            re = rulesRegex(r.pattern, "i")
+            if re <> invalid then rules.Push({ regex: re, order: r.order, zone: zone, display: display })
         end if
     end for
     return rules

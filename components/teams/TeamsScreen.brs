@@ -18,13 +18,13 @@ sub onTeams()
     content = CreateObject("roSGNode", "ContentNode")
     for each t in m.teams
         sports = ""
-        for each id in t.sports
+        for each id in asArray(t.sports)
             if sports <> "" then sports += ", "
             sports += asString(labels[id])
         end for
         if sports = "" then sports = "no sports picked"
         item = content.CreateChild("ContentNode")
-        item.title = t.name + "   -   " + sports
+        item.title = asString(t.name) + "   -   " + sports
     end for
     item = content.CreateChild("ContentNode")
     item.title = "+  Add a team"

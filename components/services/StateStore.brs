@@ -1013,8 +1013,17 @@ sub normalizeDocument(doc as Object)
     if toInt(doc.schema) > m.SCHEMA then print "[state] WARNING: saved schema "; doc.schema; " is newer than this build ("; m.SCHEMA; ")"
     if asString(doc.deviceId) = "" then doc.deviceId = CreateObject("roDeviceInfo").GetRandomUUID()
     doc.deviceName = asString(doc.deviceName)
+    ' Every list present, holding only records: a hand-made or older document
+    ' (household.json, a restored backup) must not stop the app in a loop
+    ' over it.
     for each key in ["favorites", "series", "resume", "recent", "teams", "seenGames", "watchlist"]
-        if type(doc[key]) <> "roArray" then doc[key] = []
+        records = []
+        if type(doc[key]) = "roArray"
+            for each r in doc[key]
+                if type(r) = "roAssociativeArray" then records.Push(r)
+            end for
+        end if
+        doc[key] = records
     end for
 
     ' Schema 2: resume entries carry name and ext so Continue Watching can
@@ -1058,12 +1067,17 @@ sub normalizeDocument(doc as Object)
     if doc.settings.showScores = invalid then doc.settings.showScores = true
     if doc.settings.myTeamsFirst = invalid then doc.settings.myTeamsFirst = false
 
-    ' Team names are shown capitalized ("Alabama Crimson Tide"); tidy any saved
-    ' before that rule (display only: matching ignores case).
+    ' Every team complete: an ID, a name, and lists of aliases, exclusions and
+    ' sports (loops on Home, in Settings and in My Teams assume them). Names
+    ' are shown capitalized ("Alabama Crimson Tide"); tidy any saved before
+    ' that rule (display only: matching ignores case).
     for each t in doc.teams
+        if asString(t.id) = "" then t.id = Left(CreateObject("roDeviceInfo").GetRandomUUID(), 8)
+        t.id = asString(t.id)
         t.name = capitalizeWords(asString(t.name))
-        if type(t.aliases) = "roArray" then t.aliases = capitalizedList(t.aliases)
-        if type(t.exclusions) = "roArray" then t.exclusions = capitalizedList(t.exclusions)
+        t.aliases = capitalizedList(shortList(t.aliases))
+        t.exclusions = capitalizedList(shortList(t.exclusions))
+        t.sports = shortList(t.sports)
     end for
     if toInt(doc.schema) < 6
         doc.schema = 6

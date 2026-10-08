@@ -47,6 +47,9 @@
     <Timer id="categoryDelay" duration="0.4" />
     <!-- Report the rows on screen only once scrolling pauses (what's on now). -->
     <Timer id="visibleDelay" duration="0.3" />
+    <!-- A category whose items never arrive (a lost reply; ApiTask itself
+         gives up and answers within about 95 s) offers OK to try again. -->
+    <Timer id="loadTimeout" duration="120" />
   </children>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />

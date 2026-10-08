@@ -12,7 +12,8 @@ function loadMatchRules() as Object
     json = ParseJson(ReadAsciiFile("pkg:/data/guide-rules.json"))
     if type(json) = "roAssociativeArray" and type(json.channelMatching) = "roAssociativeArray" and type(json.channelMatching.ignorePatterns) = "roArray"
         for each pattern in json.channelMatching.ignorePatterns
-            rules.ignore.Push(CreateObject("roRegex", asString(pattern), "i"))
+            re = rulesRegex(pattern, "i")
+            if re <> invalid then rules.ignore.Push(re)
         end for
     end if
     return rules

@@ -27,25 +27,31 @@ sub relayLoop()
         print "[relay] couldn't open a local port; audio fix unavailable"
         return
     end if
+    ' A runtime error is caught and logged and the loop carries on (see
+    ' ApiTask): uncaught, it would freeze the whole app on a sideloaded Roku.
     while true
         msg = wait(30, m.port)
-        if type(msg) = "roSGNodeEvent"
-            a = msg.GetData()
-            if type(a) = "roAssociativeArray" then m.urls[asString(a.key)] = asString(a.url)
-        else if type(msg) = "roSocketEvent"
-            id = msg.getSocketID()
-            if id = listener.getID()
-                c = listener.accept()
-                if c <> invalid
-                    c.setMessagePort(m.port)
-                    c.notifyReadable(true)
-                    m.conns[c.getID().ToStr()] = { sock: c, buf: "" }
+        try
+            if type(msg) = "roSGNodeEvent"
+                a = msg.GetData()
+                if type(a) = "roAssociativeArray" then m.urls[asString(a.key)] = asString(a.url)
+            else if type(msg) = "roSocketEvent"
+                id = msg.getSocketID()
+                if id = listener.getID()
+                    c = listener.accept()
+                    if c <> invalid
+                        c.setMessagePort(m.port)
+                        c.notifyReadable(true)
+                        m.conns[c.getID().ToStr()] = { sock: c, buf: "" }
+                    end if
+                else
+                    onReadable(id)
                 end if
-            else
-                onReadable(id)
             end if
-        end if
-        pumpAll()
+            pumpAll()
+        catch e
+            print "[relay] ERROR (recovered): "; redact(e.message)
+        end try
     end while
 end sub
 
@@ -98,7 +104,12 @@ sub onReadable(id as Integer)
             if found[2] <> "" then range.upto = Val(found[2], 10)
         end if
     end for
-    serve(s, path, range)
+    ' Whatever happens while serving, the player's connection is closed.
+    try
+        serve(s, path, range)
+    catch e
+        print "[relay] ERROR serving a request (recovered): "; redact(e.message)
+    end try
     s.close()
     m.conns.Delete(key)
 end sub

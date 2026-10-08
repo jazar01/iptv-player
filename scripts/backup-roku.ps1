@@ -77,9 +77,20 @@ for ($i = $begin + 1; $i -lt $lines.Count; $i++) {
 if ($data.Length -ne $expected) { throw "The backup arrived incomplete ($($data.Length) of $expected characters). Try again." }
 
 $json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($data))
-# -AsHashtable: Roku documents can hold the same key in two casings
-# ("seenGames" / "seengames"), which plain ConvertFrom-Json rejects.
-$doc = $json | ConvertFrom-Json -AsHashtable     # throws if it isn't valid JSON
+# Read with case-sensitive keys: Roku documents can hold the same key in two
+# casings ("seenGames" / "seengames"), which plain ConvertFrom-Json rejects.
+# -AsHashtable in PowerShell 7; Windows PowerShell 5.1 doesn't have it, so
+# .NET's JavaScriptSerializer there (as in deploy.ps1).
+function ConvertFrom-RokuJson([string]$text) {
+    if ($PSVersionTable.PSVersion.Major -ge 6) { return , ($text | ConvertFrom-Json -AsHashtable) }
+    Add-Type -AssemblyName System.Web.Extensions
+    $serializer = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+    $serializer.MaxJsonLength = [int]::MaxValue
+    return , $serializer.DeserializeObject($text)
+}
+# The parser's message can quote the backup (and its password): not shown.
+try { $doc = ConvertFrom-RokuJson $json } catch { $doc = $null }
+if (-not ($doc -is [System.Collections.IDictionary])) { throw 'The backup arrived but is not valid JSON; nothing was saved. Try again.' }
 $dupes = @($doc.Keys | Group-Object { $_.ToLower() } | Where-Object Count -gt 1 | ForEach-Object { ($_.Group -join ' / ') })
 if ($dupes) { Write-Host "  note: keys in two casings: $($dupes -join ', ')" }
 $backupDir = Join-Path $root 'backups'

@@ -43,6 +43,13 @@ sub init()
     m.api.ObserveField("response", "onApiResponse")
     m.api.ObserveField("ready", "onApiReady")
     m.api.control = "RUN"
+    ' The services' threads are watched: one that stops is restarted.
+    m.taskRestarts = {}
+    for each task in [m.api, m.searchTask, m.relay]
+        task.ObserveField("state", "onTaskState")
+        ' Stopped already, before it was watched: no change event will come.
+        taskStateChanged(task, asString(task.state))
+    end for
     m.epg.api = m.api
     m.epg.ObserveField("programs", "onPrograms")
     m.topBar.ObserveField("chosen", "onTopBarChosen")
@@ -83,8 +90,20 @@ sub onApiReady()
     m.pendingRequests = []
 end sub
 
+' Every reply passes through here, and the handlers read provider data, the
+' likeliest source of a surprise. A runtime error in one is caught and
+' logged: uncaught, it would open the debugger on a sideloaded Roku and
+' freeze the app.
 sub onApiResponse(event as Object)
     res = event.GetData()
+    try
+        routeApiResponse(res)
+    catch e
+        print "[main] ERROR handling a "; asString(res.id); " reply (recovered): "; redact(e.message)
+    end try
+end sub
+
+sub routeApiResponse(res as Object)
     if res.id = "login"
         onLogin(res)
     else if res.id = "connCheck"
@@ -110,6 +129,69 @@ sub onApiResponse(event as Object)
     else if res.id = "teamScores"
         onTeamScores(res)
     end if
+end sub
+
+' ---------------------------------------------------------------------------
+' Service threads. ApiTask, SearchTask and StreamRelay run for the life of
+' the app; if one stops (its loop ended, or a runtime error ended the
+' thread) its work would silently stop with it: no catalog, search, My
+' Teams or audio repair. So it's restarted, marked not ready first so new
+' requests queue instead of vanishing, with what was waiting on it
+' cleared. At most 3 restarts in 10 minutes each, then it's left stopped
+' and the viewer is told.
+
+sub onTaskState(event as Object)
+    taskStateChanged(event.GetRoSGNode(), asString(event.GetData()))
+end sub
+
+sub taskStateChanged(task as Object, newState as String)
+    state = LCase(newState)
+    if state <> "stop" and state <> "done" then return
+    name = task.Subtype()
+    now = nowSeconds()
+    recent = []
+    for each t in asArray(m.taskRestarts[name])
+        if now - t < 600 then recent.Push(t)
+    end for
+    if recent.Count() >= 3
+        print "[main] ERROR: "; name; " stopped again ("; recent.Count(); " restarts in 10 minutes); leaving it stopped"
+        showToast("Part of the app stopped working. To fix it, press Home and open IPTV Player again.")
+        return
+    end if
+    recent.Push(now)
+    m.taskRestarts[name] = recent
+    print "[main] WARNING: "; name; " stopped (state "; state; "); restarting it"
+    if task.IsSameNode(m.api)
+        m.api.ready = false
+        onApiRestart()
+    else if task.IsSameNode(m.searchTask)
+        m.searchTask.ready = false
+        onSearchTaskRestart()
+    else if task.IsSameNode(m.relay)
+        m.relay.port = 0        ' until it listens again: streams play without the fix
+    end if
+    task.control = "RUN"
+end sub
+
+' ApiTask restarted: replies to what was in flight won't come.
+sub onApiRestart()
+    m.guidePending = 0
+    m.guideFetchedAt = 0        ' that batch is lost: fetch the guides again
+    m.scoresPending = 0
+    m.guideInflight = {}
+    m.logoPending = {}
+    for each kind in m.catalogState
+        state = m.catalogState[kind]
+        if not state.categoriesShown then state.requested = false
+    end for
+end sub
+
+' SearchTask restarted: its index is gone until onSearchReady reloads it
+' from the saved lists.
+sub onSearchTaskRestart()
+    m.iconsPending = false
+    m.searchTask.counts = {}
+    if m.autoCopyFor <> invalid then onAutoCopyTimeout()
 end sub
 
 ' ---------------------------------------------------------------------------

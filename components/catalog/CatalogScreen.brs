@@ -6,6 +6,8 @@ sub init()
     m.delay = m.top.FindNode("categoryDelay")
     m.visibleDelay = m.top.FindNode("visibleDelay")
     m.visibleDelay.ObserveField("fire", "reportVisible")
+    m.loadTimeout = m.top.FindNode("loadTimeout")
+    m.loadTimeout.ObserveField("fire", "onLoadTimeout")
 
     m.categoryIds = []
     m.currentCategory = ""      ' requested
@@ -113,7 +115,15 @@ sub requestCategory(id as String)
     m.itemList.content = CreateObject("roSGNode", "ContentNode")
     m.byStream = {}
     m.shownCategory = ""
+    m.loadTimeout.control = "stop"
+    m.loadTimeout.control = "start"
     m.top.wantCategory = id
+end sub
+
+sub onLoadTimeout()
+    if m.currentCategory = "" or m.shownCategory = m.currentCategory then return
+    m.failedCategory = m.currentCategory
+    m.top.status = "This category is taking too long to load. Press OK to try again."
 end sub
 
 ' ---------------------------------------------------------------------------
@@ -123,6 +133,7 @@ sub onItems()
     d = m.top.items
     id = asString(d.categoryId)
     if id <> m.currentCategory then return
+    m.loadTimeout.control = "stop"
     if isTrue(d.failed) then m.failedCategory = id else m.failedCategory = ""
 
     ' A refresh of the list already on screen keeps the focused position.

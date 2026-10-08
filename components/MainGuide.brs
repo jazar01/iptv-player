@@ -8,7 +8,7 @@ sub initGuide()
     m.guideChoice = "favorites"     ' "favorites" | "__local" | a category ID
     m.guideTables = {}              ' streamId -> { listings, at }
     m.guideWanted = []              ' stream IDs the grid is showing (latest)
-    m.guideInflight = {}
+    m.guideInflight = {}            ' streamId -> when its schedule was asked for
     m.guideFailed = {}              ' streamId -> { count, retryAt }
     m.guideWaiting = false          ' showing "Still loading"; asked again after indexing
     m.guideCategories = []          ' [{ id, name }] from SearchTask
@@ -148,6 +148,11 @@ end sub
 sub pumpGuide()
     if m.section <> "guide" or m.overlays.Count() > 0 then return
     now = nowSeconds()
+    ' A request unanswered after 90 s (ApiTask gives up well before) is
+    ' forgotten, so a lost reply can't hold a slot for the session.
+    for each key in m.guideInflight.Keys()
+        if now - m.guideInflight[key] > 90 then m.guideInflight.Delete(key)
+    end for
     for each id in m.guideWanted
         if m.guideInflight.Count() >= 4 then return
         key = toInt(id).ToStr()
@@ -155,7 +160,7 @@ sub pumpGuide()
         f = m.guideFailed[key]
         waiting = f <> invalid and now < f.retryAt
         if not m.guideInflight.DoesExist(key) and not waiting and (t = invalid or now - t.at >= 3600)
-            m.guideInflight[key] = true
+            m.guideInflight[key] = now
             sendRequest({
                 id: "guideTable"
                 action: "get_simple_data_table"
