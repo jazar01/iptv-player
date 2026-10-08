@@ -390,6 +390,18 @@ Planned for version 2; not started. Prompted by Oct 6, 2026, when a failed sidel
 
 Later, the service could also compute results the Roku can't (full-guide search, e.g. for My Teams) and push parsing-rule updates.
 
+### Dolby audio converter on a home Raspberry Pi (possible future version)
+
+Not built; recorded Oct 7, 2026 as an option. The problem: a TV that accepts only stereo over HDMI (the Family Room's 2008 Samsung LN52A650) can't play any Dolby channel (ESPN, SEC Network, FS1, Tennis Channel), and the Roku won't decode Dolby for apps. Today the app falls back to the provider's LBW copies (AAC, lower bitrate). The app itself can't convert the audio: Roku gives apps no audio decoder, and decoding Dolby in BrightScript is far too slow. Cloudflare can't do it either (Workers can't run ffmpeg, and relaying video isn't allowed on the free plan).
+
+**Design:**
+
+- **Hardware:** a Raspberry Pi 4 (2 GB) or Pi 5 at home, on wired Ethernet, with a fixed address from the router (about $70-90 with power supply, case and microSD). Only audio is converted; video is copied untouched, so a stream takes a few percent of the CPU.
+- **Pi side:** a small converter service (about 100 lines) plus **ffmpeg**: for each request it fetches one segment from the provider and returns it with the video copied and the Dolby audio converted to AAC stereo (`-c:v copy -c:a aac -ac 2`, timestamps kept), well under a second per 10-second segment. An install script sets up ffmpeg and a systemd service that starts at boot; setup notes cover Raspberry Pi OS Lite (Raspberry Pi Imager), SSH and the fixed address. It's stateless and keeps no provider account: each request carries the segment's provider URL (inside the home network only).
+- **App side:** a "Dolby converter" address in Settings (per device, or later in the household configuration). On a TV whose Settings audio check says no Dolby, a Dolby channel plays through StreamRelay as now, but its segments point at the Pi instead of the provider, so the TV gets the full-quality copy in stereo instead of LBW. Rewind (the archive) works the same way. If the Pi is off or unreachable, the app falls back to switching to another copy, as today.
+- **Connections:** none while idle. While a TV watches through it, the Pi fetches the stream instead of the Roku (same household internet address), so it's still one provider connection per stream being watched, as without the Pi. Other channels, and TVs that play Dolby, don't use it.
+- **Alternative without code:** a soundbar or AV receiver with HDMI input between that Roku and its TV decodes Dolby itself.
+
 ## Open questions
 
 - [ ] Which Roku models are in use? Older models have much less memory, which limits catalog caching.
