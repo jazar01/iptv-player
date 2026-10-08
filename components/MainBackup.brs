@@ -102,8 +102,8 @@ sub onBackupList(event as Object)
         end for
     end if
     if devices.Count() = 0
-        ' No Pi, or nothing on it: the copy packaged at deploy, if any.
-        tryBundleRestore()
+        ' No Pi, or nothing on it: the household setup, else the bundle.
+        trySetUpAsNew()
         return
     end if
     print "[main] "; devices.Count(); " backup(s) on the Pi; offering a restore"
@@ -132,8 +132,8 @@ sub onRestoreChoice()
     choice = dlg.buttonSelected
     dlg.close = true
     if choice < 0 or choice >= m.restoreDevices.Count()
-        ' A new TV: the household copy packaged at deploy, if any, else Setup.
-        tryBundleRestore()
+        ' A new TV: the household setup, else the bundle, else Setup.
+        trySetUpAsNew()
         return
     end if
     chosen = m.restoreDevices[choice]
@@ -151,6 +151,51 @@ sub onBackupFetched(event as Object)
         return
     end if
     finishRestore("Restored this TV from its backup on the Raspberry Pi")
+end sub
+
+' A new TV (stage 3): the household setup saved from the admin page, if the
+' Pi has one; it asks only for this TV's name. Without one, the bundle from
+' deploy.ps1, else Setup as usual.
+sub trySetUpAsNew()
+    backupSend("syncRequest", { id: "household", op: "household" })
+end sub
+
+sub onHouseholdFetched(r as Object)
+    if m.store.callFunc("isConfigured") or m.setup = invalid then return
+    if not isTrue(r.ok) or asString(r.json) = ""
+        tryBundleRestore()
+        return
+    end if
+    m.householdJson = r.json
+    dlg = CreateObject("roSGNode", "StandardKeyboardDialog")
+    dlg.title = "Name this TV"
+    dlg.message = ["Your household setup is on the Raspberry Pi: this TV gets its account, favorites, My Teams, local stations and settings. Give the TV a name, such as Kitchen."]
+    dlg.buttons = ["OK", "Set up by hand"]
+    setKeyboardVoice(dlg, "generic")
+    dlg.ObserveField("buttonSelected", "onHouseholdName")
+    m.householdDialog = dlg
+    m.top.dialog = dlg
+end sub
+
+sub onHouseholdName()
+    dlg = m.householdDialog
+    if dlg = invalid then return
+    m.householdDialog = invalid
+    choice = dlg.buttonSelected
+    typed = dlg.text.Trim()
+    dlg.close = true
+    if choice <> 0 then return         ' by hand: Setup as usual
+    if typed = ""
+        showToast("Give this TV a name first.")
+        onHouseholdFetched({ ok: true, json: m.householdJson })
+        return
+    end if
+    name = UCase(Left(typed, 1)) + Mid(typed, 2)        ' voice entry comes in lower case
+    if m.store.callFunc("applyHousehold", m.householdJson, name)
+        finishRestore("Set up from your household setup as " + name)
+    else if m.setup <> invalid
+        m.setup.status = "The household setup couldn't be used. Set this TV up below."
+    end if
 end sub
 
 sub tryBundleRestore()
@@ -222,6 +267,10 @@ end sub
 
 sub onSyncResult(event as Object)
     r = event.GetData()
+    if asString(r.id) = "household"
+        onHouseholdFetched(r)
+        return
+    end if
     if asString(r.id) <> "sync" then return
     if r.op = "fetch"
         if not isTrue(r.ok)

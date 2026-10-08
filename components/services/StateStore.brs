@@ -93,6 +93,48 @@ function importDocument(json as String) as Boolean
     return true
 end function
 
+' The household setup from the Pi (admin page) as a new TV's state, named
+' deviceName: account, favorites, My Teams, local stations and settings.
+' Its records are dated when the setup was saved, so changes the TVs shared
+' since (a favorite removed, say) win over it. True if usable and saved.
+function applyHousehold(json as String, deviceName as String) as Boolean
+    h = ParseJson(json, "i")
+    if type(h) <> "roAssociativeArray" or type(h.credentials) <> "roAssociativeArray" then return false
+    if asString(h.credentials.server) = "" then return false
+    at = toInt(h.updatedAt)
+    doc = newDocument()
+    doc.deviceName = deviceName
+    doc.credentials = { server: asString(h.credentials.server), username: asString(h.credentials.username), password: asString(h.credentials.password) }
+    for each f in asArray(h.favorites)
+        if type(f) = "roAssociativeArray" and toInt(f.streamId) > 0
+            doc.favorites.Push({ streamId: toInt(f.streamId), name: shortName(f.name), epgChannelId: asString(f.epgChannelId), pinned: isTrue(f.pinned), position: f.position, deleted: false, updatedAt: at })
+        end if
+    end for
+    for each t in asArray(h.teams)
+        if type(t) = "roAssociativeArray" and asString(t.name) <> ""
+            team = { id: asString(t.id), name: shortName(t.name), aliases: shortList(t.aliases), exclusions: shortList(t.exclusions), sports: shortList(t.sports), deleted: false, updatedAt: at }
+            if asString(t.logo) <> "" then team.logo = asString(t.logo)
+            if t.logoFor <> invalid then team.logoFor = asString(t.logoFor)
+            doc.teams.Push(team)
+        end if
+    end for
+    if type(h.market) = "roAssociativeArray" then doc.market = { key: asString(h.market.key), label: asString(h.market.label) }
+    if type(h.settings) = "roAssociativeArray"
+        for each name in ["showMyTeams", "showNoGameTeams", "showFavoritesInRecent", "myTeamsFirst", "showScores"]
+            if h.settings[name] <> invalid then doc.settings[name] = isTrue(h.settings[name])
+        end for
+    end if
+    previous = m.doc
+    m.doc = doc
+    normalizeDocument(m.doc)
+    if not persist()
+        m.doc = previous
+        return false
+    end if
+    print "[state] set up from the household setup as '"; deviceName; "'"
+    return true
+end function
+
 ' pkg:/data/restore.json (deploy.ps1): { devices: [{ ip, name, document? }],
 ' household? }. This Roku's own backup if one matches its IP address, else
 ' the household copy (with this Roku's name from the deploy list, a new
@@ -1420,7 +1462,10 @@ function mergeShared(json as String) as Object
     result = { changed: false, upload: (json = "") }
 
     if share.favorites then shared.favorites = mergeRecords(m.doc.favorites, shared.favorites, "streamId", result)
-    if share.teams then shared.teams = mergeRecords(m.doc.teams, shared.teams, "id", result)
+    if share.teams
+        dedupeTeams(shared.teams, result)
+        shared.teams = mergeRecords(m.doc.teams, shared.teams, "id", result)
+    end if
     if share.series then shared.watchlist = mergeRecords(m.doc.watchlist, shared.watchlist, "id", result)
     if share.series or share.progress then shared.series = mergeSeries(shared.series, share, result)
     if share.progress then mergeResume(shared, result)
@@ -1431,6 +1476,35 @@ function mergeShared(json as String) as Object
     end if
     return { changed: result.changed, upload: result.upload, json: FormatJson(shared) }
 end function
+
+' The same team added on two TVs has two IDs, so it would show twice
+' (Alabama, Falcons and Braves on three TVs, Oct 8, 2026). Teams are one
+' team by name: the one with the lowest ID is kept everywhere, and this TV
+' deletes its other copies (the deletion then reaches the other TVs).
+sub dedupeTeams(sharedTeams as Object, result as Object)
+    keep = {}       ' lower-case name -> lowest ID among live copies
+    for each list in [m.doc.teams, sharedTeams]
+        for each t in list
+            if type(t) = "roAssociativeArray" and not isTrue(t.deleted)
+                name = LCase(asString(t.name).Trim())
+                id = asString(t.id)
+                if name <> "" and (keep[name] = invalid or id < keep[name]) then keep[name] = id
+            end if
+        end for
+    end for
+    now = nowSeconds()
+    for each t in m.doc.teams
+        if not isTrue(t.deleted)
+            id = keep[LCase(asString(t.name).Trim())]
+            if id <> invalid and id <> asString(t.id)
+                print "[state] My Teams: '"; asString(t.name); "' was added on more than one TV; keeping one"
+                t.deleted = true
+                t.updatedAt = now
+                result.changed = true
+            end if
+        end if
+    end for
+end sub
 
 ' Record lists with updatedAt (and deleted): the newer copy of each wins.
 ' Updates mine in place; returns the list for the shared copy.

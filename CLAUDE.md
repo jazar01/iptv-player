@@ -92,7 +92,10 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   TVs: a versioned shared copy on the Pi (`/shared`, 409 when another TV
   saved first), merged by StateStore `mergeShared` (newer record wins,
   tombstones, `resumeGone`); Settings -> Sharing between TVs
-  (`components/screens/SharingScreen.*`) picks the kinds per TV.
+  (`components/screens/SharingScreen.*`) picks the kinds per TV. Stage 3:
+  the admin page `http://<pi>:8792/admin` (`pi/backup-service/admin.*`,
+  password `$AdminPassword` in `deploy.local.ps1`) shows the backups and edits
+  the household setup; a new TV starts from it (`applyHousehold`).
 - `components/services/StateStore.*`: interface functions called via
   `callFunc`. Every mutation saves immediately and returns true only if it
   persisted.

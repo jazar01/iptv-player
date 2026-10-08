@@ -74,6 +74,7 @@
     <function name="removeRecentSearch" />
     <function name="importDocument" />
     <function name="restoreFromBundle" />
+    <function name="applyHousehold" />
     <function name="getStreamMarks" />
     <function name="setStreamMarks" />
     <function name="getShareSettings" />

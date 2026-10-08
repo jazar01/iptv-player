@@ -20,3 +20,7 @@ $LocalRokus = @(
 # Household key for V2 backups on the Pi: 64 hex characters (32 random bytes).
 # Keep it secret; a new key makes existing backups unreadable.
 # $BackupKey = '<64 hex characters>'
+
+# Password for the admin page on the Pi (http://<pi>:8792/admin). Only its hash goes
+# to the Pi. Change it here, then run .\scripts\pi-deploy.ps1 -Service backup.
+# $AdminPassword = '<a password>'

@@ -176,6 +176,21 @@ function sync(req as Dynamic) as Object
     if type(req) <> "roAssociativeArray" then req = {}
     out = { id: asString(req.id), op: asString(req.op), ok: false, conflict: false, json: "", version: 0 }
     if m.keys = invalid then return out
+    if out.op = "household"
+        ' The household setup a new TV starts from (stage 3; saved from the
+        ' admin page). json "" when there is none.
+        r = request("GET", "/household", "")
+        if r.code = 404
+            out.ok = true
+            return out
+        end if
+        if r.code <> 200 then return out
+        json = unseal(ParseJson(r.body))
+        if json = "" then return out
+        out.ok = true
+        out.json = json
+        return out
+    end if
     if out.op = "fetch"
         r = request("GET", "/shared", "")
         if r.code = 404

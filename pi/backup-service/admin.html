@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>IPTV Player admin</title>
+<style>
+  :root { --bg: #101418; --panel: #1b232c; --line: #2c3742; --text: #e6eaee; --dim: #8c96a0; --accent: #4da3ff; --warn: #ffb44d; --bad: #ff6b6b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 16px; border-bottom: 1px solid var(--line); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  header h1 { font-size: 20px; margin: 0; flex: 1; }
+  nav button { margin-right: 6px; }
+  main { padding: 16px; max-width: 900px; margin: 0 auto; }
+  section { display: none; }
+  section.on { display: block; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .grow { flex: 1; min-width: 160px; }
+  .dim { color: var(--dim); font-size: 14px; }
+  .warn { color: var(--warn); }
+  .bad { color: var(--bad); }
+  h2 { font-size: 18px; margin: 0 0 8px; }
+  h3 { font-size: 15px; margin: 14px 0 6px; color: var(--accent); }
+  button { background: #2a3540; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; font: inherit; cursor: pointer; }
+  button.primary { background: var(--accent); color: #06121f; border-color: var(--accent); font-weight: 600; }
+  button.small { padding: 3px 9px; font-size: 14px; }
+  button.on { background: var(--accent); color: #06121f; }
+  input[type=text], input[type=password], select { background: #0d1216; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; width: 100%; }
+  label.field { display: block; margin: 8px 0; }
+  label.field span { display: block; font-size: 14px; color: var(--dim); margin-bottom: 3px; }
+  ul.items { list-style: none; padding: 0; margin: 0; }
+  ul.items li { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  ul.items li:last-child { border-bottom: 0; }
+  ul.items li .grow { min-width: 0; overflow-wrap: anywhere; }
+  #signin { max-width: 380px; margin: 60px auto; }
+  #message { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #2e3946; padding: 10px 16px; border-radius: 8px; display: none; max-width: 90vw; }
+</style>
+</head>
+<body>
+<header>
+  <h1>IPTV Player admin</h1>
+  <nav id="tabs" hidden>
+    <button data-tab="tvs" class="on">TVs</button>
+    <button data-tab="household">Household setup</button>
+    <button data-tab="sharing">Sharing</button>
+    <button id="signout">Sign out</button>
+  </nav>
+</header>
+
+<div id="signin" class="card" hidden>
+  <h2>Sign in</h2>
+  <p class="dim">The admin password is <code>$AdminPassword</code> in scripts\deploy.local.ps1 on the computer the app is installed from.</p>
+  <label class="field"><span>Admin password</span><input type="password" id="password" autocomplete="current-password"></label>
+  <button class="primary" id="signinButton">Sign in</button>
+  <p id="signinError" class="bad"></p>
+</div>
+
+<main id="app" hidden>
+  <section id="tvs" class="on">
+    <p class="dim">Each TV backs itself up to this Raspberry Pi within a minute of a change. A TV that loses its saved data (a reinstall) offers to restore its backup when it starts.</p>
+    <div id="tvList"></div>
+    <div id="tvDetail"></div>
+  </section>
+
+  <section id="household">
+    <p class="dim">What a new TV starts from: after "Set up as a new TV", it asks only for its name. TVs already set up aren't changed.</p>
+    <div class="card">
+      <h2>Copy from a TV</h2>
+      <div class="row">
+        <select id="copyFrom" class="grow"></select>
+        <button id="copyAll">Copy everything</button>
+      </div>
+      <p class="dim">Account, favorites, My Teams, local stations and settings from that TV's latest backup. Then remove what a new TV shouldn't have, and save.</p>
+    </div>
+    <div class="card">
+      <h2>Account</h2>
+      <label class="field"><span>Server URL</span><input type="text" id="server" placeholder="https://..."></label>
+      <label class="field"><span>Username</span><input type="text" id="username" autocomplete="off"></label>
+      <label class="field"><span>Password</span>
+        <div class="row"><input type="password" id="accountPassword" class="grow" autocomplete="off"><button class="small" id="showPassword">Show</button></div>
+      </label>
+    </div>
+    <div class="card">
+      <h2>Local stations</h2>
+      <div class="row"><div id="market" class="grow"></div><button class="small" id="clearMarket">None</button></div>
+    </div>
+    <div class="card">
+      <h2>Settings</h2>
+      <div id="settings"></div>
+    </div>
+    <div class="card">
+      <h2>Favorites</h2>
+      <ul class="items" id="favorites"></ul>
+    </div>
+    <div class="card">
+      <h2>My Teams</h2>
+      <ul class="items" id="teams"></ul>
+    </div>
+    <div class="row">
+      <button class="primary" id="saveHousehold">Save household setup</button>
+      <span id="householdNote" class="dim"></span>
+    </div>
+  </section>
+
+  <section id="sharing">
+    <p class="dim">What the TVs share (each TV chooses in Settings &gt; Sharing between TVs). The newest change to each item wins.</p>
+    <div id="sharingInfo" class="card"></div>
+  </section>
+</main>
+<div id="message"></div>
+
+<script>
+"use strict";
+const SETTINGS = [
+  ["showMyTeams", "Show My Teams on Home", true],
+  ["myTeamsFirst", "My Teams first on Home (before Favorites)", false],
+  ["showNoGameTeams", "Show teams with no game", true],
+  ["showScores", "Live scores on My Teams", true],
+  ["showFavoritesInRecent", "Favorites in Recently Viewed", false],
+];
+let state = null;
+let household = { credentials: {}, favorites: [], teams: [], market: { key: "", label: "" }, settings: {} };
+
+const $ = (id) => document.getElementById(id);
+function el(tag, text, cls) { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; }
+function when(seconds) { return seconds ? new Date(seconds * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "unknown"; }
+function note(text) { const m = $("message"); m.textContent = text; m.style.display = "block"; clearTimeout(note.t); note.t = setTimeout(() => m.style.display = "none", 3500); }
+
+async function api(method, path, body) {
+  const r = await fetch("/admin/api/" + path, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined, credentials: "same-origin" });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401 && path !== "login") { showSignIn(); throw new Error("signed out"); }
+  if (!r.ok) throw new Error(data.error || ("HTTP " + r.status));
+  return data;
+}
+
+function showSignIn() { $("signin").hidden = false; $("app").hidden = true; $("tabs").hidden = true; $("password").focus(); }
+async function signIn() {
+  $("signinError").textContent = "";
+  try { await api("POST", "login", { password: $("password").value }); $("password").value = ""; await start(); }
+  catch (e) { $("signinError").textContent = e.message; }
+}
+
+async function start() {
+  state = await api("GET", "state");
+  $("signin").hidden = true; $("app").hidden = false; $("tabs").hidden = false;
+  drawTvs(); drawSharing();
+  household = Object.assign({ credentials: {}, favorites: [], teams: [], market: { key: "", label: "" }, settings: {} }, await api("GET", "household"));
+  fillCopyFrom(); drawHousehold();
+  $("householdNote").textContent = state.household.exists ? "Last saved " + when(state.household.savedAt) : "Not set up yet.";
+}
+
+// ---- TVs ---------------------------------------------------------------
+function drawTvs() {
+  const list = $("tvList"); list.replaceChildren();
+  if (!state.tvs.length) { list.append(el("p", "No TV has backed up yet.", "dim")); return; }
+  for (const tv of state.tvs) {
+    const card = el("div", undefined, "card");
+    const row = el("div", undefined, "row");
+    const info = el("div", undefined, "grow");
+    info.append(el("h2", tv.name || "(no name)"), el("div", "Backed up " + when(tv.savedAt) + " - " + Math.round(tv.size / 1024) + " KB - " + tv.history.length + " daily copies", "dim"));
+    const show = el("button", "Show");
+    show.onclick = () => showTv(tv.id, "", tv.name);
+    row.append(info, show); card.append(row); list.append(card);
+  }
+}
+
+async function showTv(id, day, name) {
+  const box = $("tvDetail"); box.replaceChildren(el("p", "Opening ...", "dim"));
+  let data;
+  try { data = await api("GET", "tv/" + id + (day ? "?day=" + day : "")); }
+  catch (e) { box.replaceChildren(el("p", e.message, "bad")); return; }
+  const d = data.doc, card = el("div", undefined, "card");
+  card.append(el("h2", (data.name || name) + (day ? " - copy from " + day : " - latest backup")), el("div", "Saved " + when(data.savedAt) + " - schema " + d.schema + " - device " + d.deviceId, "dim"));
+  const creds = d.credentials || {};
+  card.append(el("h3", "Account"), el("div", (creds.server || "") + "  -  " + (creds.username || "") + "  (password kept)"));
+  const active = (list) => (list || []).filter((r) => !r.deleted);
+  section(card, "Favorites", active(d.favorites).map((f) => (f.pinned ? "★ " : "") + f.name));
+  section(card, "My Teams", active(d.teams).map((t) => t.name + (t.sports && t.sports.length ? "  (" + t.sports.join(", ") + ")" : "")));
+  section(card, "Local stations", [d.market && d.market.label ? d.market.label : "none"]);
+  section(card, "Favorite Series", (d.series || []).filter((s) => s.favorite && !s.deleted).map((s) => s.name + (s.year ? " (" + s.year + ")" : "")));
+  section(card, "Watch List", active(d.watchlist).map((w) => w.name + (w.year ? " (" + w.year + ")" : "")));
+  section(card, "Continue Watching", (d.resume || []).map((r) => r.name + "  -  " + Math.round((r.position || 0) / 60) + " of " + Math.round((r.duration || 0) / 60) + " min"));
+  const s = d.settings || {};
+  section(card, "Settings", SETTINGS.map(([k, label, def]) => label + ": " + ((s[k] === undefined ? def : s[k]) ? "on" : "off")).concat([
+    "Dolby converter: " + (s.dolbyConverter || "off"),
+    "Sharing: " + (s.share ? Object.entries(s.share).filter(([, v]) => v).map(([k]) => k).join(", ") || "off" : "everything")]));
+  const tv = state.tvs.find((t) => t.id === id);
+  if (tv && tv.history.length) {
+    card.append(el("h3", "Daily copies"));
+    const ul = el("ul", undefined, "items");
+    for (const h of tv.history) {
+      const li = el("li"); li.append(el("span", h.day + "  -  saved " + when(h.savedAt), "grow"));
+      const view = el("button", "View", "small"); view.onclick = () => showTv(id, h.day, data.name);
+      const use = el("button", "Make current", "small");
+      use.onclick = async () => {
+        if (!confirm("Make the copy from " + h.day + " this TV's backup? A TV restores from it only after losing its saved data (a reinstall); the TV's next change replaces it again.")) return;
+        try { await api("POST", "tv/" + id + "/use-day", { day: h.day }); note("The copy from " + h.day + " is now the backup."); state = await api("GET", "state"); drawTvs(); }
+        catch (e) { note(e.message); }
+      };
+      li.append(view, use); ul.append(li);
+    }
+    card.append(ul);
+  }
+  box.replaceChildren(card);
+  card.scrollIntoView({ behavior: "smooth" });
+}
+
+function section(card, title, lines) {
+  card.append(el("h3", title));
+  if (!lines.length) { card.append(el("div", "none", "dim")); return; }
+  const ul = el("ul", undefined, "items");
+  for (const line of lines) ul.append(el("li", line));
+  card.append(ul);
+}
+
+// ---- Household setup ------------------------------------------------------
+function fillCopyFrom() {
+  const sel = $("copyFrom"); sel.replaceChildren();
+  for (const tv of state.tvs) { const o = el("option", tv.name + "  (backed up " + when(tv.savedAt) + ")"); o.value = tv.id; sel.append(o); }
+  $("copyAll").disabled = !state.tvs.length;
+}
+
+async function copyAll() {
+  const id = $("copyFrom").value; if (!id) return;
+  try {
+    const d = (await api("GET", "tv/" + id)).doc;
+    household.credentials = Object.assign({}, d.credentials || {});
+    household.favorites = (d.favorites || []).filter((f) => !f.deleted).map((f) => ({ streamId: f.streamId, name: f.name, epgChannelId: f.epgChannelId || "", pinned: !!f.pinned, position: f.position }));
+    household.teams = (d.teams || []).filter((t) => !t.deleted).map((t) => ({ id: t.id, name: t.name, aliases: t.aliases || [], exclusions: t.exclusions || [], sports: t.sports || [], logo: t.logo, logoFor: t.logoFor }));
+    household.market = Object.assign({ key: "", label: "" }, d.market || {});
+    household.settings = {}; for (const [k] of SETTINGS) if (d.settings && d.settings[k] !== undefined) household.settings[k] = !!d.settings[k];
+    drawHousehold(); note("Copied. Review it, then Save household setup.");
+  } catch (e) { note(e.message); }
+}
+
+function drawHousehold() {
+  const c = household.credentials || {};
+  $("server").value = c.server || ""; $("username").value = c.username || ""; $("accountPassword").value = c.password || "";
+  $("market").textContent = household.market && household.market.label ? household.market.label : "None (national channels only)";
+  const settings = $("settings"); settings.replaceChildren();
+  for (const [k, label, def] of SETTINGS) {
+    const row = el("label", undefined, "row"); const box = el("input"); box.type = "checkbox";
+    box.checked = household.settings[k] === undefined ? def : !!household.settings[k];
+    box.onchange = () => household.settings[k] = box.checked;
+    row.append(box, el("span", label)); settings.append(row);
+  }
+  listWithRemove("favorites", household.favorites, (f) => (f.pinned ? "★ " : "") + f.name);
+  listWithRemove("teams", household.teams, (t) => t.name + (t.sports && t.sports.length ? "  (" + t.sports.join(", ") + ")" : ""));
+}
+
+function listWithRemove(id, items, label) {
+  const ul = $(id); ul.replaceChildren();
+  if (!items.length) { ul.append(el("li", "None. Copy them from a TV above.", "dim")); return; }
+  items.forEach((item, i) => {
+    const li = el("li"); li.append(el("span", label(item), "grow"));
+    const rm = el("button", "Remove", "small"); rm.onclick = () => { items.splice(i, 1); drawHousehold(); };
+    li.append(rm); ul.append(li);
+  });
+}
+
+async function saveHousehold() {
+  household.credentials = { server: $("server").value.trim(), username: $("username").value.trim(), password: $("accountPassword").value };
+  try {
+    await api("PUT", "household", household);
+    state = await api("GET", "state");
+    $("householdNote").textContent = "Saved " + when(state.household.savedAt) + ". A new TV starts from this.";
+    note("Household setup saved.");
+  } catch (e) { note("Not saved: " + e.message); }
+}
+
+// ---- Sharing --------------------------------------------------------------
+function drawSharing() {
+  const box = $("sharingInfo"); box.replaceChildren();
+  const s = state.shared;
+  if (!s.exists) { box.append(el("p", "Nothing shared yet. The TVs start the shared copy on their first sync.", "dim")); return; }
+  box.append(el("h2", "Shared copy, version " + s.version), el("div", "Last saved by " + s.savedBy + ", " + when(s.savedAt), "dim"));
+  if (s.error) { box.append(el("p", "It " + s.error, "bad")); return; }
+  const c = s.counts;
+  section(box, "Holds", [c.favorites + " favorites", c.teams + " teams", c.favoriteSeries + " favorite series", c.watchlist + " movies on the Watch List", c.resume + " resume points"]);
+  section(box, "Favorites", s.favorites);
+}
+
+// ---- Wiring ---------------------------------------------------------------
+for (const b of document.querySelectorAll("#tabs button[data-tab]")) {
+  b.onclick = () => {
+    for (const x of document.querySelectorAll("#tabs button[data-tab]")) x.classList.toggle("on", x === b);
+    for (const s of document.querySelectorAll("section")) s.classList.toggle("on", s.id === b.dataset.tab);
+  };
+}
+$("signinButton").onclick = signIn;
+$("password").onkeydown = (e) => { if (e.key === "Enter") signIn(); };
+$("signout").onclick = async () => { await api("POST", "logout").catch(() => {}); showSignIn(); };
+$("copyAll").onclick = copyAll;
+$("saveHousehold").onclick = saveHousehold;
+$("clearMarket").onclick = () => { household.market = { key: "", label: "" }; drawHousehold(); };
+$("showPassword").onclick = () => { const p = $("accountPassword"); p.type = p.type === "password" ? "text" : "password"; $("showPassword").textContent = p.type === "password" ? "Show" : "Hide"; };
+start().catch(() => showSignIn());
+</script>
+</body>
+</html>

@@ -6,6 +6,9 @@
 set -e
 cd "$(dirname "$0")"
 
+# python3-cryptography opens and seals backups for the admin page.
+python3 -c "import cryptography" 2>/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3-cryptography
+
 id iptvbackup >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin iptvbackup
 
 if [ ! -s /etc/iptv-backup/key ]; then
@@ -17,7 +20,7 @@ chmod 0750 /etc/iptv-backup
 chmod 0640 /etc/iptv-backup/key
 
 install -d /opt/iptv-backup
-install -m 0644 backup.py /opt/iptv-backup/backup.py
+install -m 0644 backup.py admin.py admin.html /opt/iptv-backup/
 install -m 0644 iptv-backup.service /etc/systemd/system/iptv-backup.service
 systemctl daemon-reload
 systemctl enable iptv-backup >/dev/null 2>&1

@@ -15,6 +15,8 @@ nothing else on the network can overwrite a TV's backup.
     GET  /shared                 the shared copy (V2 stage 2), with its "version"
     PUT  /shared                 save it; header X-Base-Version names the version it
                                  was merged from: 409 if another TV saved since
+    GET  /household              the household setup a new TV starts from (stage 3)
+    /admin                       the admin page (admin.py; its own password)
     UDP 8793                     answers "IPTV-BACKUP?" with "IPTV-BACKUP <port> <version>"
 
 Sealed backup (JSON): {"v": 1, "device": id, "name": TV name, "savedAt":
@@ -42,7 +44,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.1"
+VERSION = "1.2"
 DISCOVERY_PORT = 8793
 DISCOVERY_ASK = b"IPTV-BACKUP?"
 MAX_BODY = 256 * 1024        # a TV's state is a few KB
@@ -213,9 +215,13 @@ class Handler(BaseHTTPRequestHandler):
         if not self.server.allowed(self.client_address[0]):
             self.send_json(403, {"error": "not on the home network"})
             return
+        if self.server.admin.handle(self, "GET"):
+            return
         store = self.server.store
         parts = self.parts()
-        if parts == ["shared"]:
+        if parts == ["household"]:
+            self.send_file(os.path.join(store.root, "household.json"))     # a new TV starts from it
+        elif parts == ["shared"]:
             self.send_file(store.shared_path())
         elif parts == ["health"]:
             self.send_json(200, {"ok": True, "version": VERSION, "devices": len(store.devices())})
@@ -230,9 +236,18 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.send_json(404, {"error": "not found"})
 
+    def do_POST(self):
+        if not self.server.allowed(self.client_address[0]):
+            self.send_json(403, {"error": "not on the home network"})
+            return
+        if not self.server.admin.handle(self, "POST"):
+            self.send_json(404, {"error": "not found"})
+
     def do_PUT(self):
         if not self.server.allowed(self.client_address[0]):
             self.send_json(403, {"error": "not on the home network"})
+            return
+        if self.server.admin.handle(self, "PUT"):
             return
         parts = self.parts()
         shared = parts == ["shared"]
@@ -312,7 +327,15 @@ def main():
     parser.add_argument("--key-file", default="/etc/iptv-backup/key",
                         help="the household key, 64 hex characters (scripts/pi-deploy.ps1 writes it)")
     parser.add_argument("--allow", default="192.168.222.0/24")
+    parser.add_argument("--admin-file", default="/etc/iptv-backup/admin",
+                        help="the admin page password's hash (scripts/pi-deploy.ps1 writes it)")
+    parser.add_argument("--hash-admin-password", action="store_true",
+                        help="read a password on standard input, print its hash, and exit")
     args = parser.parse_args()
+    if args.hash_admin_password:
+        from admin import hash_password
+        print(hash_password(sys.stdin.readline().strip()))
+        return
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", stream=sys.stdout)
     try:
         with open(args.key_file) as f:
@@ -322,7 +345,11 @@ def main():
     if len(key) != 32:
         sys.exit("the household key must be 32 bytes (64 hex characters)")
     networks = [ipaddress.ip_network(n.strip()) for n in args.allow.split(",") if n.strip()]
-    server = Server(("0.0.0.0", args.port), networks, Store(args.data, key))
+    store = Store(args.data, key)
+    server = Server(("0.0.0.0", args.port), networks, store)
+    from admin import Admin
+    page = os.path.join(os.path.dirname(os.path.abspath(__file__)), "admin.html")
+    server.admin = Admin(store, key, args.admin_file, page, log, write_atomic)
     threading.Thread(target=answer_discovery, args=(server, args.port), daemon=True).start()
     log.info("backup service %s on port %d (search on UDP %d), storing in %s, for %s",
              VERSION, args.port, DISCOVERY_PORT, args.data, ", ".join(map(str, networks)))

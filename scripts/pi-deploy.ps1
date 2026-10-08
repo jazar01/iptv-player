@@ -37,7 +37,13 @@ function Install-Folder([string]$folder, [string]$remote) {
     Write-Host "Copying $folder to $PiHost ..."
     & ssh -T -o BatchMode=yes $PiHost "rm -rf ~/$remote && mkdir -p ~/$remote"
     & scp -q -o BatchMode=yes (Join-Path $root "pi\$folder\*") "${PiHost}:$remote/"
-    if ($LASTEXITCODE -ne 0) { throw "Copying $folder failed." }
+    if ($LASTEXITCODE -ne 0) {
+        # Now and then the first copy fails under Windows PowerShell 5.1 and
+        # the next works (Oct 2026): once more, showing scp's reason this time.
+        Start-Sleep -Seconds 1
+        & scp -o BatchMode=yes (Join-Path $root "pi\$folder\*") "${PiHost}:$remote/"
+        if ($LASTEXITCODE -ne 0) { throw "Copying $folder failed." }
+    }
     Write-Host 'Installing ...'
     & ssh -T -o BatchMode=yes $PiHost "sudo sh ~/$remote/install.sh"
     if ($LASTEXITCODE -ne 0) { throw "The $folder install script failed (see above)." }
@@ -64,5 +70,16 @@ if ($Service -eq 'all' -or $Service -eq 'backup') {
     $BackupKey | & ssh -T -o BatchMode=yes $PiHost 'sudo install -d -m 0750 /etc/iptv-backup && tr -cd 0-9a-fA-F | sudo tee /etc/iptv-backup/key >/dev/null'
     if ($LASTEXITCODE -ne 0) { throw "Couldn't write the household key on $PiHost." }
     Install-Folder 'backup-service' 'iptv-backup'
+    # The admin page's password (http://<pi>:8792/admin): only its hash goes
+    # to the Pi, made there from SSH's input.
+    if ($AdminPassword -and $AdminPassword.Length -lt 8) { throw '$AdminPassword in scripts\deploy.local.ps1 is too short (8 characters at least).' }
+    if ($AdminPassword) {
+        $AdminPassword | & ssh -T -o BatchMode=yes $PiHost 'python3 /opt/iptv-backup/backup.py --hash-admin-password | sudo tee /etc/iptv-backup/admin >/dev/null && sudo chown root:iptvbackup /etc/iptv-backup/admin && sudo chmod 0640 /etc/iptv-backup/admin'
+        if ($LASTEXITCODE -ne 0) { throw "Couldn't set the admin password on $PiHost." }
+    }
+    else {
+        Write-Warning 'No $AdminPassword in scripts\deploy.local.ps1, so the admin page has no password and refuses sign-ins.'
+    }
     Test-Health 'Backup service' 8792
+    Write-Host "Admin page: http://${address}:8792/admin"
 }
