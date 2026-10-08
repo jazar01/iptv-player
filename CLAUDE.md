@@ -237,6 +237,11 @@ is the final check.
   Windows PowerShell 5.1, which also runs the scripts: keep them working
   in both (5.1 has no `ConvertFrom-Json -AsHashtable`, no `??` / `?:`, no
   `&&`; deploy.ps1's backup check uses .NET's JavaScriptSerializer there).
+  In 5.1, any stderr line from a native program (ssh's notices) is fatal
+  under `$ErrorActionPreference = 'Stop'`, and in a console switched to UTF-8
+  (ssh does that) text piped to a program starts with a byte-order mark:
+  set `$OutputEncoding` and `[Console]::InputEncoding` to UTF-8 without one
+  before piping secrets (deploy.ps1 `Install-Roku`).
 - Node.js (`C:\Program Files\nodejs`) and Git (`C:\Program Files\Git\cmd`) are
   installed but may be missing from PATH in older shells; prepend them if a
   command isn't found.

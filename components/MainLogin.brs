@@ -250,6 +250,8 @@ sub onSettingsChosen(event as Object)
         toggleFavoritesInRecent()
     else if choice = "teamsPosition"
         toggleMyTeamsFirst()
+    else if choice = "tvName"
+        editTvName()
     else if choice = "sharing"
         openSharing()
     else if choice = "converter"
@@ -263,6 +265,41 @@ end sub
 ' the debug console between markers, for scripts\backup-roku.ps1 to save.
 ' Short prefixed lines survive the console's line wrapping. It includes the
 ' provider password, so it's only ever printed here, on request.
+' Settings -> TV name: saved as soon as it's typed (in "Account and device
+' name" it saved only with Connect, so a name changed there and left with
+' Back was lost: the Deck, Oct 2026), and backed up straight away, so the
+' Pi and the admin page show it.
+sub editTvName()
+    dlg = CreateObject("roSGNode", "StandardKeyboardDialog")
+    dlg.title = "TV name"
+    dlg.message = ["A name for this TV, such as Living room. Backups on the Raspberry Pi and the admin page show it."]
+    dlg.text = m.store.callFunc("getDevice").deviceName
+    dlg.buttons = ["OK", "Cancel"]
+    setKeyboardVoice(dlg, "generic")
+    dlg.ObserveField("buttonSelected", "onTvNameButton")
+    m.tvNameDialog = dlg
+    m.top.dialog = dlg
+end sub
+
+sub onTvNameButton()
+    dlg = m.tvNameDialog
+    if dlg = invalid then return
+    m.tvNameDialog = invalid
+    choice = dlg.buttonSelected
+    typed = dlg.text.Trim()
+    dlg.close = true
+    if choice <> 0 or typed = "" then return
+    name = UCase(Left(typed, 1)) + Mid(typed, 2)        ' voice entry comes in lower case
+    if not m.store.callFunc("setDeviceName", name)
+        showToast("Couldn't save the change. Storage may be full.")
+        return
+    end if
+    showToast("This TV is now called " + name)
+    sendBackup()
+    settings = m.sections.settings
+    if settings <> invalid then settings.info = settingsInfo()
+end sub
+
 sub backupToConsole()
     bytes = CreateObject("roByteArray")
     bytes.FromAsciiString(m.store.callFunc("exportDocument"))

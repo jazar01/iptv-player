@@ -201,6 +201,11 @@ function setAccount(values as Object) as Boolean
     return persist()
 end function
 
+function setDeviceName(name as String) as Boolean
+    m.doc.deviceName = name
+    return persist()
+end function
+
 function getDevice() as Object
     return { deviceId: m.doc.deviceId, deviceName: m.doc.deviceName }
 end function

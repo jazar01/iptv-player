@@ -263,10 +263,24 @@ function Install-Roku([string]$Ip, [string]$DevPassword) {
     # Credentials go to curl on stdin so the password isn't on the command line.
     $escaped = $DevPassword.Replace('\', '\\').Replace('"', '\"')
     $curlConfig = "user = `"${User}:$escaped`""
-    $output = $curlConfig | & curl.exe --config - --silent --show-error --digest `
-        --connect-timeout 10 --max-time 120 --write-out "`n%{http_code}" `
-        --form 'mysubmit=Install' --form "archive=@$zipPath" `
-        "http://$Ip/plugin_install"
+    # Plain UTF-8 without a byte-order mark: in a console switched to UTF-8
+    # (ssh does that), Windows PowerShell 5.1 otherwise starts what it pipes
+    # with one, and curl reads "<BOM>user" as an unknown option (Oct 2026).
+    $savedOutput = $OutputEncoding
+    $savedInput = [Console]::InputEncoding
+    $plain = New-Object System.Text.UTF8Encoding $false
+    try {
+        $OutputEncoding = $plain
+        try { [Console]::InputEncoding = $plain } catch { }      # no console: nothing to change
+        $output = $curlConfig | & curl.exe --config - --silent --show-error --digest `
+            --connect-timeout 10 --max-time 120 --write-out "`n%{http_code}" `
+            --form 'mysubmit=Install' --form "archive=@$zipPath" `
+            "http://$Ip/plugin_install"
+    }
+    finally {
+        $OutputEncoding = $savedOutput
+        try { [Console]::InputEncoding = $savedInput } catch { }
+    }
     if ($LASTEXITCODE -ne 0) { throw "Upload failed (curl exit code $LASTEXITCODE). Is the Roku on and in Developer Mode?" }
 
     $lines = @($output)
@@ -294,8 +308,26 @@ $script:piBackups = $null
 function Get-PiBackups {
     if ($null -ne $script:piBackups) { return $script:piBackups }
     $script:piBackups = @()
-    $piHost = if ($LocalPi) { $LocalPi } else { 'iptv-pi' }
-    $address = (& ssh -G $piHost 2>$null | Select-String '^hostname ' | ForEach-Object { ($_ -split ' ')[1] } | Select-Object -First 1)
+    # Only a check: nothing here may stop the deploy. ('Stop' would, under
+    # Windows PowerShell 5.1, for any notice ssh writes to stderr.)
+    $ErrorActionPreference = 'Continue'
+    # Found the way the TVs find it (a broadcast, UDP 8793), not with ssh:
+    # running ssh switches the console to UTF-8, after which Windows
+    # PowerShell 5.1 puts a byte-order mark before what it pipes to curl,
+    # and the install's credentials stop working (Oct 2026).
+    $address = $null
+    $udp = New-Object System.Net.Sockets.UdpClient
+    try {
+        $udp.EnableBroadcast = $true
+        $udp.Client.ReceiveTimeout = 1500
+        $ask = [Text.Encoding]::ASCII.GetBytes('IPTV-BACKUP?')
+        [void]$udp.Send($ask, $ask.Length, (New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Broadcast, 8793)))
+        $from = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)
+        $reply = [Text.Encoding]::ASCII.GetString($udp.Receive([ref]$from))
+        if ($reply -like 'IPTV-BACKUP *') { $address = $from.Address.ToString() }
+    }
+    catch { }
+    finally { $udp.Close() }
     if ($address) {
         # Through the pipeline: Windows PowerShell 5.1 returns a JSON array as
         # one item holding the array.

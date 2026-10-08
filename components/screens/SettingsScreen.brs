@@ -1,7 +1,7 @@
 sub init()
     m.menu = m.top.FindNode("menu")
     m.details = m.top.FindNode("details")
-    m.actions = ["teams", "teamsRow", "teamsPosition", "noGameTeams", "scores", "market", "recentFavorites", "converter", "sharing", "account"]
+    m.actions = ["teams", "teamsRow", "teamsPosition", "noGameTeams", "scores", "market", "recentFavorites", "converter", "sharing", "tvName", "account"]
     m.backupPanel = m.top.FindNode("backupPanel")
     m.top.FindNode("backupText").text = backupExplanation()
     buildMenu({})
@@ -16,6 +16,8 @@ sub buildMenu(info as Object)
     if marketLabel = "" then marketLabel = "not set"
     showMyTeams = (info.showMyTeams = invalid or isTrue(info.showMyTeams))
     showNoGameTeams = (info.showNoGameTeams = invalid or isTrue(info.showNoGameTeams))
+    tvName = asString(info.deviceName)
+    if tvName = "" then tvName = "(not set)"
     converterLabel = "Off"
     if Left(asString(info.converter), 3) <> "off" and asString(info.converter) <> "" then converterLabel = asString(info.converter).Split(" ")[0].Replace(":8790", "")
     teamsPosition = "After Favorites"
@@ -30,6 +32,7 @@ sub buildMenu(info as Object)
         "Favorites in Recently Viewed:   " + onOff(isTrue(info.showFavoritesInRecent))
         "Dolby converter:   " + converterLabel
         "Sharing between TVs"
+        "TV name:   " + tvName
         "Account and device name"
     ]
     focus = m.menu.itemFocused

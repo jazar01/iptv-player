@@ -16,6 +16,7 @@
     <function name="getCredentials" />
     <function name="setAccount" />
     <function name="getDevice" />
+    <function name="setDeviceName" />
     <function name="getMarket" />
     <function name="setMarket" />
     <function name="getSettings" />
