@@ -1,7 +1,8 @@
-# Roku IPTV player
+# Dixie TV (Roku IPTV player)
 
 Personal Roku app (BrightScript + SceneGraph) for one Xtream Codes account.
-Sideloaded on home devices; never published.
+Sideloaded on home devices; never published. Named Dixie TV (Oct 2026) after
+the family's German Shepherd, Dixie, whose face is the logo (`art/dixie.svg`).
 
 Full requirements: docs/requirements.md. Read it before making design decisions.
 
@@ -211,8 +212,11 @@ without a passphrase; `$LocalPi` in `deploy.local.ps1` overrides):
     .\scripts\pi-deploy.ps1
 
 Home-screen logo and splash: `.\scripts\make-icons.ps1` draws them into
-`images/` (colors and text at the top of the script); the manifest points at
-them.
+`images/`: Dixie from `art/dixie.svg` (her face, drawn from her photo; edit
+it to change the logo) and the name; the manifest points at them. The
+top-bar mark (`make-ui-assets.ps1`) is Dixie alone. Both draw the SVG with
+`scripts/SvgArt.ps1` (paths of M, L, C and Z, fills, strokes, circles).
+`art/` isn't packaged.
 
 UI images (focus highlights, rounded panels, background, player fade, top-bar
 mark): `.\scripts\make-ui-assets.ps1` draws them into `images/ui/`. Rounded

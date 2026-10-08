@@ -18,7 +18,7 @@
     <Poster width="1920" height="1080" uri="pkg:/images/ui/background.jpg" />
     <Label id="title" translation="[160,120]" width="1600"
       font="font:LargeBoldSystemFont" color="0xFFFFFFFF"
-      text="Set up IPTV Player" />
+      text="Set up Dixie TV" />
     <Label id="subtitle" translation="[160,200]" width="1600" wrap="true"
       font="font:SmallSystemFont" color="0xA0A8B0FF"
       text="Enter your Xtream Codes account. You only do this once on each Roku." />

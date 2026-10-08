@@ -1,4 +1,4 @@
-"""Admin page for the IPTV Player backup service (V2 stage 3).
+"""Admin page for the Dixie TV backup service (V2 stage 3).
 
 Served by backup.py at /admin on the home network, behind an admin password
 (scripts/pi-deploy.ps1 stores its hash in /etc/iptv-backup/admin). The page

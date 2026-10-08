@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
-    Draws the Roku channel poster (home-screen logo) and splash screen.
+    Draws the Roku channel poster (home-screen logo) and splash screen:
+    Dixie (art\dixie.svg) and the name, Dixie TV.
 
 .DESCRIPTION
     Renders one design at every size Roku asks for, using the Windows drawing
@@ -54,57 +55,18 @@ function Draw-SpacedText($g, [string]$text, $font, $brush, [single]$cx, [single]
     }
 }
 
-# The logo, designed on a 540x405 canvas.
+# Dixie, the German Shepherd the app is named after (art\dixie.svg, drawn
+# from her photo).
+. (Join-Path $PSScriptRoot 'SvgArt.ps1')
+$dixie = Read-SvgArt (Join-Path $root 'art\dixie.svg')
+
+# The logo, designed on a 540x405 canvas: Dixie, and the name beside her.
 function Draw-Logo($g) {
-    # Soft glow behind the screen.
-    $glow = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $glow.AddEllipse(110, 20, 320, 240)
-    $glowBrush = New-Object System.Drawing.Drawing2D.PathGradientBrush($glow)
-    $glowBrush.CenterColor = [System.Drawing.Color]::FromArgb(70, $blue)
-    $glowBrush.SurroundColors = @([System.Drawing.Color]::FromArgb(0, $blue))
-    $g.FillPath($glowBrush, $glow)
-
-    # TV screen: gradient outline.
-    $screen = New-RoundedRect 165 62 210 138 22
-    $edge = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
-        (New-Object System.Drawing.PointF(155, 52)), (New-Object System.Drawing.PointF(385, 210)), $blue, $violet)
-    $edge.WrapMode = 'TileFlipXY'
-    $pen = New-Object System.Drawing.Pen($edge, 11)
-    $pen.LineJoin = 'Round'
-    $g.FillPath((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 0x13, 0x1B, 0x25))), $screen)
-    $g.DrawPath($pen, $screen)
-
-    # Stand.
-    $standPen = New-Object System.Drawing.Pen($grey, 9)
-    $standPen.StartCap = 'Round'
-    $standPen.EndCap = 'Round'
-    $g.DrawLine($standPen, 236, 222, 304, 222)
-
-    # Play triangle with rounded corners.
-    $tri = New-Object System.Drawing.Drawing2D.GraphicsPath
-    [System.Drawing.PointF[]]$corners = @(
-        (New-Object System.Drawing.PointF(250, 101)),
-        (New-Object System.Drawing.PointF(250, 161)),
-        (New-Object System.Drawing.PointF(301, 131)))
-    $tri.AddPolygon($corners)
-    # Gradient runs a little past the shape so the rounded outline doesn't
-    # wrap around to the far color at the corners.
-    $triBrush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
-        (New-Object System.Drawing.PointF(238, 89)), (New-Object System.Drawing.PointF(313, 173)), $white, $blue)
-    $triBrush.WrapMode = 'TileFlipXY'
-    $triPen = New-Object System.Drawing.Pen($triBrush, 8)
-    $triPen.LineJoin = 'Round'
-    $g.FillPath($triBrush, $tri)
-    $g.DrawPath($triPen, $tri)
-
-    # Live dot.
-    $g.FillEllipse((New-Object System.Drawing.SolidBrush($live)), 340, 76, 18, 18)
-
-    # Wordmark.
-    $titleFont = New-Object System.Drawing.Font('Segoe UI', 54, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
-    $subFont = New-Object System.Drawing.Font('Segoe UI Semibold', 22, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
-    Draw-SpacedText $g 'IPTV' $titleFont (New-Object System.Drawing.SolidBrush($white)) 270 246 4
-    Draw-SpacedText $g 'PLAYER' $subFont (New-Object System.Drawing.SolidBrush($grey)) 270 318 11
+    Draw-SvgArt $g $dixie 24 38 1.56
+    $titleFont = New-Object System.Drawing.Font('Segoe UI', 84, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
+    $fmt = [System.Drawing.StringFormat]::GenericTypographic
+    $g.DrawString('Dixie', $titleFont, (New-Object System.Drawing.SolidBrush($white)), 330, 92, $fmt)
+    $g.DrawString('TV', $titleFont, (New-Object System.Drawing.SolidBrush($blue)), 332, 192, $fmt)
 }
 
 function Save-Image([int]$width, [int]$height, [string]$file, [single]$logoScale) {

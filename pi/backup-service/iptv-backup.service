@@ -1,5 +1,5 @@
 [Unit]
-Description=IPTV Player backup service (sealed backups of each TV's saved state)
+Description=Dixie TV backup service (sealed backups of each TV's saved state)
 After=network-online.target
 Wants=network-online.target
 

@@ -118,13 +118,10 @@ $fade = New-Object System.Drawing.Drawing2D.LinearGradientBrush((New-Object Syst
 $c.g.FillRectangle($fade, 0, 0, 8, 400)
 Save-Png $c 'fade-bottom.png'
 
-# Small TV mark for the top bar (the logo without the wordmark).
-$c = New-Canvas 64 48
-$edge = New-Object System.Drawing.Drawing2D.LinearGradientBrush((New-Object System.Drawing.PointF(0, 0)), (New-Object System.Drawing.PointF(64, 40)), $blue, $violet)
-$pen = New-Object System.Drawing.Pen($edge, 4)
-$c.g.DrawPath($pen, (New-RoundedRect 3 3 58 36 8))
-[System.Drawing.PointF[]]$tri = @((New-Object System.Drawing.PointF(27, 12)), (New-Object System.Drawing.PointF(27, 30)), (New-Object System.Drawing.PointF(41, 21)))
-$c.g.FillPolygon((New-Object System.Drawing.SolidBrush($white)), $tri)
-$c.g.FillEllipse((New-Object System.Drawing.SolidBrush((Color 255 0xFF 0x5A 0x4E))), 49, 8, 6, 6)
-$c.g.FillRectangle((New-Object System.Drawing.SolidBrush((Color 255 0x9A 0xA6 0xB2))), 24, 43, 16, 3)
+# Small mark for the top bar: Dixie (art\dixie.svg), the logo without the name.
+. (Join-Path $PSScriptRoot 'SvgArt.ps1')
+$dixie = Read-SvgArt (Join-Path (Split-Path -Parent $PSScriptRoot) 'art\dixie.svg')
+$c = New-Canvas 76 76
+$scale = 75 / $dixie.Height
+Draw-SvgArt $c.g $dixie ((76 - $dixie.Width * $scale) / 2) 0.5 $scale
 Save-Png $c 'logo-mark.png'

@@ -10,7 +10,7 @@
 -->
 <component name="MainScene" extends="Scene">
   <interface>
-    <!-- Set after "Exit IPTV Player?" is confirmed; main.brs then ends the app. -->
+    <!-- Set after "Exit Dixie TV?" is confirmed; main.brs then ends the app. -->
     <field id="exitApp" type="boolean" alwaysNotify="true" />
   </interface>
   <children>

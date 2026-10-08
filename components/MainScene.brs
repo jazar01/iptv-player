@@ -162,7 +162,7 @@ sub taskStateChanged(task as Object, newState as String)
     end for
     if recent.Count() >= 3
         print "[main] ERROR: "; name; " stopped again ("; recent.Count(); " restarts in 10 minutes); leaving it stopped"
-        showToast("Part of the app stopped working. To fix it, press Home and open IPTV Player again.")
+        showToast("Part of the app stopped working. To fix it, press Home and open Dixie TV again.")
         return
     end if
     recent.Push(now)
@@ -373,7 +373,7 @@ end function
 ' (or Cancel) stays.
 sub confirmExit()
     dlg = CreateObject("roSGNode", "StandardMessageDialog")
-    dlg.title = "Exit IPTV Player?"
+    dlg.title = "Exit Dixie TV?"
     dlg.buttons = ["Exit", "Cancel"]
     dlg.ObserveField("buttonSelected", "onExitChoice")
     m.exitDialog = dlg

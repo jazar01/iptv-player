@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 210" width="200" height="210">
+  <!-- Dixie, the German Shepherd the app is named after, drawn from her photo:
+       tall wide-set ears with pink insides, golden-tan face, darker muzzle,
+       black nose, tongue out, dark collar. The source of the app's logo:
+       scripts\make-icons.ps1 and make-ui-assets.ps1 draw it at each size (art\ isn't packaged).
+       Their renderer reads <path d> (M, L, C, Z, absolute only), fill, stroke,
+       stroke-width and stroke-linecap, and <circle>. -->
+  <!-- Ears -->
+  <path d="M58 104 L 50 26 C 49 12 58 8 66 16 L 100 74 Z" fill="#C98A45"/>
+  <path d="M64 92 L 58 34 C 58 26 63 25 67 30 L 90 74 Z" fill="#E3A3A0"/>
+  <path d="M142 104 L 150 26 C 151 12 142 8 134 16 L 100 74 Z" fill="#C98A45"/>
+  <path d="M136 92 L 142 34 C 142 26 137 25 133 30 L 110 74 Z" fill="#E3A3A0"/>
+  <path d="M50 30 C 49 18 56 12 64 18" fill="none" stroke="#8A5A2B" stroke-width="3" stroke-linecap="round"/>
+  <path d="M150 30 C 151 18 144 12 136 18" fill="none" stroke="#8A5A2B" stroke-width="3" stroke-linecap="round"/>
+  <!-- Head -->
+  <path d="M56 100 C 62 80 80 70 100 70 C 120 70 138 80 144 100 C 152 124 150 146 140 164 C 130 182 116 194 100 196 C 84 194 70 182 60 164 C 50 146 48 124 56 100 Z" fill="#D49A55"/>
+  <path d="M92 76 C 96 74 104 74 108 76 L 104 112 L 96 112 Z" fill="#B0773D"/>
+  <!-- Brows and eyes -->
+  <path d="M72 112 C 78 106 88 106 94 112" fill="none" stroke="#5A3B22" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M106 112 C 112 106 122 106 128 112" fill="none" stroke="#5A3B22" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M74 122 C 78 116 88 116 92 122 C 88 127 78 127 74 122 Z" fill="#2A1C12"/>
+  <path d="M108 122 C 112 116 122 116 126 122 C 122 127 112 127 108 122 Z" fill="#2A1C12"/>
+  <circle cx="85" cy="120.5" r="1.6" fill="#FFFFFF"/>
+  <circle cx="119" cy="120.5" r="1.6" fill="#FFFFFF"/>
+  <!-- Muzzle, nose, mouth, tongue -->
+  <path d="M76 140 C 80 128 90 124 100 124 C 110 124 120 128 124 140 C 128 154 122 168 112 174 L 88 174 C 78 168 72 154 76 140 Z" fill="#4C423B"/>
+  <path d="M88 140 C 88 134 94 132 100 132 C 106 132 112 134 112 140 C 112 146 106 150 100 150 C 94 150 88 146 88 140 Z" fill="#141010"/>
+  <path d="M94 136 C 96 134 100 134 102 135" fill="none" stroke="#5E5652" stroke-width="2" stroke-linecap="round"/>
+  <path d="M100 150 L 100 160" fill="none" stroke="#141010" stroke-width="2.5"/>
+  <path d="M80 160 C 88 166 94 166 100 160 C 106 166 112 166 120 160 C 118 170 112 176 104 178 L 96 178 C 88 176 82 170 80 160 Z" fill="#2A1C12"/>
+  <path d="M90 166 C 90 160 110 160 110 166 L 109 192 C 108 202 92 202 91 192 Z" fill="#E68A9C"/>
+  <path d="M100 168 L 100 194" fill="none" stroke="#C86A7E" stroke-width="2" stroke-linecap="round"/>
+  <!-- Collar -->
+  <path d="M66 186 C 80 198 120 198 134 186 L 136 196 C 120 208 80 208 64 196 Z" fill="#2B2A2A"/>
+</svg>

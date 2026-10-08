@@ -13,7 +13,8 @@
   </interface>
 
   <children>
-    <Poster id="logo" translation="[96,46]" width="64" height="48" uri="pkg:/images/ui/logo-mark.png" />
+    <!-- Dixie (art/dixie.svg), centered on the tabs row. -->
+    <Poster id="logo" translation="[96,32]" width="76" height="76" uri="pkg:/images/ui/logo-mark.png" />
     <Group id="tabs" translation="[196,52]" />
     <Rectangle id="underline" translation="[196,104]" width="160" height="4" color="0x4DA3FFFF" visible="false" />
     <Label id="clock" translation="[1424,52]" width="400" horizAlign="right"

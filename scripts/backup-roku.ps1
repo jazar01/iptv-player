@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Saves a Roku's IPTV Player state (account, favorites, teams, progress,
+    Saves a Roku's Dixie TV state (account, favorites, teams, progress,
     settings) to backups\ on this PC.
 
 .DESCRIPTION
@@ -75,7 +75,7 @@ finally {
 # backup holding it means nothing would ever arrive here.
 if ($text -match 'already in use') { throw "$Name's console is in use by another connection (deploy.ps1 -Console, telnet, or another backup). Close it and run this again." }
 if ($closed -and $text -notmatch '\[backup\] END') { throw "$Name closed the console connection. Run this again." }
-if ($text -notmatch '\[backup\] END') { throw "No backup arrived within $TimeoutSeconds s. Is IPTV Player open on that TV?" }
+if ($text -notmatch '\[backup\] END') { throw "No backup arrived within $TimeoutSeconds s. Is Dixie TV open on that TV?" }
 
 # The last BEGIN..END block: the "[backup] " lines between them, joined.
 $lines = $text -split "`r?`n"

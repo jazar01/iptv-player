@@ -1,5 +1,5 @@
 [Unit]
-Description=IPTV Player Dolby converter (Dolby audio to AAC stereo for Rokus)
+Description=Dixie TV Dolby converter (Dolby audio to AAC stereo for Rokus)
 After=network-online.target
 Wants=network-online.target
 

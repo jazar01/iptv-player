@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Backup service for IPTV Player (runs on the home Raspberry Pi).
+"""Backup service for Dixie TV (runs on the home Raspberry Pi).
 
 Each TV sends its saved state here, sealed: encrypted on the Roku with the
 household key (AES-256-CBC) and signed (HMAC-SHA256), so this service only

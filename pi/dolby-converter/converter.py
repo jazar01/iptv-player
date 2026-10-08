@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dolby converter for IPTV Player (runs on a home Raspberry Pi).
+"""Dolby converter for Dixie TV (runs on a home Raspberry Pi).
 
 Some TVs take only stereo over HDMI, so Roku can't play channels whose audio
 is Dolby (AC-3 / E-AC-3): "Unsupported audio format: Dolby Digital". This
