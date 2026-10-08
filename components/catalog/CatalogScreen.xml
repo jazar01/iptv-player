@@ -25,6 +25,10 @@
          though the field already holds "". -->
     <field id="status" type="string" onChange="onStatus" alwaysNotify="true" />
     <field id="wantCategory" type="string" alwaysNotify="true" />
+    <!-- The category list failed to load (categoriesFailed, set by MainScene):
+         OK asks for it again (retryCategories). -->
+    <field id="categoriesFailed" type="boolean" />
+    <field id="retryCategories" type="boolean" alwaysNotify="true" />
     <field id="selected" type="assocarray" alwaysNotify="true" />
     <field id="options" type="assocarray" alwaysNotify="true" />
     <!-- Live TV: what's on now. visibleChannels out (stream IDs of rows on

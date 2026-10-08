@@ -108,7 +108,16 @@ function evaluateLogin(res as Object) as Object
     info = data.user_info
     if asString(info.auth) <> "1" then return { ok: false, rejected: true, message: "Login rejected. Check the username and password." }
     status = asString(info.status)
-    if status <> "" and LCase(status) <> "active" then return { ok: false, rejected: true, message: "The account is " + status + "." }
+    if status <> "" and LCase(status) <> "active"
+        ' "Expired", "Banned", "Disabled": what to do about it, too.
+        message = "The account is " + LCase(status) + "."
+        if LCase(status) = "expired"
+            message = "The account has expired. Renew it with your IPTV provider, then try again."
+        else
+            message = message + " Contact your IPTV provider about it."
+        end if
+        return { ok: false, rejected: true, message: message }
+    end if
 
     formats = []
     if type(info.allowed_output_formats) = "roArray" then formats = info.allowed_output_formats

@@ -61,6 +61,7 @@ sub onFocusedChild()
 end sub
 
 function videoKeepsFocus() as Boolean
+    if m.errorPanel.visible then return false
     return m.mode = "vod" or m.mode = "timeshift"
 end function
 
@@ -188,10 +189,11 @@ sub onVideoState()
         dolbyUnsupported = (code = -5 and Instr(1, LCase(detail), "unsupported audio format: dolby") > 0)
         if audioUnsupported and m.play.kind = "live" then message = "This channel sends audio your Roku can't decode as it is. Trying to fix it ..."
         if dolbyUnsupported and m.play.kind = "live" then message = "This channel's audio is Dolby, which this TV doesn't accept. Looking for another copy ..."
-        m.errorMessage.text = message
-        m.errorPanel.visible = true
-        m.liveOverlay.visible = false
+        ' Where a movie or episode was, for OK (try again) on the panel.
+        position = Int(m.video.position)
+        if m.mode = "vod" and m.playedSinceLoad and position > 0 then m.vodAt = position
         m.saveTimer.control = "stop"
+        showErrorPanel(message)
         m.top.failed = { play: m.play, code: code, message: message, audioUnsupported: audioUnsupported, dolbyUnsupported: dolbyUnsupported }
     else if state = "finished" and m.play.kind = "live" and not m.errored and m.playedSinceLoad
         ' (After an error the Video node also reports "finished", sometimes only
@@ -293,10 +295,38 @@ sub failPlayback(code as Integer, message as String)
     m.stallTimer.control = "stop"
     m.startTimer.control = "stop"
     m.saveTimer.control = "stop"
+    showErrorPanel(message)
+    m.top.failed = { play: m.play, code: code, message: message }
+end sub
+
+' The error panel takes the keys (OK tries again; with copies listed, OK
+' plays the one chosen), even for movies, where the Video node has them.
+sub showErrorPanel(message as String)
     m.errorMessage.text = message
     m.errorPanel.visible = true
     m.liveOverlay.visible = false
-    m.top.failed = { play: m.play, code: code, message: message }
+    m.top.FindNode("errorBack").text = "Press OK to try again, or Back to return."
+    focusPlayer()
+end sub
+
+' OK on the error panel: the same item again, from where it was.
+sub retryPlayback()
+    print "[player] trying again: "; m.play.kind; " "; m.play.id
+    m.errorPanel.visible = false
+    hideErrorCopies()
+    m.errored = false
+    m.note = ""
+    if m.play.kind = "live"
+        m.stallReloads = []
+        m.liveEndedAt = invalid
+        startLive()
+    else
+        m.slowReloads = []
+        m.mode = "vod"
+        loadVideo(m.play.url, asString(m.play.streamFormat), false, m.vodAt)
+        m.saveTimer.control = "start"
+        focusPlayer()
+    end if
 end sub
 
 ' Movies and episodes: reload where it was. One that has never played gets
@@ -483,6 +513,7 @@ sub onErrorCopies()
     m.top.FindNode("copiesHead").visible = true
     m.errorCopyList.visible = true
     m.top.FindNode("errorBack").translation = [420, 960]
+    m.top.FindNode("errorBack").text = "OK plays the copy chosen. Back returns."
     m.errorCopyList.SetFocus(true)
 end sub
 
@@ -884,6 +915,11 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     end if
     ' Error panel with other copies: Up/Down stay in its list.
     if m.errorPanel.visible and m.errorCopyList.visible and (key = "up" or key = "down") then return true
+    ' Error panel: OK tries again (a copy chosen in its list never gets here).
+    if m.errorPanel.visible and m.play <> invalid and (key = "OK" or key = "play")
+        retryPlayback()
+        return true
+    end if
     ' Everything below is live-only (channel step, favorite, pause, rewind,
     ' start over, channel info). Movies and episodes use the Video node's own
     ' controls, and * there must not save the movie ID as a favorite channel.

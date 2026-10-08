@@ -137,6 +137,7 @@ function createCatalogScreen(kind as String) as Object
     screen = CreateObject("roSGNode", "CatalogScreen")
     screen.kind = kind
     screen.ObserveField("wantCategory", "onWantCategory")
+    screen.ObserveField("retryCategories", "onRetryCategories")
     screen.ObserveField("selected", "onItemSelected")
     screen.ObserveField("options", "onCatalogOptions")      ' favorite / channel info, Favorite Series, Watch List
     screen.ObserveField("visibleChannels", "onCatalogVisible")      ' live: what's on now
@@ -169,6 +170,14 @@ sub onCatalogShown(screen as Object)
     })
 end sub
 
+' OK after the category list failed: ask for it again now.
+sub onRetryCategories(event as Object)
+    screen = event.GetRoSGNode()
+    state = catalogState(screen.kind)
+    state.requested = false
+    onCatalogShown(screen)
+end sub
+
 sub onCatalogCategories(res as Object)
     kind = asString(res.context.kind)
     screen = catalogScreen(kind)
@@ -195,7 +204,8 @@ sub onCatalogCategories(res as Object)
         end if
     else if not state.categoriesShown
         state.requested = false     ' try again next visit
-        screen.status = "Couldn't load the categories. " + friendlyRequestError(res)
+        screen.status = "Couldn't load the categories. " + friendlyRequestError(res) + " Press OK to try again."
+        screen.categoriesFailed = true
     end if
 end sub
 

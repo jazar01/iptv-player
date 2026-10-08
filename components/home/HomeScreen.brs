@@ -58,6 +58,27 @@ sub onRows()
     updateVisible()
 end sub
 
+' Game cards' score lines, changed in place: the card redraws on epgVersion.
+' A card is "game:<key>"; a game without a line now shows its sport again.
+sub onScores()
+    scores = m.top.scores
+    content = m.list.content
+    if type(scores) <> "roAssociativeArray" or content = invalid then return
+    for r = 0 to content.GetChildCount() - 1
+        row = content.GetChild(r)
+        for c = 0 to row.GetChildCount() - 1
+            node = row.GetChild(c)
+            if node.kind = "game"
+                line = asString(scores[Mid(node.itemKey, 6)])
+                if node.message <> line
+                    node.message = line
+                    node.epgVersion = node.epgVersion + 1
+                end if
+            end if
+        end for
+    end for
+end sub
+
 sub indexStream(node as Object)
     key = node.streamId.ToStr()
     if m.byStream[key] = invalid then m.byStream[key] = []

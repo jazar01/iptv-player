@@ -50,19 +50,31 @@ $stream = $client.GetStream()
 $stream.ReadTimeout = 2000
 $buffer = New-Object byte[] 65536
 $text = ''
+$closed = $false
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+# On connect the Roku replays its recent log, which can hold an earlier
+# backup: what arrives in the first second is checked for a busy console,
+# then dropped.
+$replayEnds = (Get-Date).AddSeconds(1)
 try {
-    while ((Get-Date) -lt $deadline -and $text -notmatch '\[backup\] END') {
+    while ((Get-Date) -lt $deadline -and ($replayEnds -or $text -notmatch '\[backup\] END')) {
         try {
             $n = $stream.Read($buffer, 0, $buffer.Length)
-            if ($n -gt 0) { $text += [Text.Encoding]::UTF8.GetString($buffer, 0, $n) }
+            if ($n -le 0) { $closed = $true; break }   # the Roku hung up
+            $text += [Text.Encoding]::UTF8.GetString($buffer, 0, $n)
         }
         catch [System.IO.IOException] { }   # read timeout: keep waiting
+        if ($text -match 'already in use') { break }
+        if ($replayEnds -and (Get-Date) -ge $replayEnds) { $text = ''; $replayEnds = $null }
     }
 }
 finally {
     $client.Close()
 }
+# Only one console connection at a time: a deploy -Console, telnet or another
+# backup holding it means nothing would ever arrive here.
+if ($text -match 'already in use') { throw "$Name's console is in use by another connection (deploy.ps1 -Console, telnet, or another backup). Close it and run this again." }
+if ($closed -and $text -notmatch '\[backup\] END') { throw "$Name closed the console connection. Run this again." }
 if ($text -notmatch '\[backup\] END') { throw "No backup arrived within $TimeoutSeconds s. Is IPTV Player open on that TV?" }
 
 # The last BEGIN..END block: the "[backup] " lines between them, joined.

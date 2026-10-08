@@ -329,9 +329,35 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     else if key = "back" and m.section <> "home" and m.section <> ""
         showSection("home")
         return true
+    else if key = "back" and m.section = "home"
+        confirmExit()
+        return true
     end if
     return false
 end function
+
+' Back on Home: ask first, so a stray Back doesn't close the app. Back again
+' (or Cancel) stays.
+sub confirmExit()
+    dlg = CreateObject("roSGNode", "StandardMessageDialog")
+    dlg.title = "Exit IPTV Player?"
+    dlg.buttons = ["Exit", "Cancel"]
+    dlg.ObserveField("buttonSelected", "onExitChoice")
+    m.exitDialog = dlg
+    m.top.dialog = dlg
+end sub
+
+sub onExitChoice()
+    dlg = m.exitDialog
+    if dlg = invalid then return
+    m.exitDialog = invalid
+    choice = dlg.buttonSelected
+    dlg.close = true
+    if choice = 0
+        print "[main] exit chosen"
+        m.top.exitApp = true
+    end if
+end sub
 
 ' ---------------------------------------------------------------------------
 ' Toast and helpers

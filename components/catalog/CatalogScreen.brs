@@ -290,6 +290,12 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     else if key = "left" and m.itemList.HasFocus()
         focusCategories()
         return true
+    else if key = "OK" and m.categoryIds.Count() = 0 and m.top.categoriesFailed
+        ' The category list didn't load: ask again.
+        m.top.categoriesFailed = false
+        m.top.status = "Loading ..."
+        m.top.retryCategories = true
+        return true
     else if key = "options" and m.itemList.HasFocus()
         node = focusedItem()
         if node <> invalid and (m.top.kind = "live" or m.top.kind = "series" or m.top.kind = "movie") then m.top.options = itemSummary(node)

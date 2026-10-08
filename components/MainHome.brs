@@ -149,8 +149,13 @@ sub favoriteOptions(item as Object)
     dlg.message = ["Pinned favorites always come first, in the order you pin them. The rest are ordered by how much you watch them."]
     dlg.buttons = [pinLabel, "Remove from Favorites", "Cancel"]
     dlg.ObserveField("buttonSelected", "onFavoriteOptionChosen")
+    dlg.ObserveField("wasClosed", "onFavoriteDialogClosed")
     m.favoriteDialog = { dialog: dlg, item: item, pinned: pinned }
     m.top.dialog = dlg
+end sub
+
+sub onFavoriteDialogClosed()
+    m.favoriteDialog = invalid
 end sub
 
 sub onFavoriteOptionChosen()

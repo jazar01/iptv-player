@@ -13,6 +13,9 @@
   <interface>
     <field id="rows" type="array" onChange="onRows" />
     <field id="programs" type="assocarray" onChange="onPrograms" alwaysNotify="true" />
+    <!-- Live score lines, game key -> line: set on the game cards in place,
+         without rebuilding the rows (focus stays put). -->
+    <field id="scores" type="assocarray" onChange="onScores" alwaysNotify="true" />
     <field id="selected" type="assocarray" alwaysNotify="true" />
     <field id="options" type="assocarray" alwaysNotify="true" />
     <field id="removeContinue" type="assocarray" alwaysNotify="true" />

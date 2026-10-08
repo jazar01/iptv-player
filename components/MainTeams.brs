@@ -567,7 +567,10 @@ sub onScoresResult(event as Object)
     result = event.GetData()
     if result.id <> "home" or type(result.scores) <> "roAssociativeArray" then return
     m.scores = result.scores
-    refreshHome()
+    ' On the cards in place: rebuilding Home every 45 s would make the
+    ' focus jump while browsing. Rows built later read m.scores.
+    home = m.sections.home
+    if home <> invalid then home.scores = m.scores
 end sub
 
 ' Settings -> Live scores on My Teams.

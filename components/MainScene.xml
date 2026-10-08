@@ -9,6 +9,10 @@
   toast. Dialogs (resume prompt, keyboards) use the Scene's `dialog` field.
 -->
 <component name="MainScene" extends="Scene">
+  <interface>
+    <!-- Set after "Exit IPTV Player?" is confirmed; main.brs then ends the app. -->
+    <field id="exitApp" type="boolean" />
+  </interface>
   <children>
     <Poster id="background" width="1920" height="1080" uri="pkg:/images/ui/background.jpg" />
     <Group id="screenHost" />

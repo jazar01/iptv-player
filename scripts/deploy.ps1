@@ -89,14 +89,31 @@ if (-not $SkipCheck) {
     # Roku won't compile is worse than a failed check: the failed install
     # removes the existing dev app, and its saved data (registry) with it.
     # Learned Oct 6, 2026, when that wiped the Basement Roku.
-    #   - A statement can't start with a call result: catalogState(k).x.Delete(id)
+    #   - A statement can't start with a function's result:
+    #     catalogState(k).x.Delete(id), also after "then" / "else" on one line
+    #     and with a call in the arguments: f(g(x)).y = 1. (A method's result
+    #     is fine: m.top.FindNode("x").visible = true runs on the Roku.)
+    #   - A statement can't start with a parenthesis: (a + b).ToStr()
+    # Strings and comments are blanked first, so their text can't match.
+    $callStart = '[A-Za-z_][A-Za-z0-9_]*\((?:[^()]|\([^()]*\))*\)\.[A-Za-z_]'
+    $patterns = @(
+        @{ Regex = "^\s*$callStart"; Why = 'statement starts with a call result' }
+        @{ Regex = "\b(?:then|else)\s+$callStart"; Why = 'statement starts with a call result' }
+        @{ Regex = '^\s*\('; Why = 'statement starts with a parenthesis' }
+        @{ Regex = '\b(?:then|else)\s+\('; Why = 'statement starts with a parenthesis' }
+    )
     $rokuOnly = @()
     foreach ($file in Get-ChildItem (Join-Path $root 'components'), (Join-Path $root 'source') -Recurse -Filter *.brs) {
         $n = 0
         foreach ($line in Get-Content $file.FullName) {
             $n++
-            if ($line -match '^\s*[A-Za-z_][A-Za-z0-9_]*\([^()]*\)\.[A-Za-z_]') {
-                $rokuOnly += "$($file.FullName.Substring($root.Length + 1)):${n}: statement starts with a call result: $($line.Trim())"
+            $code = ($line -replace '"[^"]*"', '""') -replace "'.*$", ''
+            if ($code -match '^\s*rem\b') { continue }
+            foreach ($p in $patterns) {
+                if ($code -match $p.Regex) {
+                    $rokuOnly += "$($file.FullName.Substring($root.Length + 1)):${n}: $($p.Why): $($line.Trim())"
+                    break
+                }
             }
         }
     }
@@ -259,6 +276,23 @@ function Install-Roku([string]$Ip, [string]$DevPassword) {
 }
 
 
+# A failed install removes the dev app and its saved data; the restore bundle
+# only brings it back if that Roku has a recent backup. Warns, doesn't stop.
+function Test-Backup([string]$Ip) {
+    $roku = @($LocalRokus) | Where-Object { $_ -and $_.Ip -eq $Ip } | Select-Object -First 1
+    if (-not $roku -or -not $roku.Name) { return }
+    $file = Join-Path (Join-Path $root 'backups') "$($roku.Name).json"
+    $how = "back it up first: .\scripts\backup-roku.ps1 -Roku '$($roku.Name)'"
+    if (-not (Test-Path $file)) {
+        Write-Warning "$($roku.Name) has no backup in backups\. If this install failed, its saved data would be lost; $how"
+        return
+    }
+    $days = [int]((Get-Date) - (Get-Item $file).LastWriteTime).TotalDays
+    if ($days -ge 14) {
+        Write-Warning "$($roku.Name)'s backup is $days days old. A failed install would restore it as it was then; $how"
+    }
+}
+
 # --- Every Roku in deploy.local.ps1 ($LocalRokus) ---------------------------
 
 if ($All) {
@@ -269,6 +303,7 @@ if ($All) {
         $name = if ($roku.Name) { $roku.Name } else { $roku.Ip }
         $devPassword = if ($roku.Password) { $roku.Password } elseif ($Password) { $Password } else { $LocalRokuPassword }
         Write-Host "Installing on $name ($($roku.Ip)) ..."
+        Test-Backup $roku.Ip
         try {
             if (-not $devPassword) { throw 'No developer password (set Password for it or $LocalRokuPassword).' }
             $outcome = Install-Roku $roku.Ip $devPassword
@@ -305,6 +340,7 @@ if ($Console) {
 
 try {
     Write-Host "Installing on $RokuIp ..."
+    Test-Backup $RokuIp
     $outcome = Install-Roku $RokuIp $Password
     if ($outcome -eq 'identical') {
         Write-Host 'The Roku already has this exact build; it was not reinstalled.'
