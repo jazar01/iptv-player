@@ -461,6 +461,17 @@ Recorded Oct 7, 2026 as an option; built Oct 8, 2026 (see "Built" below). The pr
 - **Family Room (Oct 8, 2026):** found the Pi from Settings and played ESPN and other Dolby channels through it ("working well"). A provider session ended there (HTTP 509) and the Pi carried on with a new one.
 - **Not yet tried:** the Deck TV, and the archive (rewind) through the Pi.
 
+### Live buffer on the home Pi (planned)
+
+Planned Oct 8, 2026; not started. Instant pause and rewind on every channel, like a cable box, instead of a traditional DVR: while a TV watches a channel through the Pi, the Pi keeps the last stretch of it.
+
+- **Why:** today's rewind uses the provider's catch-up archive, which only 199 channels have, runs 5 minutes behind live, takes about 6 s to start, and is too big for this Roku's buffer on HD channels. A buffer on the Pi covers every channel, reaches right up to live, rewinds instantly, and holds normal 10-second segments.
+- **How:** live channels play through the Pi, as Dolby channels do through the converter (the same service, or one beside it). It keeps the channel's segments as they arrive and serves the TV a growing (EVENT) HLS playlist, so the Roku's own player handles pause, rewind and the scrub bar. No extra provider connections: the Pi fetches what the TV watches anyway. Changing channel drops that channel's buffer. Dolby channels are converted on the way, as now.
+- **Storage:** in memory, not on the card: the Pi 5 has 8 GB and uses well under 1. HD sports run about 4.5 GB an hour (ESPN about 10 Mbit/s), so about 60 minutes for one TV, or 20-30 minutes each for two or three, sharing 5-6 GB. Nothing written, so no card wear. Longer buffers would need a USB 3 drive (no HAT or NVMe).
+- **Without the Pi:** if it's off or unreachable, live channels play straight from the provider (as converter channels fall back today), with the archive rewind where there is one.
+- **To decide when building:** buffer length per TV, whether the provider archive stays for going back further than the buffer, and whether the app's own pause/rewind keys or the Roku player's take over in live.
+- **Storage hardware (Oct 8, 2026):** a 32 GB SanDisk Max Endurance microSD card for the Pi (made for continuous video recording); an NVMe SSD and HAT (about $100, 256 GB at least) would be far more than the Pi needs, today or with the buffer in memory. A traditional DVR (recordings kept for days) was considered and not chosen: the household mostly watches VOD, and nearly every game is available on demand afterwards, so what sports need is pause and rewind while watching live, which the buffer gives. A DVR would also need a USB drive (HD about 4-5 GB an hour).
+
 ### Multiple provider accounts (options, undecided)
 
 Recorded Oct 7, 2026; not decided or planned. The current account is hit-or-miss on quality and reliability, and other IPTV providers may be good, so more than one account may be wanted later. For now the aim is to make the current account work as well as possible: nearly every fix so far is general (audio repair, Dolby fallback, stall watchdog, end-of-stream recovery, faster archive start, copy switching, "Replace favorite?", the Dolby check, live scores) and would carry over, while provider-specific behavior stays in `data/guide-rules.json` (title tags, server time zone, event-channel naming, LBW and network names), which would need a set per provider.
