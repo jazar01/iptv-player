@@ -216,7 +216,7 @@ end function
 
 ' Capture groups -> UTC seconds, reading them as local time in the rule's zone.
 function nameTimeUtc(match as Object, rule as Object) as Integer
-    year = CreateObject("roDateTime").GetYear()
+    year = 0
     month = 0
     day = 0
     hour = 0
@@ -238,12 +238,30 @@ function nameTimeUtc(match as Object, rule as Object) as Integer
     if ampm = "PM" and hour < 12 then hour = hour + 12
     if ampm = "AM" and hour = 12 then hour = 0
     if month < 1 or month > 12 or day < 1 or day > 31 or hour > 23 or minute > 59 then return 0
+    if year > 0 then return localTimeUtc(year, month, day, hour, minute, rule.zone)
 
+    ' No year in the name: the year that puts it nearest to now, so on
+    ' Dec 31 a "Jan 1" bowl game is next year's, and on Jan 1 a "Dec 31"
+    ' listing last year's.
+    now = nowSeconds()
+    thisYear = CreateObject("roDateTime").GetYear()
+    best = 0
+    for y = thisYear - 1 to thisYear + 1
+        utc = localTimeUtc(y, month, day, hour, minute, rule.zone)
+        if utc > 0 and (best = 0 or Abs(utc - now) < Abs(best - now)) then best = utc
+    end for
+    return best
+end function
+
+' A local date and time in a zone rule -> UTC seconds, or 0 if there's no
+' such date that year (Feb 29).
+function localTimeUtc(year as Integer, month as Integer, day as Integer, hour as Integer, minute as Integer, zone as Object) as Integer
     dt = CreateObject("roDateTime")
     dt.FromISO8601String(year.ToStr() + "-" + pad2(month) + "-" + pad2(day) + "T" + pad2(hour) + ":" + pad2(minute) + ":00Z")
+    if dt.GetMonth() <> month or dt.GetDayOfMonth() <> day then return 0
     localAsUtc = dt.AsSeconds()
     ' The offset in effect then (approximate only within a DST changeover hour).
-    offset = utcOffsetMinutes(localAsUtc - toInt(rule.zone.standard) * 60, rule.zone)
+    offset = utcOffsetMinutes(localAsUtc - toInt(zone.standard) * 60, zone)
     return localAsUtc - offset * 60
 end function
 

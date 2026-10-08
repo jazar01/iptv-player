@@ -50,7 +50,8 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   profile). A local HTTP server on 127.0.0.1 serves the playlist with its
   segments pointed back at itself and rewrites each audio header to LC.
   MainPlayback sends a stream through it after that error (`relayStreams`,
-  4 hours); if it fails there too, `badStreams` and other copies.
+  7 days, kept per Roku by StateStore `setStreamMarks`); if it fails there
+  too with an audio error, `badStreams` and other copies.
 - `components/services/EpgService.*`: now/next via `get_short_epg`, only for
   channels on screen; cached until the current program ends. Title cleanup
   rules come from `data/guide-rules.json`.

@@ -186,18 +186,22 @@ sub onGamesResult(event as Object)
     result = event.GetData()
     if result.id <> "home" then return
     now = nowSeconds()
-    seen = {}
+    seen = {}       ' matchup -> starts of its games seen
     for each s in m.store.callFunc("getSeenGames")
-        seen[s.key] = toInt(s.start)
+        starts = seen[s.key]
+        if starts = invalid
+            starts = []
+            seen[s.key] = starts
+        end if
+        starts.Push(toInt(s.start))
     end for
     started = []
     for each g in result.games
         key = matchupKey(g)
-        earlier = seen[key]
-        if earlier <> invalid
+        for each earlier in asArray(seen[key])
             gap = g.start - earlier
             if gap > 6 * 3600 and gap < 15 * 3600 then g.replay = true
-        end if
+        end for
         if g.start <= now and not g.replay then started.Push({ key: key, start: g.start })
     end for
     if started.Count() > 0 then m.store.callFunc("recordSeenGames", started)

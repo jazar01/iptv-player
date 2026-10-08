@@ -21,6 +21,11 @@ sub init()
     m.searchSection = CreateObject("roRegistrySection", "iptv_searches")
     m.SEARCH_CAP = 10
 
+    ' Stream marks: per device, in their own section (not the synced
+    ' document or the backup). See the end of this file.
+    m.marksSection = CreateObject("roRegistrySection", "iptv_streams")
+    m.MARKS_CAP = 40            ' per kind; about 20 bytes each
+
     m.backend = RegistryBackend("iptv_state")
     m.doc = m.backend.read()
     restored = false
@@ -304,25 +309,28 @@ function getSeenGames() as Object
     return m.doc.seenGames
 end function
 
-' games: [{ key, start }]. Keeps the earliest start per key.
+' games: [{ key, start }]. Each game is kept (one entry per matchup and
+' start), so a replay is measured against the game it repeats: with games 3
+' and 4 of a series, a replay of game 4 against game 4, not game 3. The
+' newest m.SEEN_CAP are kept; only the last 15 hours matter for replays.
 function recordSeenGames(games as Object) as Boolean
     cutoff = nowSeconds() - m.SEEN_DAYS * 86400
-    byKey = {}
+    byGame = {}
     for each s in m.doc.seenGames
-        if toInt(s.start) >= cutoff then byKey[s.key] = s
+        if toInt(s.start) >= cutoff then byGame[asString(s.key) + "@" + toInt(s.start).ToStr()] = s
     end for
     changed = false
     for each g in games
-        existing = byKey[g.key]
-        if existing = invalid or toInt(g.start) < toInt(existing.start)
-            byKey[g.key] = { key: g.key, start: toInt(g.start) }
+        id = asString(g.key) + "@" + toInt(g.start).ToStr()
+        if not byGame.DoesExist(id)
+            byGame[id] = { key: asString(g.key), start: toInt(g.start) }
             changed = true
         end if
     end for
     if not changed then return true
     list = []
-    for each key in byKey
-        list.Push(byKey[key])
+    for each id in byGame
+        list.Push(byGame[id])
     end for
     list.SortBy("start", "r")
     while list.Count() > m.SEEN_CAP
@@ -1223,6 +1231,61 @@ end function
 function saveRecentSearches(list as Object) as Boolean
     if not m.searchSection.Write("list", FormatJson(list)) or not m.searchSection.Flush()
         print "[state] WARNING: could not save recent searches"
+        return false
+    end if
+    return true
+end function
+
+' ---------------------------------------------------------------------------
+' Stream marks: live streams whose audio doesn't play on this Roku as sent.
+' "relay": plays through the audio fix (StreamRelay); "bad": doesn't play
+' even so, or its Dolby audio isn't taken by this TV. Each is streamId ->
+' until (UTC seconds). Per device, since it depends on the Roku and its TV.
+' Losing them only means a stream fails once more, so a failed write is
+' logged and skipped.
+
+function getStreamMarks() as Object
+    marks = { relay: {}, bad: {} }
+    if not m.marksSection.Exists("marks") then return marks
+    parsed = ParseJson(m.marksSection.Read("marks"), "i")
+    if type(parsed) <> "roAssociativeArray" then return marks
+    now = nowSeconds()
+    for each kind in ["relay", "bad"]
+        saved = parsed[kind]
+        kept = marks[kind]
+        if type(saved) = "roAssociativeArray"
+            for each id in saved
+                until = toInt(saved[id])
+                if until > now then kept[id] = until
+            end for
+        end if
+    end for
+    return marks
+end function
+
+' marks: { relay, bad } as getStreamMarks returns them. Expired ones are
+' dropped, and at most m.MARKS_CAP of each kind kept (latest first).
+function setStreamMarks(marks as Object) as Boolean
+    now = nowSeconds()
+    out = {}
+    for each kind in ["relay", "bad"]
+        entries = []
+        given = marks[kind]
+        if type(given) = "roAssociativeArray"
+            for each id in given
+                until = toInt(given[id])
+                if until > now then entries.Push({ id: id, until: until })
+            end for
+        end if
+        entries.SortBy("until", "r")
+        kept = {}
+        for each e in entries
+            if kept.Count() < m.MARKS_CAP then kept[e.id] = e.until
+        end for
+        out[kind] = kept
+    end for
+    if not m.marksSection.Write("marks", FormatJson(out)) or not m.marksSection.Flush()
+        print "[state] WARNING: could not save stream marks"
         return false
     end if
     return true

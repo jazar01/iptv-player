@@ -24,6 +24,8 @@ sub init()
     m.liveTick.ObserveField("fire", "onLiveTick")
     m.stallTimer = m.top.FindNode("stallTimer")
     m.stallTimer.ObserveField("fire", "onStall")
+    m.startTimer = m.top.FindNode("startTimer")
+    m.startTimer.ObserveField("fire", "onStartTimeout")
     m.infoPanel = m.top.FindNode("infoPanel")
     m.infoPanel.ObserveField("chosen", "onInfoCopyChosen")
     m.statsTimer = m.top.FindNode("statsTimer")
@@ -33,6 +35,7 @@ sub init()
     m.bufferingSince = -1   ' clock ms when buffering began, -1 when not buffering
     m.livePlayed = false    ' this live stream has played (so buffering now is a stall)
     m.stallReloads = []     ' clock ms of recent watchdog reloads
+    m.slowReloads = []      ' the same for movies, episodes and the archive
     m.lastFormat = ""       ' last logged stream format
 
     m.play = invalid
@@ -87,13 +90,17 @@ sub onContent()
     ' Never print play.url: it contains the password.
     print "[player] "; play.kind; " "; play.id; " '"; play.name; "' from "; toInt(play.startPosition); " s"
     m.stallTimer.control = "stop"
+    m.startTimer.control = "stop"
     m.bufferingSince = -1
     m.livePlayed = false
+    m.vodPlayed = false         ' this movie or episode has played
+    m.vodAt = toInt(play.startPosition)     ' where it last was, for a reload
     m.liveEndedAt = invalid     ' when this channel's stream last ended (liveStreamEnded)
     m.errored = false          ' the Video node reported an error since the last load (loadVideo)
     m.bufferCount = 0
     hideInfo()
     m.stallReloads = []
+    m.slowReloads = []
     m.lastFormat = ""
     m.liveTick.control = "stop"
     m.liveSeconds = 0           ' playing time on this channel; restarts on every change
@@ -128,14 +135,19 @@ sub loadVideo(url as String, streamFormat as String, live as Boolean, playStart 
     if playStart > 0 then c.playStart = playStart
     m.video.content = c
     m.video.control = "play"
+    ' The archive has its own limit (timeshiftTimeout).
+    m.startTimer.control = "stop"
+    if m.mode <> "timeshift" then m.startTimer.control = "start"
 end sub
 
 sub onVideoState()
     state = m.video.state
     if m.play = invalid then return
     watchStall(state)
+    if state = "playing" or state = "error" or state = "finished" then m.startTimer.control = "stop"
 
     if state = "playing" then m.playedSinceLoad = true
+    if state = "playing" and m.mode = "vod" then m.vodPlayed = true
     if m.mode = "timeshift"
         if state = "playing" and not m.tsConfirmed
             m.tsConfirmed = true
@@ -199,10 +211,7 @@ sub liveStreamEnded()
     now = m.clock.TotalMilliseconds()
     if m.liveEndedAt <> invalid and now - m.liveEndedAt < 120000
         print "[player] live stream ended again; giving up"
-        m.errorMessage.text = "This channel stopped sending video. It may be off the air right now; try again later, or another copy of the channel."
-        m.errorPanel.visible = true
-        m.liveOverlay.visible = false
-        m.top.failed = { play: m.play, code: -101, message: m.errorMessage.text }
+        failPlayback(-101, "This channel stopped sending video. It may be off the air right now; try again later, or another copy of the channel.")
         return
     end if
     m.liveEndedAt = now
@@ -214,21 +223,31 @@ end sub
 ' ---------------------------------------------------------------------------
 ' Stalls. Some relayed live channels change format at commercial breaks
 ' without telling the player, and Roku's player can sit at "Loading" until
-' the stream is reopened. Every buffering spell is logged; on a live stream
-' that has already played, one lasting stallTimer's duration reloads the
-' stream at the live point (at most 4 times in 3 minutes, then an error).
+' the stream is reopened. Every buffering spell is logged. On a live stream
+' that has already played, one lasting 6 s reloads the stream at the live
+' point (at most 4 times in 3 minutes, then an error). A movie, episode or
+' archive stretch that has played and then buffers for 25 s is reloaded
+' where it was (at most 3 times in 5 minutes): movies and episodes then
+' show an error, the archive goes back to live. A stream that never starts
+' is onStartTimeout's.
 
 sub watchStall(state as String)
     if state = "buffering"
         if m.bufferingSince < 0 then m.bufferingSince = m.clock.TotalMilliseconds()
-        if m.mode = "live" and m.livePlayed then m.stallTimer.control = "start"
+        if m.mode = "live" and m.livePlayed
+            m.stallTimer.duration = 6
+            m.stallTimer.control = "start"
+        else if (m.mode = "vod" or m.mode = "timeshift") and m.playedSinceLoad
+            m.stallTimer.duration = 25
+            m.stallTimer.control = "start"
+        end if
         return
     end if
     m.stallTimer.control = "stop"
     if m.bufferingSince >= 0
         waited = (m.clock.TotalMilliseconds() - m.bufferingSince) / 1000
         if waited >= 1 and m.livePlayed then m.bufferCount = m.bufferCount + 1
-        if waited >= 1 and m.livePlayed then print "[player] buffered "; Int(waited); " s ("; m.mode; ", ended "; state; ")"
+        if waited >= 1 and (m.livePlayed or m.playedSinceLoad) then print "[player] buffered "; Int(waited); " s ("; m.mode; ", ended "; state; ")"
         m.bufferingSince = -1
     end if
     if state = "playing" and m.mode = "live" and not m.livePlayed
@@ -238,7 +257,100 @@ sub watchStall(state as String)
 end sub
 
 sub onStall()
-    if m.play = invalid or m.mode <> "live" or m.video.state <> "buffering" then return
+    if m.play = invalid or m.video.state <> "buffering" then return
+    if m.mode = "live"
+        liveStalled()
+    else if m.mode = "vod"
+        vodStalled("stalled")
+    else if m.mode = "timeshift"
+        archiveStalled()
+    end if
+end sub
+
+' Nothing played within startTimer's 25 s of loading, and no error either:
+' Roku's player can sit at "Loading" for good. A live channel's first start
+' fails like an error, so its copies are offered (a reload after a stall
+' that sits in "buffering" is the stall watchdog's).
+sub onStartTimeout()
+    if m.play = invalid or m.playedSinceLoad or m.errored or m.errorPanel.visible then return
+    state = m.video.state
+    if state = "playing" or state = "paused" then return
+    if m.mode = "live" and not m.livePlayed
+        print "[player] live stream didn't start in "; Int(m.startTimer.duration); " s (state "; state; ")"
+        m.video.control = "stop"
+        ' Code -102: the app's own "never started" (not the Video node's).
+        failPlayback(-102, "This channel didn't start: no video arrived. It may be off the air right now; try again later, or another copy of the channel.")
+    else if m.mode = "live" and state <> "buffering"
+        liveStalled()
+    else if m.mode = "vod"
+        vodStalled("didn't start")
+    end if
+end sub
+
+' The error panel, and the same path as a playback error (MainScene offers
+' copies of a live channel). Codes below -99 are the app's own.
+sub failPlayback(code as Integer, message as String)
+    m.stallTimer.control = "stop"
+    m.startTimer.control = "stop"
+    m.saveTimer.control = "stop"
+    m.errorMessage.text = message
+    m.errorPanel.visible = true
+    m.liveOverlay.visible = false
+    m.top.failed = { play: m.play, code: code, message: message }
+end sub
+
+' Movies and episodes: reload where it was. One that has never played gets
+' one more try; one that has, 3 in 5 minutes. Its position is saved first,
+' so after the error it resumes from there.
+sub vodStalled(reason as String)
+    position = Int(m.video.position)
+    if m.playedSinceLoad and position > 0 then m.vodAt = position
+    allowed = 3
+    if not m.vodPlayed then allowed = 1
+    if not reloadAllowed(allowed)
+        print "[player] "; m.play.kind; " "; reason; " again; giving up"
+        reportProgress()
+        m.video.control = "stop"
+        if m.vodPlayed
+            failPlayback(-100, "This video keeps stalling. Try again in a few minutes; it will continue from here.")
+        else
+            failPlayback(-102, "This video didn't start: no video arrived from the provider. Try again in a few minutes.")
+        end if
+        return
+    end if
+    print "[player] "; m.play.kind; " "; reason; "; reloading at "; m.vodAt; " s"
+    loadVideo(m.play.url, asString(m.play.streamFormat), false, m.vodAt)
+end sub
+
+' The archive: reload this stretch from where it was; back to live if it
+' keeps stalling.
+sub archiveStalled()
+    if not reloadAllowed(3)
+        timeshiftFailed("kept stalling")
+        return
+    end if
+    at = m.tsStart + Int(m.video.position)
+    if at > archiveEdge() then at = archiveEdge()
+    print "[player] archive stalled; reloading from "; formatClock(at)
+    m.note = "The recording stalled, so it was reloaded."
+    startTimeshift(at, 0)
+end sub
+
+' Movie, episode and archive reloads: true (and counted) if fewer than
+' allowed happened in the last 5 minutes.
+function reloadAllowed(allowed as Integer) as Boolean
+    now = m.clock.TotalMilliseconds()
+    recent = []
+    for each t in m.slowReloads
+        if now - t < 300000 then recent.Push(t)
+    end for
+    m.slowReloads = recent
+    if recent.Count() >= allowed then return false
+    m.slowReloads.Push(now)
+    return true
+end function
+
+sub liveStalled()
     now = m.clock.TotalMilliseconds()
     recent = []
     for each t in m.stallReloads
@@ -248,12 +360,8 @@ sub onStall()
     if recent.Count() >= 4
         print "[player] still stalling after "; recent.Count(); " reloads in 3 minutes; giving up"
         m.video.control = "stop"
-        m.errorMessage.text = "This channel keeps stalling. Try it again in a minute, or another copy of the channel."
-        m.errorPanel.visible = true
-        m.liveOverlay.visible = false
-        ' The same path as a playback error, so other copies are offered.
         ' Code -100: the app's own "kept stalling" (not the Video node's).
-        m.top.failed = { play: m.play, code: -100, message: m.errorMessage.text }
+        failPlayback(-100, "This channel keeps stalling. Try it again in a minute, or another copy of the channel.")
         return
     end if
     m.stallReloads.Push(now)
@@ -485,6 +593,7 @@ sub close()
     m.saveTimer.control = "stop"
     hideInfo()
     m.stallTimer.control = "stop"
+    m.startTimer.control = "stop"
     m.overlayTimer.control = "stop"
     m.liveTick.control = "stop"
     reportProgress()

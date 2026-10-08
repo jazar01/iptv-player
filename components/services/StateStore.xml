@@ -70,6 +70,8 @@
     <function name="getRecentSearches" />
     <function name="addRecentSearch" />
     <function name="removeRecentSearch" />
+    <function name="getStreamMarks" />
+    <function name="setStreamMarks" />
   </interface>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />

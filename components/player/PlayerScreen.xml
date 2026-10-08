@@ -115,9 +115,13 @@
     <!-- Counts seconds of live video actually playing (not paused, buffering
          or failed): viewed after a minute, watched after channelViewSeconds. -->
     <Timer id="liveTick" duration="5" repeat="true" />
-    <!-- Stall watchdog: a live stream that has played and then sits in
-         "buffering" this long is reloaded at the live point. -->
+    <!-- Stall watchdog: a stream that has played and then sits in
+         "buffering" this long is reloaded (live 6 s, at the live point;
+         movies, episodes and the archive 25 s, where it was; watchStall). -->
     <Timer id="stallTimer" duration="6" />
+    <!-- A live channel, movie or episode with no video this long after
+         loading, and no error either, counts as failed (onStartTimeout). -->
+    <Timer id="startTimer" duration="25" />
   </children>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />

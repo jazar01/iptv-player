@@ -11,11 +11,15 @@ sub initPlayback()
     m.guideRules = invalid
     m.connections = invalid     ' { active, max } from the provider, last checked
 
-    ' Live streams whose audio this Roku can't decode ("Unsupported AAC
-    ' stream"): streamId -> retry after (UTC seconds). Playing one goes to a
-    ' working copy instead; the provider changes sources, so after a few
-    ' hours it's tried again.
-    m.badStreams = {}
+    ' Live streams whose audio doesn't play here (undecodable AAC even
+    ' through the audio fix, or Dolby this TV doesn't take): streamId ->
+    ' retry after (UTC seconds). Playing one goes to a working copy instead.
+    ' Kept on this Roku for 7 days (StateStore stream marks, with
+    ' relayStreams), so each launch doesn't fail them once again; the
+    ' provider changes sources, so after that they're tried again.
+    marks = m.store.callFunc("getStreamMarks")
+    m.badStreams = marks.bad
+    m.MARK_SECONDS = 7 * 86400
     m.autoCopyFor = invalid     ' { streamId, name, item, afterFailure } waiting for its copies
     ' SearchTask answers about copies; when it's busy (indexing, a scoreboard)
     ' or not answering, don't leave the viewer with nothing (onAutoCopyTimeout).
@@ -25,9 +29,10 @@ sub initPlayback()
     m.top.AppendChild(m.autoCopyTimer)
 
     ' The audio fix (StreamRelay): streams that failed with "Unsupported AAC
-    ' stream" play through it, streamId -> until (UTC seconds). Only if the
-    ' relayed stream fails too is it marked bad (badStreams) and a copy tried.
-    m.relayStreams = {}
+    ' stream" play through it, streamId -> until (UTC seconds; 7 days, kept
+    ' with badStreams). Only if the relayed stream fails too with an audio
+    ' or format error is it marked bad (badStreams) and a copy tried.
+    m.relayStreams = marks.relay
     m.relay = CreateObject("roSGNode", "StreamRelay")
     m.relay.control = "RUN"
 
@@ -344,14 +349,19 @@ sub onPlayerFailed(event as Object)
     if m.playing <> invalid and m.playing.kind = "live" and isTrue(failure.audioUnsupported) and not isTrue(m.playing.relayed) and m.relay.port > 0
         ' First time: play it again through the audio fix.
         id = toInt(m.playing.id)
-        m.relayStreams[id.ToStr()] = nowSeconds() + 4 * 3600
+        m.relayStreams[id.ToStr()] = nowSeconds() + m.MARK_SECONDS
+        saveStreamMarks()
         print "[main] stream "; id; " has audio Roku rejects; playing it through the audio fix"
         playLive({ streamId: id, name: m.playing.name, epgChannelId: m.playing.epgChannelId, archiveDays: m.playing.archiveDays, stepFrom: m.playing.stepFrom, replaceFor: m.playing.replaceFor, direct: true, note: "This channel's audio is being repaired for this Roku." })
         return
     end if
     ' Dolby audio this TV doesn't accept, too: the relay can't help, but a
-    ' copy with other audio can (Family Room, Oct 2026).
-    if m.playing <> invalid and m.playing.kind = "live" and (isTrue(failure.audioUnsupported) or isTrue(failure.dolbyUnsupported) or isTrue(m.playing.relayed))
+    ' copy with other audio can (Family Room, Oct 2026). Only audio and
+    ' format errors (-5) count: a repaired stream that fails otherwise (the
+    ' provider, a timeout, a stall, the connection limit) takes the normal
+    ' path below, like any other channel.
+    relayedAudio = m.playing <> invalid and isTrue(m.playing.relayed) and m.failCode = -5
+    if m.playing <> invalid and m.playing.kind = "live" and (isTrue(failure.audioUnsupported) or isTrue(failure.dolbyUnsupported) or relayedAudio)
         ' Failed even through the audio fix (or the fix isn't running): mark
         ' it bad and go to a working copy.
         m.relayStreams.Delete(toInt(m.playing.id).ToStr())
@@ -369,8 +379,13 @@ end sub
 
 sub markStreamBad(streamId as Dynamic)
     key = toInt(streamId).ToStr()
-    m.badStreams[key] = nowSeconds() + 4 * 3600
-    print "[main] stream "; key; " has audio this Roku can't decode; skipping it for 4 hours"
+    m.badStreams[key] = nowSeconds() + m.MARK_SECONDS
+    saveStreamMarks()
+    print "[main] stream "; key; " has audio that doesn't play here; skipping it for 7 days"
+end sub
+
+sub saveStreamMarks()
+    m.store.callFunc("setStreamMarks", { relay: m.relayStreams, bad: m.badStreams })
 end sub
 
 function needsRelay(streamId as Dynamic) as Boolean
