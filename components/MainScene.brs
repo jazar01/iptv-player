@@ -131,6 +131,7 @@ sub showSection(name as String)
 
     if name = "home"
         refreshHome()
+        refreshScoresIfStale()
     else if name = "settings"
         screen.info = settingsInfo()
         checkConnections("settings")
@@ -205,6 +206,7 @@ sub removeOverlay(node as Object)
     end if
     ' Back on the Guide (after playing, say): fetch what it was waiting for.
     if m.section = "guide" then pumpGuide()
+    if m.section = "home" then refreshScoresIfStale()
     focusContent()
 end sub
 

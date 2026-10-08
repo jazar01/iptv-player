@@ -22,6 +22,7 @@ sub initTeams()
     ' Live scores (Settings -> Live scores on My Teams): game key -> line.
     m.scores = {}
     m.scoresPending = 0
+    m.scoresAt = 0              ' when the scoreboards were last asked for
     m.scoresFiles = []
     m.scoresTimer = CreateObject("roSGNode", "Timer")
     m.scoresTimer.repeat = true
@@ -514,6 +515,7 @@ sub fetchScores()
             end for
         end if
     end for
+    m.scoresAt = nowSeconds()
     m.scoresPending = requests.Count()
     for each r in requests
         sendRequest(r)
@@ -552,4 +554,12 @@ sub toggleScores()
     m.scores = {}
     fetchScores()
     refreshHome()
+end sub
+
+' Back on Home (from the player, a section, a grid): scores were only
+' fetched while Home showed, so refresh now if they're over 30 s old rather
+' than show the old score until the next tick.
+sub refreshScoresIfStale()
+    if m.section <> "home" or m.overlays.Count() > 0 then return
+    if nowSeconds() - m.scoresAt > 30 then fetchScores()
 end sub
