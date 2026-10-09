@@ -70,6 +70,9 @@
     <!-- Live buffer: the picture as the Pi measured it ("Full HD 1920x1080, 60 fps"),
          for the channel info panel (Roku's player doesn't report it for these streams). -->
     <field id="streamPicture" type="string" />
+    <!-- Live buffer: where the Pi's pictures are ("http://<pi>/bt/<id>/"), for the
+         picture of the point a jump would land on. -->
+    <field id="thumbBase" type="string" />
   </interface>
 
   <children>
@@ -94,6 +97,13 @@
       <Rectangle id="progressFill" translation="[96,936]" width="0" height="6" color="0x4DA3FFFF" />
       <Label id="nextLine" translation="[96,962]" width="1728" font="font:SmallSystemFont" color="0x8C96A0FF" />
       <Label id="hints" translation="[96,1016]" width="1728" font="font:SmallestSystemFont" color="0x6E7882FF" />
+      <!-- While jumping in the live buffer: the picture where the jump would land,
+           over its place on the progress bar (showThumb). -->
+      <Group id="thumbGroup" visible="false">
+        <Poster width="392" height="224" uri="pkg:/images/ui/rounded.9.png" blendColor="0x0B1016F0" />
+        <Poster id="thumb" translation="[4,4]" width="384" height="216" loadDisplayMode="scaleToFit" />
+        <Rectangle id="thumbMark" translation="[194,224]" width="4" height="40" color="0xFFFFFFFF" />
+      </Group>
     </Group>
 
     <Group id="errorPanel" visible="false">

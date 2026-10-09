@@ -154,9 +154,15 @@ sub bufferPlay(play as Object, convert as Boolean)
     play.url = "http://" + converterAddress() + "/" + route + "/" + play.bufferPath
     play.buffered = true
     play.converted = convert
-    ' The provider's archive (Start over) still plays straight from the
-    ' provider, through the converter when the audio needs it.
-    if convert and type(play.timeshift) = "roAssociativeArray" then play.timeshift.url = converterUrl(play.timeshift.url)
+    ' The provider's archive (Start over, going back past the buffer) goes
+    ' through the Pi too, cut into 2-second pieces (archive.py): its HD
+    ' one-minute segments (53 MB) are more than this Roku's video buffer
+    ' holds. Converted on the way when the audio needs it.
+    if type(play.timeshift) = "roAssociativeArray"
+        piBase = "http://" + converterAddress() + "/a/"
+        if convert then piBase = "http://" + converterAddress() + "/ac/"
+        play.timeshift.piBase = piBase
+    end if
 end sub
 
 sub sendBufferNote(play as Dynamic, route as String)
@@ -172,6 +178,7 @@ sub onBufferNote(res as Object)
     p = m.playing
     if m.player = invalid or p = invalid or asString(p.bufferPath) <> asString(res.context.path) then return
     if toInt(res.data.liveGap) > 0 then m.player.liveGap = toInt(res.data.liveGap)
+    if asString(res.data.id) <> "" then m.player.thumbBase = "http://" + converterAddress() + "/bt/" + asString(res.data.id) + "/"
     v = res.data.video
     if type(v) = "roAssociativeArray" and toInt(v.height) > 0 then m.player.streamPicture = pictureText(toInt(v.width), toInt(v.height), toInt(v.fps))
 end sub

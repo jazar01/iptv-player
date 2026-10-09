@@ -74,8 +74,9 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   errors, progress reports every 30 s and on stop, live pause/rewind via the
   provider's timeshift `.m3u8` archive, kept `archiveLagSeconds` behind live).
 - `components/guide/`: GuideScreen (channels-by-time grid; filled by
-  `MainGuide.brs`: channels from SearchTask `guideRequest`, schedules from
-  `get_simple_data_table`).
+  `MainGuide.brs`: channels from SearchTask `guideRequest`, one or more sets
+  ticked in its Channels chooser and saved per TV (`guideChoices`),
+  schedules from `get_simple_data_table`).
 - `components/search/`: SearchScreen (DynamicMiniKeyboard with voice entry,
   plus results list, which shows recent searches while the box is empty;
   matching with word forms, synonyms, close spellings and an all-but-one
@@ -128,7 +129,9 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   (`buffer.py`): with Settings -> Live buffer on, every live channel plays
   through the Pi, which keeps it in memory since tuning in; PlayerScreen's
   `bufferKey` handles pause, jumps (held keys repeat) and Fast-forward to
-  live (requirements: "Live buffer on the home Pi"). `probe.py` (`/p/`)
+  live (requirements: "Live buffer on the home Pi"); it keeps a small
+  picture per piece, shown while jumping (`/bt/`). `archive.py` (`/a/`) cuts
+  the provider's archive into the same pieces, so HD archives fit the Roku. `probe.py` (`/p/`)
   reads the start of a movie or episode file for its details page
   (picture, audio tracks, subtitles; `requestMediaInfo` in MainMovies.brs).
 
@@ -295,7 +298,7 @@ optional record marks joined without a schema change).
   checked on the Basement TV; deployed to the Family Room and Deck (Oct 9),
   not yet tried there or with two TVs buffering at once. 2-second pieces,
   the Pi's live gap and the measured picture size checked on the Basement
-  TV (Oct 9); the other TVs need a deploy for them.
+  TV (Oct 9) and deployed to all three TVs.
 - Known limits: HD timeshift archives exceed this Roku's video buffer; some
   channels sometimes send an AAC variant no Roku decodes (Tennis Channel 2;
   it played again on Oct 8, 2026, and the Pi converter, which re-encodes the
@@ -304,7 +307,5 @@ optional record marks joined without a schema change).
   provider sends no episode descriptions for some series.
 - Not yet tried on a Roku: a real provider renumbering, reaching 90% of an
   episode (a movie at 90% worked, Oct 9), the connection-limit message, the usage-ordering effect.
-- Next: nothing planned. Ideas: scene thumbnails while jumping in the live
-  buffer; the Pi cutting the provider's archive into pieces so HD archives
-  fit this Roku. Moving the Pi to its new SD card with `rpi-clone` when it
-  arrives.
+- Next: nothing planned. Moving the Pi to its new SD card with `rpi-clone`
+  when it arrives.

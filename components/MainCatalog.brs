@@ -38,10 +38,6 @@ sub onLocalsResult(event as Object)
         m.localIds[toInt(item.stream_id).ToStr()] = true
     end for
     updateCatalogTags()
-    if result.id = "guide"
-        showGuideLocals(result)
-        return
-    end if
 
     screen = catalogScreen("live")
     if screen = invalid or result.id <> "live" then return

@@ -32,6 +32,8 @@ sub init()
     m.holdTimer = m.top.FindNode("holdTimer")
     m.holdTimer.ObserveField("fire", "onHoldTimer")
     m.holdKey = invalid
+    m.thumbGroup = m.top.FindNode("thumbGroup")
+    m.thumb = m.top.FindNode("thumb")
     m.seekPending = invalid  ' live buffer: seconds of jumps pressed, not made yet
     m.infoPanel = m.top.FindNode("infoPanel")
     m.infoPanel.ObserveField("chosen", "onInfoCopyChosen")
@@ -108,6 +110,8 @@ sub onContent()
     stopHold()
     m.LIVE_GAP = 30             ' until the Pi says how long its pieces are
     m.top.streamPicture = ""
+    m.top.thumbBase = ""
+    m.thumbGroup.visible = false
     m.bufferingSince = -1
     m.livePlayed = false
     m.vodPlayed = false         ' this movie or episode has played
@@ -793,8 +797,37 @@ sub addJump(jump as Integer)
         m.note = seekNote(m.seekPending)
     end if
     showOverlay()
+    showThumb(m.seekFrom + m.seekPending, m.seekPending >= latest)
     m.seekTimer.control = "stop"
     m.seekTimer.control = "start"
+end sub
+
+' The Pi's picture of where the jump would land (target: a point in the
+' player's timeline), over that moment on the progress bar. Not at live
+' (the picture is on screen) or in the archive (the Pi has no pictures of it).
+sub showThumb(target as Integer, atLive as Boolean)
+    base = m.top.thumbBase
+    if base = "" or atLive or target < 0
+        m.thumbGroup.visible = false
+        return
+    end if
+    behind = Int(m.video.duration) - target
+    if behind < 0 then behind = 0
+    ' The same address means another picture as the buffer grows, so a
+    ' changing query keeps the Poster from reusing an old one.
+    m.thumb.uri = base + behind.ToStr() + ".jpg?t=" + nowSeconds().ToStr()
+    x = 96 + 864         ' the bar's middle when there's no guide
+    p = m.programs
+    if p <> invalid and type(p.now) = "roAssociativeArray" and p.now.ends > p.now.start
+        moment = nowSeconds() - behind
+        x = 96 + Int(1728 * clampFraction((moment - p.now.start) / (p.now.ends - p.now.start)))
+    end if
+    left = x - 196
+    if left < 96 then left = 96
+    if left > 96 + 1728 - 392 then left = 96 + 1728 - 392
+    m.thumbGroup.translation = [left, 936 - 224 - 40]
+    m.top.FindNode("thumbMark").translation = [x - left - 2, 224]
+    m.thumbGroup.visible = true
 end sub
 
 function seekNote(offset as Integer) as String
@@ -806,6 +839,7 @@ end function
 sub onSeekTimer()
     offset = m.seekPending
     m.seekPending = invalid
+    m.thumbGroup.visible = false
     if offset = invalid or m.play = invalid then return
     if m.mode = "held"
         m.video.control = "resume"
@@ -869,6 +903,7 @@ sub goLive()
         m.video.control = "resume"
         m.mode = "live"
     end if
+    m.thumbGroup.visible = false
     print "[player] buffer: back to live ("; liveSpot(); " s of "; Int(m.video.duration); ")"
     m.video.seek = liveSpot()
     showNote("Live")
@@ -987,6 +1022,15 @@ sub resumeFromPause()
 end sub
 
 sub startTimeshift(startUtc as Integer, playStart as Integer)
+    t = m.play.timeshift
+    ' Through the Pi (piBase), the archive is cut into pieces a minute at a
+    ' time from its start, so begin where playback is wanted rather than
+    ' minutes before it.
+    piBase = asString(t.piBase)
+    if piBase <> "" and playStart > 0
+        startUtc = startUtc + playStart
+        playStart = 0
+    end if
     m.mode = "timeshift"
     ' The URL names a whole minute (serverTimeString), and the provider starts
     ' there: use that minute as the base and play the leftover seconds in, so
@@ -997,7 +1041,6 @@ sub startTimeshift(startUtc as Integer, playStart as Integer)
     if m.tsPlayStart < 0 then m.tsPlayStart = 0
     m.tsConfirmed = false
 
-    t = m.play.timeshift
     ' Ask only for minutes already recorded, so the stream ends instead of
     ' waiting on segments that don't exist yet.
     minutes = Int((archiveEdge() - m.tsStart) / 60) + 1
@@ -1006,8 +1049,17 @@ sub startTimeshift(startUtc as Integer, playStart as Integer)
     ' longer to build a longer playlist (about 4 s for 11 minutes, 20 s for
     ' 90), and the next stretch loads when this one ends.
     if isTrue(m.play.relayed) and minutes > 15 then minutes = 15
+    ' Through the Pi too: it holds what it has cut in memory (about 800 MB
+    ' for 15 minutes of HD).
+    if piBase <> "" and minutes > 15 then minutes = 15
     url = t.url.Replace("{start}", serverTimeString(m.tsStart, t.tz)).Replace("{duration}", minutes.ToStr())
-    print "[player] timeshift from "; serverTimeString(m.tsStart, t.tz); " server time, "; minutes; " min"
+    if piBase <> ""
+        p = Instr(1, url, "://")
+        if p > 0 then url = piBase + Left(url, p - 1) + "/" + Mid(url, p + 3)
+    end if
+    how = ""
+    if piBase <> "" then how = " (in pieces through the Pi)"
+    print "[player] timeshift from "; serverTimeString(m.tsStart, t.tz); " server time, "; minutes; " min"; how
     m.video.enableTrickPlay = true
     loadVideo(url, "hls", false, m.tsPlayStart)
     m.timeshiftTimeout.control = "stop"

@@ -18,6 +18,7 @@ prefix in front of the URL it would have played:
 /r/...  passed on unchanged (encryption keys and the like)
 /b/, /bc/ ...  the live buffer (buffer.py): instant pause and rewind on every channel
 /p/...  what's inside a movie or episode file (probe.py), for the details pages
+/a/, /ac/ ...  the provider's archive in 2-second pieces (archive.py): HD archives fit the Roku
 /health a small JSON status
 UDP 8791 answers the app's search for a converter (Settings -> Dolby converter)
 
@@ -26,6 +27,7 @@ the account password, so they're never logged (only the host and the file
 name), and only clients on the networks in --allow are served.
 """
 
+import archive
 import argparse
 import buffer
 import ipaddress
@@ -42,7 +44,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.4"
+VERSION = "1.5"
 DEFAULT_UA = "Roku/DVP-14.0 (14.0.0.0)"     # the provider refuses non-Roku agents (404)
 UPSTREAM_TIMEOUT = 20                       # seconds, per read
 MAX_SEGMENT = 64 * 1024 * 1024              # archive minutes run about 20 MB
@@ -225,7 +227,7 @@ class Handler(BaseHTTPRequestHandler):
             self.health()
             return
         try:
-            if self.live_buffer():
+            if self.live_buffer() or self.archive():
                 return
         except (BrokenPipeError, ConnectionResetError):
             return
@@ -249,11 +251,58 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass        # the Roku moved on (channel change, seek)
 
+    def archive(self):
+        """The archive's routes (archive.py); False for anything else."""
+        prefix = self.path.split("/", 2)[1] if self.path.count("/") >= 2 else ""
+        if prefix not in ("a", "ac", "as"):
+            return False
+        if prefix == "as":
+            parts = self.path.split("?", 1)[0].split("/")      # ['', 'as', id, '<seq>.ts']
+            job = archive.find(parts[2]) if len(parts) == 4 else None
+            data = None
+            if job and parts[3].endswith(".ts") and parts[3][:-3].isdigit():
+                data = job.piece(int(parts[3][:-3]))
+            if data is None:
+                self.send_error(404)
+                return True
+            self.send_body(200, "video/mp2t", data)
+            count("segments")
+            return True
+        url = upstream_url(self.path)
+        if url is None:
+            self.send_error(404)
+            return True
+        agent = self.headers.get("User-Agent", "")
+        if not agent.startswith("Roku"):
+            agent = DEFAULT_UA
+        job = archive.job_for(url, prefix == "ac", agent, self.server.ffmpeg)
+        job.ready.wait(archive.FIRST_WAIT)
+        if not job.pieces:
+            error = job.error
+            code = error.code if isinstance(error, buffer.UpstreamError) else 504
+            self.send_error(code)
+            count("failed")
+            return True
+        self.send_body(200, "application/vnd.apple.mpegurl", job.playlist().encode())
+        count("playlists")
+        return True
+
     def live_buffer(self):
         """The live buffer's routes (buffer.py); False for anything else."""
         prefix = self.path.split("/", 2)[1] if self.path.count("/") >= 2 else ""
-        if prefix not in ("b", "bc", "bs", "bk", "bq"):
+        if prefix not in ("b", "bc", "bs", "bt", "bk", "bq"):
             return False
+        if prefix == "bt":
+            parts = self.path.split("?", 1)[0].split("/")      # ['', 'bt', id, '<behind>.jpg']
+            recorder = buffer.find(rid=parts[2]) if len(parts) == 4 else None
+            data = None
+            if recorder and parts[3].endswith(".jpg") and parts[3][:-4].isdigit():
+                data = recorder.thumb_at(int(parts[3][:-4]))
+            if data is None:
+                self.send_error(404)
+                return True
+            self.send_body(200, "image/jpeg", data)
+            return True
         if prefix == "bs":
             parts = self.path.split("?", 1)[0].split("/")      # ['', 'bs', id, '<seq>.ts']
             recorder = buffer.find(rid=parts[2]) if len(parts) == 4 else None

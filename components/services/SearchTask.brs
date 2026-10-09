@@ -88,7 +88,7 @@ sub sendErrorAnswer(field as String, req as Dynamic)
     else if field = "iconsRequest"
         m.top.iconsResult = { id: req.id, ready: false, icons: {} }
     else if field = "guideRequest"
-        m.top.guideResult = { id: req.id, categoryId: asString(req.categoryId), ready: false, categories: [], channels: [] }
+        m.top.guideResult = { id: req.id, ready: false, categories: [], sets: {} }
     else if field = "localsRequest"
         m.top.localsResult = { id: req.id, market: asString(req.market), ready: false, items: [] }
     else if field = "categoryRequest"
@@ -242,16 +242,35 @@ end sub
 ' Guide: the live categories (for its chooser) and, when categoryId is set,
 ' that category's channels in catalog order. req: { id, categoryId }
 function guideChannels(req as Object) as Object
-    result = { id: req.id, categoryId: asString(req.categoryId), ready: m.index.live.Count() > 0, categories: [], channels: [] }
+    result = { id: req.id, ready: m.index.live.Count() > 0, categories: [], sets: {} }
     cats = liveCategories()
     if cats <> invalid
         for each c in cats
             if type(c) = "roAssociativeArray" then result.categories.Push({ id: asString(c.category_id), name: asString(c.category_name) })
         end for
     end if
-    if result.categoryId = "" then return result
+    wanted = {}
+    if type(req.categoryIds) = "roArray"
+        for each id in req.categoryIds
+            key = asString(id)
+            if key = "__local"
+                ' The market's local stations, as Live TV lists them.
+                locals = listLocalStations({ id: req.id, market: asString(req.market) })
+                if not locals.ready then result.ready = false
+                channels = []
+                for each item in locals.items
+                    channels.Push({ streamId: item.stream_id, name: item.name, epgChannelId: item.epg_channel_id, archiveDays: item.tv_archive_duration, logo: item.stream_icon })
+                end for
+                result.sets["__local"] = channels
+            else if key <> ""
+                wanted[key] = true
+                result.sets[key] = []
+            end if
+        end for
+    end if
+    if wanted.Count() = 0 then return result
     for each e in m.index.live
-        if e.categoryId = result.categoryId then result.channels.Push({ streamId: e.itemId, name: e.name, epgChannelId: e.epgChannelId, archiveDays: e.archiveDays, logo: asString(e.icon) })
+        if wanted.DoesExist(e.categoryId) then result.sets[e.categoryId].Push({ streamId: e.itemId, name: e.name, epgChannelId: e.epgChannelId, archiveDays: e.archiveDays, logo: asString(e.icon) })
     end for
     return result
 end function

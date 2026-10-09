@@ -13,12 +13,18 @@ sub init()
     m.statusLabel = m.top.FindNode("status")
     m.chooser = m.top.FindNode("chooser")
     m.chooserList = m.top.FindNode("chooserList")
-    m.chooserList.ObserveField("itemSelected", "onChooserSelected")
+    m.showButton = m.top.FindNode("showButton")
+    content = CreateObject("roSGNode", "ContentNode")
+    item = content.CreateChild("ContentNode")
+    item.title = "Show the ticked channels"
+    m.showButton.content = content
+    m.showButton.ObserveField("itemSelected", "onShowSelected")
     m.chooserTimer = CreateObject("roSGNode", "Timer")
     m.chooserTimer.duration = 0.05
     m.chooserTimer.ObserveField("fire", "onChooserTimer")
     m.top.AppendChild(m.chooserTimer)
-    m.pendingChoice = ""
+    m.pendingChoice = invalid
+    m.onButton = false          ' the Channels button has focus (Up from the top row)
 
     m.channels = []
     m.schedules = {}            ' streamId -> [{ start, ends, title, desc }] (or invalid while loading)
@@ -51,7 +57,13 @@ sub init()
         name.font = "font:SmallestSystemFont"
         name.color = "0xD0D6DCFF"
         programs = g.CreateChild("Group")
-        m.rowNodes.Push({ group: g, logo: logo, name: name, programs: programs })
+        ' A line above the first channel of each set after the first.
+        divider = g.CreateChild("Rectangle")
+        divider.translation = [96, -2]
+        divider.width = 1728
+        divider.height = 3
+        divider.color = "0x4DA3FF90"
+        m.rowNodes.Push({ group: g, logo: logo, name: name, programs: programs, divider: divider })
     end for
 
     m.wantDelay = m.top.FindNode("wantDelay")
@@ -64,6 +76,7 @@ end sub
 
 sub onFocusedChild()
     if m.top.HasFocus() and m.chooser.visible then m.chooserList.SetFocus(true)
+    drawButton()
 end sub
 
 function halfHour(t as Integer) as Integer
@@ -81,6 +94,8 @@ sub onChannels()
     m.failed = {}
     m.row = 0
     m.topRow = 0
+    m.onButton = false
+    drawButton()
     m.windowMin = halfHour(nowSeconds())
     m.windowStart = m.windowMin
     m.focusTime = nowSeconds()
@@ -93,7 +108,10 @@ sub onSchedule()
     s = m.top.schedule
     key = asString(s.streamId)
     if isTrue(s.failed) then m.failed[key] = true
-    if type(s.listings) = "roArray" then m.schedules[key] = s.listings
+    if type(s.listings) = "roArray"
+        m.schedules[key] = s.listings
+        m.failed.Delete(key)
+    end if
     redraw()
 end sub
 
@@ -115,6 +133,34 @@ sub onCategories()
         end if
     end for
     m.chooserList.content = content
+end sub
+
+' The Channels button: what's shown ("Favorites + 2 more"), lit when it has
+' focus; the focused channel's set and name follow it.
+sub drawButton()
+    names = m.top.title
+    if type(names) <> "roArray" then names = []
+    text = "Channels"
+    if names.Count() = 1 then text = "Channels:  " + asString(names[0])
+    if names.Count() = 2 then text = "Channels:  " + asString(names[0]) + " + " + asString(names[1])
+    if names.Count() > 2 then text = "Channels:  " + asString(names[0]) + " + " + (names.Count() - 1).ToStr() + " more"
+    label = m.top.FindNode("buttonText")
+    label.text = text
+    width = label.boundingRect().width + 40
+    if width > 1000 then width = 1000
+    bg = m.top.FindNode("buttonBg")
+    bg.width = width
+    lit = m.onButton and m.top.IsInFocusChain() and not m.chooser.visible
+    if lit
+        bg.blendColor = "0x2F6FB5FF"
+        label.color = "0xFFFFFFFF"
+    else
+        bg.blendColor = "0x2A3542FF"
+        label.color = "0xD0D6DCFF"
+    end if
+    showing = m.top.FindNode("showing")
+    showing.translation = [86 + width + 24, 128]
+    showing.width = 1300 - (86 + width + 24)
 end sub
 
 ' The rows on screen (and the next screenful), once scrolling pauses.
@@ -186,17 +232,21 @@ sub drawRow(r as Integer)
     end if
     node.group.visible = true
     ch = m.channels[idx]
+    node.divider.visible = (idx > 0 and isTrue(ch.groupStart))
     node.name.text = localizeName(asString(ch.name))
     if node.logo.uri <> asString(ch.logo) then node.logo.uri = asString(ch.logo)
-    focusedRow = (idx = m.row)
+    focusedRow = (idx = m.row) and not m.onButton
     if focusedRow then node.name.color = "0xFFFFFFFF" else node.name.color = "0xB8C1CAFF"
 
     key = toInt(ch.streamId).ToStr()
     listings = m.schedules[key]
     windowEnd = m.windowStart + m.WINDOW
     if type(listings) <> "roArray" or listings.Count() = 0
+        ' A failed request isn't an empty guide: say so (MainScene asks
+        ' again after 1 minute, then 5).
         text = "Loading ..."
-        if m.failed.DoesExist(key) or type(listings) = "roArray" then text = "No guide information"
+        if type(listings) = "roArray" then text = "No guide information"
+        if m.failed.DoesExist(key) then text = "Couldn't load the guide; trying again shortly"
         drawCell(node.programs, m.windowStart, windowEnd, text, focusedRow, false)
         return
     end if
@@ -242,14 +292,16 @@ sub drawCell(parent as Object, start as Integer, ends as Integer, title as Strin
     label.text = title
 end sub
 
-' Above the grid: what's shown, then the focused program's title, time and
-' description.
+' Above the grid: the focused channel's set and name (beside the Channels
+' button), then its program's title, time and description.
 sub drawInfo()
-    showing = asString(m.top.title)
+    showing = ""
     p = invalid
     if m.row < m.channels.Count()
         ch = m.channels[m.row]
-        showing = showing + "   -   " + localizeName(asString(ch.name))
+        showing = localizeName(asString(ch.name))
+        names = m.top.title
+        if asString(ch.group) <> "" and type(names) = "roArray" and names.Count() > 1 then showing = asString(ch.group) + "   -   " + showing
         p = focusedProgram()
     end if
     m.top.FindNode("showing").text = showing
@@ -369,36 +421,64 @@ sub selectProgram()
 end sub
 
 ' ---------------------------------------------------------------------------
-' Channels chooser (*)
+' Channels chooser (the Channels button, or *): a checklist, ticked as now
 
 sub openChooser()
     if m.categoryIds.Count() = 0 then return
+    ticked = {}
+    if type(m.top.selected) = "roArray"
+        for each id in m.top.selected
+            ticked[asString(id)] = true
+        end for
+    end if
+    states = []
+    for each id in m.categoryIds
+        states.Push(ticked.DoesExist(id))
+    end for
+    m.chooserList.checkedState = states
+    m.top.FindNode("chooserHint").text = "OK ticks or unticks. Tick as many as you like, then choose Show at the top. Back: no change."
     m.chooser.visible = true
+    m.chooserList.jumpToItem = 0
     m.chooserList.SetFocus(true)
+    drawButton()
 end sub
 
 sub closeChooser()
     m.chooser.visible = false
-    ' Take focus off the list first: SetFocus on the screen alone can leave a
-    ' focused child (the hidden list) holding it, swallowing Up/Down.
+    ' Take focus off the lists first: SetFocus on the screen alone can leave a
+    ' focused child (a hidden list) holding it, swallowing Up/Down.
     m.chooserList.SetFocus(false)
+    m.showButton.SetFocus(false)
     m.top.SetFocus(true)
+    drawButton()
 end sub
 
-' Closed a moment after the pick, not inside this handler: the list takes
-' focus back when its own key handling finishes, and a hidden list holding
-' focus would swallow Up/Down from then on (seen on the Roku).
-sub onChooserSelected()
-    i = m.chooserList.itemSelected
-    m.pendingChoice = ""
-    if i >= 0 and i < m.categoryIds.Count() then m.pendingChoice = m.categoryIds[i]
+' Show: the ticked sets, in the list's order. Closed a moment later, not
+' inside this handler: the list takes focus back when its own key handling
+' finishes, and a hidden list holding focus would swallow Up/Down from then
+' on (seen on the Roku).
+sub onShowSelected()
+    ids = []
+    states = m.chooserList.checkedState
+    for i = 0 to m.categoryIds.Count() - 1
+        if type(states) = "roArray" and i < states.Count() and states[i] = true then ids.Push(m.categoryIds[i])
+    end for
+    if ids.Count() = 0
+        m.top.FindNode("chooserHint").text = "Tick at least one set of channels first (OK on it), then Show."
+        return
+    end if
+    m.pendingChoice = ids
     m.chooserTimer.control = "start"
 end sub
 
 sub onChooserTimer()
     closeChooser()
-    if m.pendingChoice <> "" then m.top.categoryChosen = m.pendingChoice
-    m.pendingChoice = ""
+    if m.pendingChoice <> invalid
+        m.onButton = false
+        drawButton()
+        m.top.choicesChosen = m.pendingChoice
+    end if
+    m.pendingChoice = invalid
 end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
@@ -407,8 +487,41 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         if key = "back" or key = "options"
             closeChooser()
             return true
+        else if key = "up" and m.chooserList.HasFocus() and m.chooserList.itemFocused = 0
+            m.chooserList.SetFocus(false)
+            m.showButton.SetFocus(true)
+            return true
+        else if key = "down" and m.showButton.HasFocus()
+            m.showButton.SetFocus(false)
+            m.chooserList.SetFocus(true)
+            return true
         end if
         return false
+    end if
+    ' The Channels button: Up from the top row; OK opens the chooser. Up
+    ' again (or Back) goes on to the top bar, as Up from the grid did.
+    if m.onButton
+        if key = "OK" or key = "options"
+            openChooser()
+            return true
+        else if key = "down"
+            m.onButton = false
+            drawButton()
+            redraw()
+            return true
+        else if key = "left" or key = "right"
+            return true
+        end if
+        m.onButton = false
+        drawButton()
+        redraw()
+        return false
+    end if
+    if key = "up" and m.row = 0
+        m.onButton = true
+        drawButton()
+        redraw()
+        return true
     end if
     if key = "up" and m.row > 0
         moveRow(-1)

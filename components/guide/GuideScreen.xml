@@ -4,35 +4,44 @@
   current half hour), with the focused program's details above it. Up/Down
   change channel, Left/Right move between programs (the window scrolls at its
   edges, up to the end of the loaded schedules), OK plays a program that's on
-  now, * picks the channels shown (Favorites, Local stations, a category).
+  now. The Channels button above the grid (Up from the top row, OK) or *
+  opens the chooser: a checklist of Favorites, Local stations and the live
+  categories; Show applies the ticked ones. * alone wasn't found by new
+  users (Oct 2026).
 
-  In:  channels    [{ streamId, name, logo, epgChannelId, archiveDays }]
-       title       what's shown, e.g. "Favorites" or "US | Sports"
+  In:  channels    [{ streamId, name, logo, epgChannelId, archiveDays,
+                      group (its set's name), groupId, groupStart (first of its set) }]
+       title       the sets shown, e.g. ["Favorites", "US | Sports"] (the button)
        categories  [{ id, name }] for the chooser ("favorites", "__local" first)
+       selected    IDs ticked in the chooser
        schedule    { streamId, listings: [{ start, ends, title, desc }], failed? }
                    one channel's schedule (MainGuide.brs); applied to its row
        status      message where the grid goes (loading, empty)
   Out: wantSchedules  stream IDs of the rows on screen (schedules to fetch)
        play           the channel to play (OK on a program that's on now)
-       categoryChosen chooser pick: "favorites", "__local" or a category ID
+       choicesChosen  the chooser's ticked IDs, in its order, when Show is chosen
 -->
 <component name="GuideScreen" extends="Group">
   <interface>
     <field id="channels" type="array" onChange="onChannels" />
-    <field id="title" type="string" onChange="drawInfo" />
+    <field id="title" type="array" onChange="drawButton" />
     <field id="categories" type="array" onChange="onCategories" />
+    <field id="selected" type="array" />
     <field id="schedule" type="assocarray" onChange="onSchedule" alwaysNotify="true" />
     <field id="status" type="string" onChange="onStatus" alwaysNotify="true" />
     <field id="wantSchedules" type="array" alwaysNotify="true" />
     <field id="play" type="assocarray" alwaysNotify="true" />
-    <field id="categoryChosen" type="string" alwaysNotify="true" />
+    <field id="choicesChosen" type="array" alwaysNotify="true" />
   </interface>
 
   <children>
-    <!-- Focused program: what's shown, title, time, description. -->
-    <Label id="showing" translation="[96,140]" width="1300" font="font:SmallBoldSystemFont" color="0x4DA3FFFF" />
-    <Label id="hint" translation="[1100,140]" width="724" horizAlign="right" font="font:SmallestSystemFont" color="0x6E7882FF"
-      text="OK: watch     *: channels shown" />
+    <!-- The Channels button (what's shown; OK opens the chooser), then the
+         focused channel's set and name, then the focused program. -->
+    <Poster id="buttonBg" translation="[86,128]" width="300" height="48" uri="pkg:/images/ui/rounded.9.png" blendColor="0x2A3542FF" />
+    <Label id="buttonText" translation="[106,128]" height="48" vertAlign="center" font="font:SmallBoldSystemFont" color="0xD0D6DCFF" />
+    <Label id="showing" translation="[420,128]" width="1000" height="48" vertAlign="center" font="font:SmallBoldSystemFont" color="0x4DA3FFFF" />
+    <Label id="hint" translation="[1300,128]" width="524" height="48" vertAlign="center" horizAlign="right" font="font:SmallestSystemFont" color="0x6E7882FF"
+      text="OK: watch     Up or *: change channels" />
     <Label id="progTitle" translation="[96,178]" width="1728" maxLines="1" font="font:MediumBoldSystemFont" color="0xFFFFFFFF" />
     <Label id="progTime" translation="[96,226]" width="1728" font="font:SmallSystemFont" color="0xC8D0D8FF" />
     <Label id="progDesc" translation="[96,264]" width="1728" height="64" wrap="true" maxLines="2"
@@ -45,12 +54,17 @@
     <Label id="status" translation="[96,420]" width="1728" wrap="true" font="font:MediumSystemFont" color="0xA0A8B0FF"
       text="Loading the guide ..." />
 
-    <!-- Channels chooser (*). -->
+    <!-- Channels chooser: Show at the top, then a checklist (OK ticks). -->
     <Group id="chooser" visible="false">
       <Rectangle width="1920" height="1080" color="0x000000B0" />
-      <Poster translation="[560,120]" width="800" height="860" uri="pkg:/images/ui/rounded.9.png" blendColor="0x1F2833F8" />
-      <Label translation="[600,150]" width="720" font="font:MediumBoldSystemFont" color="0xFFFFFFFF" text="Channels to show" />
-      <LabelList id="chooserList" translation="[600,210]" itemSize="[720,56]" numRows="13"
+      <Poster translation="[560,90]" width="800" height="920" uri="pkg:/images/ui/rounded.9.png" blendColor="0x1F2833F8" />
+      <Label translation="[600,116]" width="720" font="font:MediumBoldSystemFont" color="0xFFFFFFFF" text="Channels to show" />
+      <Label id="chooserHint" translation="[600,170]" width="720" wrap="true" font="font:SmallestSystemFont" color="0x8C96A0FF"
+        text="OK ticks or unticks. Tick as many as you like, then choose Show at the top. Back: no change." />
+      <LabelList id="showButton" translation="[600,262]" itemSize="[720,56]" numRows="1"
+        font="font:SmallBoldSystemFont" focusedFont="font:SmallBoldSystemFont"
+        color="0x4DA3FFFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png" />
+      <CheckList id="chooserList" translation="[600,332]" itemSize="[720,56]" numRows="11"
         font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont"
         color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png"
         vertFocusAnimationStyle="floatingFocus" />

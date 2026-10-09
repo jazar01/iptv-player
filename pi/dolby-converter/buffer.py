@@ -10,6 +10,8 @@ from memory. Nothing is written to disk.
     /b/<scheme>/<host>/<path>.m3u8    the channel, buffered
     /bc/<scheme>/<host>/<path>.m3u8   buffered, Dolby audio converted to stereo
     /bs/<id>/<seq>.ts                 a buffered segment
+    /bt/<id>/<behind>.jpg             a small picture from that many seconds before the newest
+                                      (shown while the TV jumps)
     /bk/<scheme>/<host>/<path>.m3u8   keep the recorder going (sent while paused)
     /bq/<scheme>/<host>/<path>.m3u8   stop it (the TV left the channel)
 
@@ -59,10 +61,11 @@ class UpstreamError(Exception):
 
 
 class Segment:
-    __slots__ = ("seq", "duration", "data", "disc")
+    __slots__ = ("seq", "duration", "data", "disc", "thumb")
 
     def __init__(self, seq, duration, data, disc):
         self.seq, self.duration, self.data, self.disc = seq, duration, data, disc
+        self.thumb = None                   # a small JPEG of its first picture
 
 
 class Recorder:
@@ -167,13 +170,22 @@ class Recorder:
             pieces = self.fetch_segment(url, duration)
             if self.video is None or (new_session and i == 0):
                 self.video = self.probe(pieces[0][1]) or self.video
+            added = []
             with self.lock:
                 disc = new_session and i == 0 and bool(self.segments)
                 for piece_duration, data in pieces:
-                    self.segments.append(Segment(self.next_seq, piece_duration, data, disc))
+                    added.append(Segment(self.next_seq, piece_duration, data, disc))
+                    self.segments.append(added[-1])
                     disc = False
                     self.next_seq += 1
                     self.bytes += len(data)
+            # Pictures after the pieces are in, so they don't hold up live.
+            for segment in added:
+                thumb = self.thumbnail(segment.data)
+                if thumb:
+                    with self.lock:
+                        segment.thumb = thumb
+                        self.bytes += len(thumb)
             if self.sessions == 1 and self.next_seq == len(pieces):
                 log.info("buffer: %s: segments of %ss split into %d piece(s)", self.name, duration, len(pieces))
             # (ready is set by run() once this batch is in: a player starting a
@@ -187,7 +199,7 @@ class Recorder:
         with self.lock:
             while self.bytes > share and len(self.segments) > 30:
                 old = self.segments.pop(0)
-                self.bytes -= len(old.data)
+                self.bytes -= len(old.data) + len(old.thumb or b"")
                 if old.disc:
                     self.disc_seq += 1
             if self.segments and self.segments[0].disc:
@@ -206,43 +218,38 @@ class Recorder:
             return response.read(4 * 1024 * 1024).decode("utf-8", "replace"), response.geturl()
 
     def fetch_segment(self, url, duration):
-        """The provider's segment as [(seconds, data)]: split into PIECE-second
-        pieces at keyframes (a stream with keyframes further apart gives
-        longer ones), with the audio converted on the way when asked."""
         with self.open(url) as response:
             data = response.read(64 * 1024 * 1024)
-        if self.convert:
-            audio = ["-map", "0:a:0?", "-c:a", "aac", "-b:a", "192k", "-ac", "2"]
-        else:
-            audio = ["-map", "0:a?", "-c:a", "copy"]
-        # ffmpeg's HLS writer cuts from the segment's own first timestamp (the
-        # segment writer counts from zero, so with the provider's timestamps it
-        # cut at every keyframe); -copyts keeps them continuous across
-        # segments. The pieces go to /tmp, which is memory on this Pi.
-        with tempfile.TemporaryDirectory(prefix="dixie-piece-") as folder:
+        return split_segment(self.ffmpeg, data, duration, self.convert)
+
+    def thumbnail(self, data):
+        """A 320-pixel JPEG of the piece's first picture (a keyframe: pieces
+        start on one), about 10-15 KB: 25 MB an hour of buffer."""
+        try:
             result = subprocess.run([
-                self.ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin",
-                "-fflags", "+genpts+discardcorrupt", "-i", "pipe:0",
-                "-map", "0:v?", "-c:v", "copy", *audio,
-                "-copyts", "-muxdelay", "0", "-muxpreload", "0",
-                "-f", "hls", "-hls_time", str(PIECE), "-hls_list_size", "0",
-                "-hls_segment_filename", os.path.join(folder, "p%04d.ts"), os.path.join(folder, "list.m3u8"),
-            ], input=data, capture_output=True, timeout=60)
-            pieces = []
-            if result.returncode == 0:
-                try:
-                    with open(os.path.join(folder, "list.m3u8"), encoding="utf-8") as f:
-                        _, listed = parse_media_playlist(f.read(), folder + "/")
-                    for seconds, path in listed:
-                        with open(path, "rb") as f:
-                            pieces.append((seconds, f.read()))
-                except OSError:
-                    pieces = []
-        if pieces and all(piece for _, piece in pieces):
-            return pieces
-        if self.convert:
-            raise RuntimeError("ffmpeg failed: " + result.stderr.decode("utf-8", "replace").strip()[-200:])
-        return [(duration, data)]           # can't split it: kept whole
+                self.ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-i", "pipe:0",
+                "-map", "0:v:0", "-frames:v", "1", "-vf", "scale=320:-2", "-q:v", "7", "-f", "mjpeg", "pipe:1",
+            ], input=data, capture_output=True, timeout=10)
+        except Exception:
+            return None
+        return result.stdout if result.returncode == 0 and result.stdout else None
+
+    def thumb_at(self, behind):
+        """The picture of the piece `behind` seconds before the newest (the
+        TV's player timeline ends at the newest piece too), or the nearest
+        one that has a picture."""
+        with self.lock:
+            segments = self.segments
+            total, index = 0.0, 0
+            for index in range(len(segments) - 1, -1, -1):
+                total += float(segments[index].duration or 0)
+                if total >= behind:
+                    break
+            for step in range(0, 6):
+                for i in (index - step, index + step):
+                    if 0 <= i < len(segments) and segments[i].thumb:
+                        return segments[i].thumb
+        return None
 
     def probe(self, data):
         """The picture's size and frame rate (Roku's player doesn't report
@@ -298,7 +305,7 @@ class Recorder:
             target = piece_target(self.segments)
             seconds = round(sum(float(s.duration or 0) for s in self.segments))
         gap = max(3 * target + 2, math.ceil(self.target) + 4)
-        return {"ok": True, "target": target, "liveGap": gap, "seconds": seconds, "video": self.video or {}}
+        return {"ok": True, "id": self.id, "target": target, "liveGap": gap, "seconds": seconds, "video": self.video or {}}
 
     def summary(self):
         with self.lock:
@@ -334,6 +341,45 @@ def summaries():
     with recorders_lock:
         active = list(recorders.values())
     return [r.summary() for r in active]
+
+
+def split_segment(ffmpeg, data, duration, convert):
+    """A provider segment as [(seconds, data)]: split into PIECE-second pieces
+    at keyframes (a stream with keyframes further apart gives longer ones),
+    with the audio converted on the way when asked. Also used for the
+    archive (archive.py), whose segments are a minute long."""
+    if convert:
+        audio = ["-map", "0:a:0?", "-c:a", "aac", "-b:a", "192k", "-ac", "2"]
+    else:
+        audio = ["-map", "0:a?", "-c:a", "copy"]
+    # ffmpeg's HLS writer cuts from the segment's own first timestamp (the
+    # segment writer counts from zero, so with the provider's timestamps it
+    # cut at every keyframe); -copyts keeps them continuous across
+    # segments. The pieces go to /tmp, which is memory on this Pi.
+    with tempfile.TemporaryDirectory(prefix="dixie-piece-") as folder:
+        result = subprocess.run([
+            ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin",
+            "-fflags", "+genpts+discardcorrupt", "-i", "pipe:0",
+            "-map", "0:v?", "-c:v", "copy", *audio,
+            "-copyts", "-muxdelay", "0", "-muxpreload", "0",
+            "-f", "hls", "-hls_time", str(PIECE), "-hls_list_size", "0",
+            "-hls_segment_filename", os.path.join(folder, "p%04d.ts"), os.path.join(folder, "list.m3u8"),
+        ], input=data, capture_output=True, timeout=120)
+        pieces = []
+        if result.returncode == 0:
+            try:
+                with open(os.path.join(folder, "list.m3u8"), encoding="utf-8") as f:
+                    _, listed = parse_media_playlist(f.read(), folder + "/")
+                for seconds, path in listed:
+                    with open(path, "rb") as f:
+                        pieces.append((seconds, f.read()))
+            except OSError:
+                pieces = []
+    if pieces and all(piece for _, piece in pieces):
+        return pieces
+    if convert:
+        raise RuntimeError("ffmpeg failed: " + result.stderr.decode("utf-8", "replace").strip()[-200:])
+    return [(duration, data)]           # can't split it: kept whole
 
 
 def piece_target(segments):

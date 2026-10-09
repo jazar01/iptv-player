@@ -234,6 +234,7 @@ function getSettings() as Object
         showScores: isTrue(m.doc.settings.showScores)
         dolbyConverter: asString(m.doc.settings.dolbyConverter)     ' "address:port" of the Pi, "" = off
         liveBuffer: (m.doc.settings.liveBuffer = invalid or isTrue(m.doc.settings.liveBuffer))    ' live channels through the Pi's buffer
+        guideChoices: m.doc.settings.guideChoices   ' the Guide's ticked channel sets (array of IDs), or invalid
         serverTimezone: asString(m.doc.settings.serverTimezone)     ' last seen, for timeshift
         householdAccountAt: toInt(m.doc.settings.householdAccountAt)    ' the household account last taken (or refused)
     }

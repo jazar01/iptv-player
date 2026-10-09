@@ -49,9 +49,10 @@
        their guideFile (saved to cachefs: by ApiTask for MainScene).
   In:  localsRequest { id, market }
   Out: localsResult  { id, market, ready, items: [get_live_streams-shaped items] } (ABC, CBS, NBC, FOX)
-  In:  guideRequest  { id, categoryId }   the Guide: live categories, and one category's channels
-  Out: guideResult   { id, categoryId, ready, categories: [{ id, name }],
-                       channels: [{ streamId, name, epgChannelId, archiveDays, logo }] }
+  In:  guideRequest  { id, categoryIds: [category ID or "__local"], market }   the Guide's channel sets
+  Out: guideResult   { id, ready, categories: [{ id, name }] (all live categories),
+                       sets: { "<category ID or __local>": [{ streamId, name, epgChannelId, archiveDays, logo }] } }
+                     ready is false until the live list (and, for __local, the category list) is in
   In:  iconsRequest  { id, streamIds: [] }   logos for Home channel cards
   Out: iconsResult   { id, ready, icons: { "<streamId>": url or "" } }
   In:  infoRequest   { id, streamId, market, similar }   channel info (similar: also find
