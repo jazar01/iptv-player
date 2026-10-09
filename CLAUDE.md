@@ -309,5 +309,5 @@ optional record marks joined without a schema change).
   provider sends no episode descriptions for some series.
 - Not yet tried on a Roku: a real provider renumbering, reaching 90% of an
   episode (a movie at 90% worked, Oct 9), the connection-limit message, the usage-ordering effect.
-- Next: nothing planned. Moving the Pi to its new SD card with `rpi-clone`
-  when it arrives.
+- Next: nothing planned. The Pi runs from its Max Endurance card (Oct 9,
+  2026; the old card is a spare) with the Active Cooler fitted.
