@@ -22,6 +22,9 @@ sub openMovie(item as Object)
     m.movieScreen.onWatchList = m.store.callFunc("isOnWatchList", item.itemId)
     pushOverlay(m.movieScreen)
     id = toInt(item.itemId)
+    ext = asString(item.ext)
+    if ext = "" then ext = "mp4"
+    requestMediaInfo("movie", id, ext)
     sendRequest({
         id: "movieInfo"
         action: "get_vod_info"
@@ -77,6 +80,33 @@ function movieDetails(data as Object) as Object
     d.year = Val(Left(firstText(info, ["releasedate", "release_date", "year"]), 4), 10)
     return d
 end function
+
+' What's inside a movie or episode file (picture, audio tracks, subtitles),
+' for its details page: the Pi reads the start of the file
+' (pi/dolby-converter/probe.py). The provider's own figures aren't used: for
+' an episode it gave the cover picture in the file (a 3840x2160 JPEG) as the
+' video, and Roku's player never reports the picture size. Only with a Dolby
+' converter set and answering; otherwise the line is left out.
+sub requestMediaInfo(kind as String, id as Integer, ext as String)
+    if converterAddress() = "" or converterDown() then return
+    path = "movie"
+    if kind = "episode" then path = "series"
+    url = streamUrl(path, id, ext)
+    p = Instr(1, url, "://")
+    if p = 0 then return
+    sendRequest({ id: "mediaInfo", url: "http://" + converterAddress() + "/p/" + Left(url, p - 1) + "/" + Mid(url, p + 3), timeoutMs: 20000, context: { kind: kind, id: id } })
+end sub
+
+sub onMediaInfo(res as Object)
+    if not res.ok or type(res.data) <> "roAssociativeArray" or not isTrue(res.data.ok) then return
+    text = asString(res.data.text)
+    id = toInt(res.context.id)
+    if res.context.kind = "movie"
+        if m.movieScreen <> invalid and m.movieItem <> invalid and toInt(m.movieItem.itemId) = id then m.movieScreen.media = text
+    else if m.seriesScreen <> invalid
+        m.seriesScreen.media = { id: id, text: text }
+    end if
+end sub
 
 ' Play / Resume / Start over: the page stays underneath, so Back from the
 ' player returns to it.

@@ -39,6 +39,10 @@
   node's own controls work; Back returns to live. An archive stretch that ends
   while more has been recorded loads the next stretch; one that never plays
   shows a note and rejoins live.
+
+  Through the Pi's live buffer (content.buffered) the keys work within the
+  buffer instead ("live" / "held"; bufferKey); going back past its start on
+  a channel with an archive continues in the archive ("timeshift").
 -->
 <component name="PlayerScreen" extends="Group">
   <interface>
@@ -61,6 +65,11 @@
     <field id="copyChosen" type="assocarray" alwaysNotify="true" />
     <field id="errorCopiesLabel" type="string" />
     <field id="errorCopies" type="array" onChange="onErrorCopies" />
+    <!-- Live buffer: how far behind the Pi's newest piece to play at live, in seconds (its keep-alive answer). -->
+    <field id="liveGap" type="integer" onChange="onLiveGap" alwaysNotify="true" />
+    <!-- Live buffer: the picture as the Pi measured it ("Full HD 1920x1080, 60 fps"),
+         for the channel info panel (Roku's player doesn't report it for these streams). -->
+    <field id="streamPicture" type="string" />
   </interface>
 
   <children>

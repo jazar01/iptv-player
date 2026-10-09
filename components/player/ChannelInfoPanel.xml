@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-  Channel info: a side panel with the channel's logo, details, what's coming
-  up and its other copies (same guide ID). Shown over the player (OK twice)
+  Channel info: a side panel with the channel's logo, details, what's playing
+  now (the program, then the stream's details while watching) and its other copies (same guide ID). Shown over the player (OK twice)
   and over Live TV (* -> Channel info). Content comes from MainScene.
 
-  In:  info      { name, logo, facts: [line], programs: [line], programsNote,
+  In:  info      { name, logo, facts: [line], programs: [the program on now], programsNote,
                    nowDescription, copies: [{ streamId, name, epgChannelId, archiveDays }] }
        playback  { lines: [line] }  live stream details, while watching
        dim       true to darken the screen behind (over Live TV)
@@ -39,10 +39,9 @@
       color="0xFFD36BFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png" />
     <Label id="facts" width="680" wrap="true" font="font:SmallSystemFont" color="0xD0D6DCFF" lineSpacing="2" />
     <Label id="playbackHead" width="680" font="font:SmallBoldSystemFont" color="0x4DA3FFFF" text="Playing now" />
-    <Label id="playbackLines" width="680" wrap="true" font="font:SmallSystemFont" color="0xD0D6DCFF" lineSpacing="2" />
-    <Label id="programsHead" width="680" font="font:SmallBoldSystemFont" color="0x4DA3FFFF" text="Coming up" />
-    <Label id="programs" width="680" wrap="true" maxLines="4" font="font:SmallSystemFont" color="0xD0D6DCFF" lineSpacing="2" />
+    <Label id="programs" width="680" wrap="true" maxLines="2" font="font:SmallBoldSystemFont" color="0xE6EAEEFF" lineSpacing="2" />
     <Label id="nowDesc" width="680" wrap="true" maxLines="2" font="font:SmallestSystemFont" color="0xA0A8B0FF" lineSpacing="2" />
+    <Label id="playbackLines" width="680" wrap="true" font="font:SmallSystemFont" color="0xD0D6DCFF" lineSpacing="2" />
     <Label id="copiesHead" width="680" font="font:SmallBoldSystemFont" color="0x4DA3FFFF" text="Other copies   (OK to watch)" />
     <LabelList id="copies" itemSize="[680,44]" numRows="4"
       font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont"

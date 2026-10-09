@@ -9,7 +9,9 @@
        focusEpisodeId  episode to focus when info arrives (the series' current one)
        isFavorite  whether the series is in Favorite Series (shown in the title)
        status    message while loading or on error
+       media     { id, text } what's in an episode's file, from the Pi (shown with its details)
   Out: selected  episode summary (see episodeSummary)
+       mediaWanted  { id, ext } for the episode focused a moment (its media isn't known yet)
        options   same, when * is pressed on an episode
        favoriteToggle  { itemId, name, year } when * is pressed on the seasons
 -->
@@ -21,6 +23,8 @@
     <!-- alwaysNotify: setting "" must hide the initial "Loading" text even
          though the field already holds "". -->
     <field id="status" type="string" onChange="onStatus" alwaysNotify="true" />
+    <field id="media" type="assocarray" onChange="onMedia" />
+    <field id="mediaWanted" type="assocarray" alwaysNotify="true" />
     <field id="selected" type="assocarray" alwaysNotify="true" />
     <field id="options" type="assocarray" alwaysNotify="true" />
     <field id="isFavorite" type="boolean" onChange="drawTitle" />
@@ -57,6 +61,8 @@
     <Label translation="[96,1030]" width="1728" font="font:SmallestSystemFont" color="0x6E7882FF"
       text="* on an episode: mark it watched or unwatched.     * on the seasons: add to or remove from Favorite Series." />
 
+    <!-- Asks for the focused episode's media once focus rests there. -->
+    <Timer id="mediaTimer" duration="0.8" />
     <Label id="status" translation="[460,390]" width="1360" wrap="true"
       font="font:MediumSystemFont" color="0xA0A8B0FF" text="Loading episodes ..." />
   </children>

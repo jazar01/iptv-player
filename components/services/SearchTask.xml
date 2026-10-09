@@ -28,6 +28,15 @@
        Only items whose IDs are missing from the loaded catalog are matched.
   selfTest: set true to run the matching self-test once both lists are loaded.
 
+  A movie or series category for Movies / Series, from the full lists (much
+  faster than the provider's list: Documentaries is 6,801 movies, 2.7 MB):
+  In:  categoryRequest { id, kind: "movie" | "series", categoryId }
+  Out: categoryResult  { id, kind, categoryId, ready, items: [ provider-shaped items with
+                         only what a list row needs: stream_id or series_id, name,
+                         container_extension, stream_icon or cover, year ] }
+       Same items in the same order as the provider's category list (checked on 24
+       categories, Oct 9, 2026). ready false until that kind's list is indexed.
+
   My Teams (MyTeams.brs):
   In:  gamesRequest { id, teams: [{ id, name, aliases[], exclusions[], sports[] }], withGuide, market }
        market: "GA|Atlanta" adds that market's local stations to the networks.
@@ -79,6 +88,8 @@
     <field id="iconsRequest" type="assocarray" alwaysNotify="true" />
     <field id="iconsResult" type="assocarray" alwaysNotify="true" />
     <field id="infoRequest" type="assocarray" alwaysNotify="true" />
+    <field id="categoryRequest" type="assocarray" alwaysNotify="true" />
+    <field id="categoryResult" type="assocarray" alwaysNotify="true" />
     <field id="infoResult" type="assocarray" alwaysNotify="true" />
   </interface>
 

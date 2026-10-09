@@ -224,6 +224,37 @@ sub onWantCategory(event as Object)
         showWatchListCategory()
         return
     end if
+    ' Movies and series come from the search index's full lists, which is
+    ' much faster than the provider's category list (onCategoryResult).
+    if kind = "movie" or kind = "series"
+        m.categoryAsked = CreateObject("roTimespan")
+        searchSend("categoryRequest", { id: "catalog", kind: kind, categoryId: id })
+        return
+    end if
+    requestCategoryItems(kind, id)
+end sub
+
+' A movie or series category from the search index. Until that kind's full
+' list is indexed (first launch), the provider's category list instead.
+' The full lists are refreshed daily, so a movie added today may show in
+' Search and its category from tomorrow.
+sub onCategoryResult(event as Object)
+    result = event.GetData()
+    kind = asString(result.kind)
+    id = asString(result.categoryId)
+    screen = catalogScreen(kind)
+    if screen = invalid or result.id <> "catalog" then return
+    if not isTrue(result.ready)
+        requestCategoryItems(kind, id)
+        return
+    end if
+    state = catalogState(kind)
+    state.itemsShown[id] = true
+    screen.items = { categoryId: id, items: result.items }
+    if m.categoryAsked <> invalid then print "[main] "; kind; " category "; id; ": "; result.items.Count(); " items shown after "; m.categoryAsked.TotalMilliseconds(); " ms"
+end sub
+
+sub requestCategoryItems(kind as String, id as String)
     ' Shown-for-this-request: a cached copy delivered now counts; an earlier
     ' visit's success doesn't (a failed reload must show its error to retry).
     state = catalogState(kind)
@@ -316,6 +347,7 @@ sub openSeries(item as Object)
     m.seriesScreen.ObserveField("selected", "onEpisodeSelected")
     m.seriesScreen.ObserveField("options", "onEpisodeOptions")
     m.seriesScreen.ObserveField("favoriteToggle", "onSeriesFavoriteToggle")
+    m.seriesScreen.ObserveField("mediaWanted", "onEpisodeMediaWanted")
     m.seriesScreenId = seriesId
     m.seriesScreen.isFavorite = m.store.callFunc("isSeriesFavorite", seriesId)
     progress = m.store.callFunc("getSeriesProgress", seriesId)
@@ -504,6 +536,13 @@ end function
 
 sub onSeriesFavoriteToggle(event as Object)
     toggleSeriesFavorite(event.GetData())
+end sub
+
+sub onEpisodeMediaWanted(event as Object)
+    ep = event.GetData()
+    ext = asString(ep.ext)
+    if ext = "" then ext = "mp4"
+    requestMediaInfo("episode", toInt(ep.id), ext)
 end sub
 
 sub onEpisodeSelected(event as Object)

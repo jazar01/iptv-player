@@ -8,6 +8,9 @@ sub init()
     m.epPlot = m.top.FindNode("epPlot")
     m.backdrop.ObserveField("loadStatus", "onBackdropStatus")
     m.episodeList.ObserveField("itemFocused", "onEpisodeFocused")
+    m.media = {}            ' episode ID -> what's in its file
+    m.mediaTimer = m.top.FindNode("mediaTimer")
+    m.mediaTimer.ObserveField("fire", "onMediaTimer")
     m.seasons = []
     m.shownSeason = -1
     m.inEpisodes = true
@@ -151,7 +154,8 @@ sub onBackdropStatus()
     m.backdrop.visible = (m.backdrop.uri <> "" and m.backdrop.loadStatus = "ready")
 end sub
 
-' Below the list: the focused episode's air date, length and description.
+' Below the list: the focused episode's air date, length, what's in its
+' file and description.
 sub onEpisodeFocused()
     i = m.episodeList.itemFocused
     content = m.episodeList.content
@@ -167,12 +171,39 @@ sub onEpisodeFocused()
             if plot <> "" then plot += "     "
             plot += f
         end for
+        ' Then what's in the file, from the Pi (onMedia), on its own line.
+        media = m.media[node.episodeId.ToStr()]
+        if media <> invalid and media <> ""
+            if plot <> "" then plot += Chr(10)
+            plot += media
+        end if
         if node.plot <> ""
             if plot <> "" then plot += Chr(10)
             plot += node.plot
         end if
     end if
     m.epPlot.text = plot
+    m.mediaTimer.control = "stop"
+    m.mediaTimer.control = "start"
+end sub
+
+' Focus rested on an episode: ask for its media (once per episode).
+sub onMediaTimer()
+    i = m.episodeList.itemFocused
+    content = m.episodeList.content
+    if content = invalid or i < 0 or i >= content.GetChildCount() then return
+    node = content.GetChild(i)
+    key = node.episodeId.ToStr()
+    if m.media.DoesExist(key) then return
+    m.media[key] = invalid
+    m.top.mediaWanted = { id: node.episodeId, ext: node.ext }
+end sub
+
+sub onMedia()
+    media = m.top.media
+    if type(media) <> "roAssociativeArray" then return
+    m.media[toInt(media.id).ToStr()] = asString(media.text)
+    onEpisodeFocused()
 end sub
 
 ' "The Last Kingdom (2015) - S01E01 - Episode 1" -> "Episode 1", using the

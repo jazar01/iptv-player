@@ -38,7 +38,9 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   downloads the full lists to `cachefs:/catalog/all_*.json` (`saveOnly`,
   `maxAgeSeconds` one day); SearchTask indexes them from disk, so big lists
   never cross the render thread. Also publishes which channels have a
-  catch-up archive, and runs channel matching after each (re)index.
+  catch-up archive, runs channel matching after each (re)index, and
+  serves Movies and Series categories from those lists (`categoryRequest`;
+  the provider's list for Documentaries alone is 2.7 MB).
 - `components/services/ChannelMatch.brs`: shared re-matching rules (guide
   ID, then name; series by name and year). `match_selftest=1` in the
   manifest runs its on-device self-test at launch; take it out again after.
@@ -126,7 +128,9 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   (`buffer.py`): with Settings -> Live buffer on, every live channel plays
   through the Pi, which keeps it in memory since tuning in; PlayerScreen's
   `bufferKey` handles pause, jumps (held keys repeat) and Fast-forward to
-  live (requirements: "Live buffer on the home Pi").
+  live (requirements: "Live buffer on the home Pi"). `probe.py` (`/p/`)
+  reads the start of a movie or episode file for its details page
+  (picture, audio tracks, subtitles; `requestMediaInfo` in MainMovies.brs).
 
 ## Conventions
 
@@ -200,6 +204,11 @@ Deploy to every Roku listed in `$LocalRokus` in `scripts/deploy.local.ps1`
 (packages once, continues past failures, prints a summary):
 
     .\scripts\deploy.ps1 -All
+
+An upload that can't connect ("curl: (7)", port 80 closed) while the Roku
+answers on 8060: restart that Roku. Its developer installer stopped
+answering after its address changed (the Family Room, Oct 9, 2026, once
+DHCP reservations were set).
 
 Roku IP and developer password: `-RokuIp`/`-Password`, then
 `$env:ROKU_IP`/`$env:ROKU_DEV_PASSWORD`, then `scripts/deploy.local.ps1`
@@ -284,7 +293,9 @@ optional record marks joined without a schema change).
   TVs (Oct 9); not yet tried with the archive.
 - Live buffer on the Pi (Oct 8, 2026): pause, jumps and back to live
   checked on the Basement TV; deployed to the Family Room and Deck (Oct 9),
-  not yet tried there or with two TVs buffering at once.
+  not yet tried there or with two TVs buffering at once. 2-second pieces,
+  the Pi's live gap and the measured picture size checked on the Basement
+  TV (Oct 9); the other TVs need a deploy for them.
 - Known limits: HD timeshift archives exceed this Roku's video buffer; some
   channels sometimes send an AAC variant no Roku decodes (Tennis Channel 2;
   it played again on Oct 8, 2026, and the Pi converter, which re-encodes the
@@ -293,6 +304,7 @@ optional record marks joined without a schema change).
   provider sends no episode descriptions for some series.
 - Not yet tried on a Roku: a real provider renumbering, reaching 90% of an
   episode (a movie at 90% worked, Oct 9), the connection-limit message, the usage-ordering effect.
-- Next: nothing planned. Ideas: 2-second segments on the Pi for finer
-  live-buffer jumps; rewinding past the buffer's start into the provider's
-  archive. Moving the Pi to its new SD card with `rpi-clone` when it arrives.
+- Next: nothing planned. Ideas: scene thumbnails while jumping in the live
+  buffer; the Pi cutting the provider's archive into pieces so HD archives
+  fit this Roku. Moving the Pi to its new SD card with `rpi-clone` when it
+  arrives.

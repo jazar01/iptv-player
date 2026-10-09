@@ -20,6 +20,8 @@
     <field id="details" type="assocarray" onChange="draw" />
     <field id="position" type="integer" onChange="drawButtons" />
     <field id="status" type="string" onChange="draw" alwaysNotify="true" />
+    <!-- What's in the file ("Full HD 1920x1080, 24 fps, H.264   -   Audio: ..."), from the Pi. -->
+    <field id="media" type="string" onChange="drawMedia" />
     <field id="onWatchList" type="boolean" onChange="drawButtons" />
     <field id="play" type="assocarray" alwaysNotify="true" />
     <field id="watchListToggle" type="boolean" alwaysNotify="true" />
@@ -38,8 +40,10 @@
     <Label id="meta" translation="[560,250]" width="1260" font="font:SmallSystemFont" color="0xC8D0D8FF" />
     <Label id="plot" translation="[560,310]" width="1180" wrap="true" maxLines="7" lineSpacing="4"
       font="font:SmallSystemFont" color="0xE6EAEEFF" />
-    <Label id="people" translation="[560,620]" width="1180" wrap="true" maxLines="3" lineSpacing="4"
+    <Label id="people" translation="[560,620]" width="1180" wrap="true" maxLines="2" lineSpacing="4"
       font="font:SmallestSystemFont" color="0x8C96A0FF" />
+    <Label id="media" translation="[560,706]" width="1260" wrap="true" maxLines="2" lineSpacing="2"
+      font="font:SmallestSystemFont" color="0xA8C4E0FF" />
     <LabelList id="buttons" translation="[560,780]" itemSize="[520,64]" numRows="3"
       font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont"
       color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png"

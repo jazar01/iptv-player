@@ -25,8 +25,12 @@ one starts and its newest segment follows a discontinuity marker.
 """
 
 import hashlib
+import json
 import logging
+import math
+import os
 import subprocess
+import tempfile
 import threading
 import time
 import urllib.error
@@ -38,7 +42,10 @@ log = logging.getLogger("converter")
 IDLE = 45               # seconds without any request before a recorder stops
 FIRST_WAIT = 20         # seconds a new channel's first playlist waits for video
 UPSTREAM_TIMEOUT = 20
+POLL = 2                # seconds between checks of the provider's playlist
 BUDGET = 6000 * 1024 * 1024
+PIECE = 2               # seconds: each provider segment is split this fine, so
+                        # the TV's jumps land within 2 s and restart sooner
 
 recorders = {}          # original URL -> Recorder
 recorders_lock = threading.Lock()
@@ -73,8 +80,9 @@ class Recorder:
         self.bytes = 0
         self.next_seq = 0
         self.disc_seq = 0
-        self.target = 10
+        self.target = 10                     # the provider's segment length
         self.final = None                    # redirected playlist of this session
+        self.video = None                    # {width, height, fps}, measured per provider session
         self.sessions = 0
         self.seen = set()
         self.used = time.time()
@@ -112,7 +120,9 @@ class Recorder:
                     self.error = e
                     break
             self.ready.set() if self.segments else None
-            time.sleep(min(5, max(2, self.target / 2)))
+            # Every 2 s: a new segment is picked up 1 s after it appears on
+            # average (5 s left the picture 2-3 s further behind live).
+            time.sleep(POLL)
         self.stopped = True
         self.ready.set()
         with recorders_lock:
@@ -154,11 +164,18 @@ class Recorder:
             if self.stopped:
                 return
             self.seen.add(url)
-            data = self.fetch_segment(url)
+            pieces = self.fetch_segment(url, duration)
+            if self.video is None or (new_session and i == 0):
+                self.video = self.probe(pieces[0][1]) or self.video
             with self.lock:
-                self.segments.append(Segment(self.next_seq, duration, data, new_session and i == 0 and bool(self.segments)))
-                self.next_seq += 1
-                self.bytes += len(data)
+                disc = new_session and i == 0 and bool(self.segments)
+                for piece_duration, data in pieces:
+                    self.segments.append(Segment(self.next_seq, piece_duration, data, disc))
+                    disc = False
+                    self.next_seq += 1
+                    self.bytes += len(data)
+            if self.sessions == 1 and self.next_seq == len(pieces):
+                log.info("buffer: %s: segments of %ss split into %d piece(s)", self.name, duration, len(pieces))
             # (ready is set by run() once this batch is in: a player starting a
             # live stream wants a few segments, not one)
         self.trim()
@@ -168,7 +185,7 @@ class Recorder:
         with recorders_lock:
             share = BUDGET // max(1, len(recorders))
         with self.lock:
-            while self.bytes > share and len(self.segments) > 6:
+            while self.bytes > share and len(self.segments) > 30:
                 old = self.segments.pop(0)
                 self.bytes -= len(old.data)
                 if old.disc:
@@ -188,20 +205,63 @@ class Recorder:
         with self.open(url) as response:
             return response.read(4 * 1024 * 1024).decode("utf-8", "replace"), response.geturl()
 
-    def fetch_segment(self, url):
+    def fetch_segment(self, url, duration):
+        """The provider's segment as [(seconds, data)]: split into PIECE-second
+        pieces at keyframes (a stream with keyframes further apart gives
+        longer ones), with the audio converted on the way when asked."""
         with self.open(url) as response:
             data = response.read(64 * 1024 * 1024)
-        if not self.convert:
-            return data
-        result = subprocess.run([
-            self.ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin",
-            "-fflags", "+genpts+discardcorrupt", "-i", "pipe:0",
-            "-map", "0:v?", "-map", "0:a:0?", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ac", "2",
-            "-copyts", "-muxdelay", "0", "-muxpreload", "0", "-f", "mpegts", "pipe:1",
-        ], input=data, capture_output=True, timeout=60)
-        if result.returncode != 0 or not result.stdout:
+        if self.convert:
+            audio = ["-map", "0:a:0?", "-c:a", "aac", "-b:a", "192k", "-ac", "2"]
+        else:
+            audio = ["-map", "0:a?", "-c:a", "copy"]
+        # ffmpeg's HLS writer cuts from the segment's own first timestamp (the
+        # segment writer counts from zero, so with the provider's timestamps it
+        # cut at every keyframe); -copyts keeps them continuous across
+        # segments. The pieces go to /tmp, which is memory on this Pi.
+        with tempfile.TemporaryDirectory(prefix="dixie-piece-") as folder:
+            result = subprocess.run([
+                self.ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin",
+                "-fflags", "+genpts+discardcorrupt", "-i", "pipe:0",
+                "-map", "0:v?", "-c:v", "copy", *audio,
+                "-copyts", "-muxdelay", "0", "-muxpreload", "0",
+                "-f", "hls", "-hls_time", str(PIECE), "-hls_list_size", "0",
+                "-hls_segment_filename", os.path.join(folder, "p%04d.ts"), os.path.join(folder, "list.m3u8"),
+            ], input=data, capture_output=True, timeout=60)
+            pieces = []
+            if result.returncode == 0:
+                try:
+                    with open(os.path.join(folder, "list.m3u8"), encoding="utf-8") as f:
+                        _, listed = parse_media_playlist(f.read(), folder + "/")
+                    for seconds, path in listed:
+                        with open(path, "rb") as f:
+                            pieces.append((seconds, f.read()))
+                except OSError:
+                    pieces = []
+        if pieces and all(piece for _, piece in pieces):
+            return pieces
+        if self.convert:
             raise RuntimeError("ffmpeg failed: " + result.stderr.decode("utf-8", "replace").strip()[-200:])
-        return result.stdout
+        return [(duration, data)]           # can't split it: kept whole
+
+    def probe(self, data):
+        """The picture's size and frame rate (Roku's player doesn't report
+        them for this provider's streams)."""
+        ffprobe = os.path.join(os.path.dirname(self.ffmpeg), "ffprobe")
+        try:
+            result = subprocess.run([ffprobe, "-v", "error", "-select_streams", "v:0",
+                                     "-show_entries", "stream=width,height,avg_frame_rate", "-of", "json", "pipe:0"],
+                                    input=data, capture_output=True, timeout=20)
+            stream = json.loads(result.stdout or b"{}").get("streams", [{}])[0]
+            num, _, den = str(stream.get("avg_frame_rate", "0/1")).partition("/")
+            fps = round(float(num) / float(den or 1)) if float(den or 1) else 0
+            video = {"width": int(stream.get("width") or 0), "height": int(stream.get("height") or 0), "fps": fps}
+            if video["height"] > 0:
+                log.info("buffer: %s: picture %dx%d, %d fps", self.name, video["width"], video["height"], fps)
+                return video
+        except Exception as e:
+            log.info("buffer: %s: couldn't measure the picture (%s)", self.name, describe(e))
+        return None
 
     # -- serving --------------------------------------------------------------
 
@@ -210,7 +270,8 @@ class Recorder:
         with self.lock:
             segments = list(self.segments)
             first = segments[0].seq if segments else self.next_seq
-            lines = ["#EXTM3U", "#EXT-X-VERSION:3", f"#EXT-X-TARGETDURATION:{int(self.target) + 1}",
+            target = piece_target(segments)
+            lines = ["#EXTM3U", "#EXT-X-VERSION:3", f"#EXT-X-TARGETDURATION:{target}",
                      f"#EXT-X-MEDIA-SEQUENCE:{first}", f"#EXT-X-DISCONTINUITY-SEQUENCE:{self.disc_seq}"]
         for s in segments:
             if s.disc:
@@ -225,6 +286,19 @@ class Recorder:
                 if s.seq == seq:
                     return s.data
         return None
+
+    def status(self):
+        """For the TV's keep-alive: how far behind the newest piece to play
+        at live (liveGap). As close as is safe: new pieces come a whole
+        provider segment (10 s) at a time, a second or two after the
+        provider lists it, so the player needs that much plus a little
+        left when the next arrives; and Roku's player wants about three
+        pieces in hand."""
+        with self.lock:
+            target = piece_target(self.segments)
+            seconds = round(sum(float(s.duration or 0) for s in self.segments))
+        gap = max(3 * target + 2, math.ceil(self.target) + 4)
+        return {"ok": True, "target": target, "liveGap": gap, "seconds": seconds, "video": self.video or {}}
 
     def summary(self):
         with self.lock:
@@ -260,6 +334,12 @@ def summaries():
     with recorders_lock:
         active = list(recorders.values())
     return [r.summary() for r in active]
+
+
+def piece_target(segments):
+    """The playlist's target duration: the longest piece, rounded up."""
+    longest = max((float(s.duration or 0) for s in segments), default=PIECE)
+    return max(1, math.ceil(longest))
 
 
 def describe(e):

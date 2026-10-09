@@ -62,7 +62,9 @@ sub onInfoResult(event as Object)
     deliverChannelInfo()
 end sub
 
-' get_simple_data_table -> the next 4 programs, from what's on now.
+' get_simple_data_table -> the program on now, with its times and
+' description (the panel shows it under Playing now; what's next is on the
+' player's overlay).
 sub onChannelGuide(res as Object)
     if m.infoFor = invalid or toInt(res.context.streamId) <> m.infoFor.streamId then return
     m.infoFor.programs = []
@@ -75,22 +77,15 @@ sub onChannelGuide(res as Object)
         for each listing in res.data.epg_listings
             if type(listing) = "roAssociativeArray" and toInt(listing.stop_timestamp) > now and toInt(listing.start_timestamp) > 0 then upcoming.Push(listing)
         end for
-        upcoming.SortBy("start_timestamp")
-        today = formatDayTime(now).Split(" ")[0]
         for each listing in upcoming
-            if m.infoFor.programs.Count() < 4
-                start = toInt(listing.start_timestamp)
-                when = formatClock(start)
-                if start <= now
-                    when = "Now"
-                    m.infoFor.nowDescription = guideTitle(listing.description)
-                end if
-                if formatDayTime(start).Split(" ")[0] <> today then when = formatDayTime(start)
-                m.infoFor.programs.Push(when + "   " + guideTitle(listing.title))
+            start = toInt(listing.start_timestamp)
+            if start <= now and m.infoFor.programs.Count() = 0
+                m.infoFor.programs.Push(guideTitle(listing.title) + "   " + formatClock(start) + " - " + formatClock(toInt(listing.stop_timestamp)))
+                m.infoFor.nowDescription = guideTitle(listing.description)
             end if
         end for
     end if
-    if m.infoFor.programs.Count() = 0 and m.infoFor.programsNote = "" then m.infoFor.programsNote = "No guide information for this channel."
+    if m.infoFor.programs.Count() = 0 and m.infoFor.programsNote = "" then m.infoFor.programsNote = "No guide information for what's on now."
     deliverChannelInfo()
 end sub
 

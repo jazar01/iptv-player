@@ -17,6 +17,7 @@ prefix in front of the URL it would have played:
 /x/...  playlists are rewritten; anything else is converted (MPEG-TS)
 /r/...  passed on unchanged (encryption keys and the like)
 /b/, /bc/ ...  the live buffer (buffer.py): instant pause and rewind on every channel
+/p/...  what's inside a movie or episode file (probe.py), for the details pages
 /health a small JSON status
 UDP 8791 answers the app's search for a converter (Settings -> Dolby converter)
 
@@ -28,6 +29,7 @@ name), and only clients on the networks in --allow are served.
 import argparse
 import buffer
 import ipaddress
+import probe
 import json
 import logging
 import shutil
@@ -40,7 +42,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.2"
+VERSION = "1.4"
 DEFAULT_UA = "Roku/DVP-14.0 (14.0.0.0)"     # the provider refuses non-Roku agents (404)
 UPSTREAM_TIMEOUT = 20                       # seconds, per read
 MAX_SEGMENT = 64 * 1024 * 1024              # archive minutes run about 20 MB
@@ -229,6 +231,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         route = self.path[:3]
         url = upstream_url(self.path)
+        if route == "/p/" and url is not None:
+            agent = self.headers.get("User-Agent", "")
+            if not agent.startswith("Roku"):
+                agent = DEFAULT_UA
+            answer = probe.media_info(url, agent, self.server.ffmpeg, safe_name(url))
+            try:
+                self.send_body(200, "application/json", json.dumps(answer).encode())
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
         if route not in ("/x/", "/r/") or url is None:
             self.send_error(404)
             return
@@ -261,12 +273,14 @@ class Handler(BaseHTTPRequestHandler):
             return True
         if prefix in ("bk", "bq"):
             recorder = buffer.find(url=url)
+            answer = {"ok": recorder is not None}
             if recorder and prefix == "bk":
                 recorder.touch()
+                answer = recorder.status()
             elif recorder:
                 recorder.stopped = True
                 log.info("buffer: %s left by its TV", recorder.name)
-            self.send_body(200, "application/json", json.dumps({"ok": recorder is not None}).encode())
+            self.send_body(200, "application/json", json.dumps(answer).encode())
             return True
         agent = self.headers.get("User-Agent", "")
         if not agent.startswith("Roku"):

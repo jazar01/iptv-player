@@ -38,7 +38,7 @@ sub initPlayback()
     ' streamId -> until (7 days, kept with the other marks).
     m.convertStreams = marks.convert
     m.bufferKeepTimer = CreateObject("roSGNode", "Timer")       ' live buffer keep-alive
-    m.bufferKeepTimer.duration = 20
+    m.bufferKeepTimer.duration = 10     ' its answer also brings the live gap and picture size
     m.bufferKeepTimer.repeat = true
     m.bufferKeepTimer.ObserveField("fire", "onBufferKeepTimer")
     m.top.AppendChild(m.bufferKeepTimer)
@@ -161,8 +161,35 @@ end sub
 
 sub sendBufferNote(play as Dynamic, route as String)
     if type(play) <> "roAssociativeArray" or not isTrue(play.buffered) then return
-    sendRequest({ id: "buffer", url: "http://" + converterAddress() + "/" + route + "/" + play.bufferPath, priority: "low", timeoutMs: 3000 })
+    sendRequest({ id: "buffer", url: "http://" + converterAddress() + "/" + route + "/" + play.bufferPath, priority: "low", timeoutMs: 3000, context: { path: play.bufferPath } })
 end sub
+
+' The keep-alive's answer: how far behind the Pi's newest piece the player
+' should sit at live (the Pi works it out from its piece and segment
+' lengths: about 14 s).
+sub onBufferNote(res as Object)
+    if not res.ok or type(res.data) <> "roAssociativeArray" then return
+    p = m.playing
+    if m.player = invalid or p = invalid or asString(p.bufferPath) <> asString(res.context.path) then return
+    if toInt(res.data.liveGap) > 0 then m.player.liveGap = toInt(res.data.liveGap)
+    v = res.data.video
+    if type(v) = "roAssociativeArray" and toInt(v.height) > 0 then m.player.streamPicture = pictureText(toInt(v.width), toInt(v.height), toInt(v.fps))
+end sub
+
+' "Full HD 1920x1080, 60 fps", as measured by the Pi.
+function pictureText(width as Integer, height as Integer, fps as Integer) as String
+    name = "SD"
+    if height >= 2000
+        name = "4K"
+    else if height >= 1000
+        name = "Full HD"
+    else if height >= 700
+        name = "HD"
+    end if
+    text = name + " " + width.ToStr() + "x" + height.ToStr()
+    if fps > 0 then text = text + ", " + fps.ToStr() + " fps"
+    return text
+end function
 
 sub onBufferKeepTimer()
     if m.player <> invalid then sendBufferNote(m.playing, "bk")

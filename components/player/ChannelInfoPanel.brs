@@ -6,7 +6,7 @@ sub init()
     m.copiesKey = ""
     ' Top to bottom, in this order, below the logo and name.
     m.stack = []
-    for each id in ["actionList", "facts", "playbackHead", "playbackLines", "programsHead", "programs", "nowDesc", "copiesHead", "copies"]
+    for each id in ["actionList", "facts", "playbackHead", "programs", "nowDesc", "playbackLines", "copiesHead", "copies"]
         m.stack.Push(m.top.FindNode(id))
     end for
     m.logo.ObserveField("loadStatus", "onLogoStatus")
@@ -76,7 +76,6 @@ sub draw()
     lines = invalid
     if type(playback) = "roAssociativeArray" then lines = playback.lines
     setLines("playbackLines", lines)
-    m.top.FindNode("playbackHead").visible = m.top.FindNode("playbackLines").visible
 
     programs = m.top.FindNode("programs")
     if type(info.programs) = "roArray" and info.programs.Count() > 0
@@ -85,7 +84,7 @@ sub draw()
         programs.text = asString(info.programsNote)
         programs.visible = (programs.text <> "")
     end if
-    m.top.FindNode("programsHead").visible = programs.visible
+    m.top.FindNode("playbackHead").visible = programs.visible or m.top.FindNode("playbackLines").visible
     ' What's on now, described (when the guide has a description).
     nowDesc = m.top.FindNode("nowDesc")
     nowDesc.text = asString(info.nowDescription)
@@ -133,23 +132,42 @@ sub drawCopies(copies as Dynamic)
 end sub
 
 ' Stack the visible sections below the header; the copies list gets what
-' room is left (2 to 4 rows).
+' room is left (2 to 4 rows). When that's less than 2 rows the program's
+' description goes, then its title keeps to 1 line: the list ran off the
+' bottom of the panel (Oct 2026).
 sub layout()
+    nowDesc = m.top.FindNode("nowDesc")
+    programs = m.top.FindNode("programs")
+    nowDesc.visible = (nowDesc.text <> "")
+    programs.maxLines = 2
+    if stackSections() >= 2 then return
+    nowDesc.visible = false
+    if stackSections() >= 2 then return
+    programs.maxLines = 1
+    stackSections()
+end sub
+
+' Places the sections; returns the rows left for the copies list (99 when
+' there are no copies).
+function stackSections() as Integer
+    rows = 99
     y = 200
     for each node in m.stack
         if node.visible
             if node.id = "copies"
                 rows = Int((1030 - y) / 44)
-                if rows > 4 then rows = 4
-                if rows < 2 then rows = 2
-                node.numRows = rows
+                fit = rows
+                if fit > 4 then fit = 4
+                if fit < 1 then fit = 1
+                node.numRows = fit
             end if
-            if node.id = "playbackHead" or node.id = "programsHead" or node.id = "copiesHead" then y = y + 14
+            if node.id = "playbackHead" or node.id = "copiesHead" then y = y + 14
             node.translation = [1160, y]
             y = y + node.boundingRect().height + 10
         end if
     end for
-end sub
+    return rows
+end function
 
 sub onCopySelected()
     i = m.copies.itemSelected

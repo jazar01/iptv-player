@@ -6,6 +6,7 @@ sub runLoop()
     m.LIMIT = 50                ' results per kind
     m.index = { live: [], movie: [], series: [] }
     m.byId = { live: {}, movie: {}, series: {} }    ' "<id>" -> entry
+    m.byCategory = { movie: {}, series: {} }        ' "<category ID>" -> entries, in list order
     m.matchLookup = {}          ' kind -> { byEpg, byName }, built when first needed
     m.matchRules = invalid
     m.selfTested = false
@@ -20,6 +21,7 @@ sub runLoop()
     m.top.ObserveField("infoRequest", port)
     m.top.ObserveField("iconsRequest", port)
     m.top.ObserveField("guideRequest", port)
+    m.top.ObserveField("categoryRequest", port)
     m.top.ready = true
 
     ' One message at a time. A runtime error while handling one (unexpected
@@ -57,6 +59,8 @@ sub handleMessage(msg as Object, port as Object)
         m.top.infoResult = channelDetails(msg.GetData())
     else if field = "localsRequest"
         m.top.localsResult = listLocalStations(msg.GetData())
+    else if field = "categoryRequest"
+        m.top.categoryResult = categoryItems(msg.GetData())
     else if field = "marketsRequest"
         req = msg.GetData()
         m.top.marketsResult = { id: req.id, ready: m.index.live.Count() > 0 and liveCategories() <> invalid, markets: listMarkets() }
@@ -87,6 +91,8 @@ sub sendErrorAnswer(field as String, req as Dynamic)
         m.top.guideResult = { id: req.id, categoryId: asString(req.categoryId), ready: false, categories: [], channels: [] }
     else if field = "localsRequest"
         m.top.localsResult = { id: req.id, market: asString(req.market), ready: false, items: [] }
+    else if field = "categoryRequest"
+        m.top.categoryResult = { id: req.id, kind: asString(req.kind), categoryId: asString(req.categoryId), ready: false, items: [] }
     else if field = "marketsRequest"
         m.top.marketsResult = { id: req.id, ready: false, markets: [] }
     else if field = "matchRequest"
@@ -109,6 +115,7 @@ sub loadKind(req as Object)
         ' Account changed: drop the old account's lists until the new ones load.
         m.index = { live: [], movie: [], series: [] }
         m.byId = { live: {}, movie: {}, series: {} }
+        m.byCategory = { movie: {}, series: {} }
         m.matchLookup = {}
         resetCategoryLookups()
         m.top.counts = { live: 0, movie: 0, series: 0 }
@@ -145,6 +152,7 @@ sub loadKind(req as Object)
     entries = []
     byId = {}
     archive = {}
+    byCategory = {}
     for each item in raw
         if type(item) = "roAssociativeArray"
             e = indexEntry(kind, item)
@@ -152,12 +160,14 @@ sub loadKind(req as Object)
                 entries.Push(e)
                 byId[e.itemId.ToStr()] = e
                 if e.archiveDays > 0 then archive[e.itemId.ToStr()] = e.archiveDays
+                if kind <> "live" then addToCategories(byCategory, e, item)
             end if
         end if
     end for
     raw = invalid
     m.index[kind] = entries
     m.byId[kind] = byId
+    if kind <> "live" then m.byCategory[kind] = byCategory
     m.matchLookup.Delete(kind)
     m.vocabulary = invalid      ' fuzzy search's word list, rebuilt when next needed
 
@@ -178,6 +188,48 @@ sub loadKind(req as Object)
         matchSelfTest()
     end if
 end sub
+
+' A movie or series in each of its categories (category_ids, else
+' category_id), in the full list's order.
+sub addToCategories(byCategory as Object, e as Object, item as Object)
+    ids = []
+    if type(item.category_ids) = "roArray" then ids = item.category_ids
+    if ids.Count() = 0 and asString(item.category_id) <> "" then ids = [item.category_id]
+    seen = {}
+    for each id in ids
+        key = asString(id)
+        if key <> "" and not seen.DoesExist(key)
+            seen[key] = true
+            list = byCategory[key]
+            if list = invalid
+                list = []
+                byCategory[key] = list
+            end if
+            list.Push(e)
+        end if
+    end for
+end sub
+
+' A category for Movies / Series (see categoryRequest in SearchTask.xml).
+function categoryItems(req as Object) as Object
+    kind = asString(req.kind)
+    id = asString(req.categoryId)
+    result = { id: req.id, kind: kind, categoryId: id, ready: false, items: [] }
+    if m.byCategory[kind] = invalid or m.index[kind].Count() = 0 then return result
+    result.ready = true
+    timer = CreateObject("roTimespan")
+    list = m.byCategory[kind][id]
+    if list = invalid then return result
+    for each e in list
+        if kind = "series"
+            result.items.Push({ series_id: e.itemId, name: e.name, cover: e.icon, year: e.year })
+        else
+            result.items.Push({ stream_id: e.itemId, name: e.name, container_extension: e.ext, stream_icon: e.icon, year: e.year })
+        end if
+    end for
+    print "[search] "; kind; " category "; id; ": "; result.items.Count(); " items ("; timer.TotalMilliseconds(); " ms)"
+    return result
+end function
 
 ' My Teams' lookups built from the live index and category list.
 sub resetCategoryLookups()

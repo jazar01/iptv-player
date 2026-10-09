@@ -46,7 +46,7 @@ sub init()
     m.stallReloads = []     ' clock ms of recent watchdog reloads
     m.slowReloads = []      ' the same for movies, episodes and the archive
     m.lastFormat = ""       ' last logged stream format
-    m.LIVE_GAP = 30         ' live buffer: at live, the player runs this far behind the newest segment
+    m.LIVE_GAP = 30         ' live buffer: at live, the player runs this far behind the newest piece (onBufferPiece)
     m.bufferStarted = false ' live buffer: checked that this load started at live (watchStall)
 
     m.play = invalid
@@ -106,6 +106,8 @@ sub onContent()
     m.seekTimer.control = "stop"
     m.seekPending = invalid
     stopHold()
+    m.LIVE_GAP = 30             ' until the Pi says how long its pieces are
+    m.top.streamPicture = ""
     m.bufferingSince = -1
     m.livePlayed = false
     m.vodPlayed = false         ' this movie or episode has played
@@ -483,6 +485,7 @@ sub updatePlaybackInfo()
     ' Three lines: picture, connection and state, trouble so far.
     lines = []
     video = m.lastFormat
+    if video = "" then video = m.top.streamPicture
     codecs = codecName(m.video.videoFormat) + " / " + codecName(m.video.audioFormat)
     if codecs <> " / "
         if video <> "" then video = video + "   -   "
@@ -771,14 +774,18 @@ sub addJump(jump as Integer)
         m.seekFrom = m.video.position
     end if
     ' Kept within the buffer: back no further than its start (when the TV
-    ' tuned in), ahead no further than live.
+    ' tuned in), ahead no further than live. A channel with a catch-up
+    ' archive goes on back into it, as far as the archive reaches.
     m.seekPending = m.seekPending + jump
     earliest = -Int(m.seekFrom)
+    if canRewind() then earliest = Int(m.video.duration) - Int(m.seekFrom) - toInt(m.play.archiveDays) * 86400
     latest = liveSpot() - Int(m.seekFrom)
     if latest < 0 then latest = 0
     if m.seekPending <= earliest
         m.seekPending = earliest
-        m.note = "Start of the buffer (when you tuned in to this channel)"
+        if canRewind() then m.note = "Start of the archive" else m.note = "Start of the buffer (when you tuned in to this channel)"
+    else if m.seekPending < -Int(m.seekFrom)
+        m.note = seekNote(m.seekPending) + "  (from the archive)"
     else if m.seekPending >= latest
         m.seekPending = latest
         m.note = "Live"
@@ -806,6 +813,10 @@ sub onSeekTimer()
     end if
     target = m.seekFrom + offset
     m.note = ""
+    if target < 0 and canRewind()
+        archiveFrom(target)
+        return
+    end if
     ' The buffer starts when the TV tuned in: say so, so a press that can't
     ' go further back isn't a mystery. Not past live either.
     if target < 1
@@ -819,6 +830,28 @@ sub onSeekTimer()
     print "[player] buffer: jump "; offset; " s, from "; Int(m.seekFrom); " to "; Int(target); " s (duration "; Int(m.video.duration); ")"
     m.video.seek = target
     showOverlay()
+end sub
+
+' Before the start of the buffer, on a channel with an archive: the
+' archive from that moment. The newest piece is about now, so a point in the
+' player's timeline is that far before now. The archive runs a few minutes
+' behind live (archiveEdge); a moment it hasn't recorded yet plays from its
+' newest. Back returns to live, through the buffer again.
+sub archiveFrom(target as Integer)
+    moment = nowSeconds() - (Int(m.video.duration) - target)
+    if moment > archiveEdge() then moment = archiveEdge()
+    print "[player] buffer: before its start ("; target; " s); the archive from "; formatClock(moment)
+    m.note = "From the archive:  " + formatClock(moment)
+    startTimeshift(moment, 0)
+end sub
+
+' How far behind the Pi's newest piece live is (the Pi works it out from
+' its piece and segment lengths).
+sub onLiveGap()
+    gap = m.top.liveGap
+    if gap <= 0 or gap = m.LIVE_GAP then return
+    m.LIVE_GAP = gap
+    print "[player] buffer: live gap "; gap; " s; now "; Int(m.video.duration - m.video.position); " s from the newest"
 end sub
 
 ' Where live is in the player's timeline: the newest segment, less the gap

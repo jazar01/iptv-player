@@ -136,6 +136,10 @@ sub routeApiResponse(res as Object)
         onConverterPing(res)
     else if res.id = "converterCheck"
         onConverterCheck(res)
+    else if res.id = "buffer"
+        onBufferNote(res)
+    else if res.id = "mediaInfo"
+        onMediaInfo(res)
     end if
 end sub
 

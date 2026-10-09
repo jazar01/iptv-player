@@ -22,6 +22,10 @@ sub onBackdropStatus()
 end sub
 
 ' Details win over what was known from the list; anything missing is left out.
+sub drawMedia()
+    m.top.FindNode("media").text = m.top.media
+end sub
+
 sub draw()
     movie = m.top.movie
     if type(movie) <> "roAssociativeArray" then movie = {}
