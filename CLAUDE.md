@@ -262,8 +262,8 @@ is the final check.
 ## Status
 
 Version 2.0 (manifest 2.0.0, Oct 8, 2026): all of version 1, plus V2 backups,
-sharing between TVs, the household setup and admin page on the Pi, and the
-Dolby converter. The design and per-feature notes are in
+sharing between TVs, the household setup and admin page on the Pi, the
+Dolby converter and the live buffer. The design and per-feature notes are in
 docs/requirements.md. Saved state is schema 8 (later per-device options and
 optional record marks joined without a schema change).
 
@@ -280,10 +280,11 @@ optional record marks joined without a schema change).
   connections, account expiry, backup panel), manual backup and automatic
   restore.
 - Dolby converter on the home Raspberry Pi (Oct 8, 2026): ESPN 1080p played
-  through it on the Basement TV (with `converter_test`) and works on the
-  Family Room TV; not yet tried on the Deck TV or with the archive.
+  through it on the Basement TV (with `converter_test`); works on all three
+  TVs (Oct 9); not yet tried with the archive.
 - Live buffer on the Pi (Oct 8, 2026): pause, jumps and back to live
-  checked on the Basement TV; not yet deployed to the Family Room or Deck.
+  checked on the Basement TV; deployed to the Family Room and Deck (Oct 9),
+  not yet tried there or with two TVs buffering at once.
 - Known limits: HD timeshift archives exceed this Roku's video buffer; some
   channels sometimes send an AAC variant no Roku decodes (Tennis Channel 2;
   it played again on Oct 8, 2026, and the Pi converter, which re-encodes the
@@ -291,6 +292,7 @@ optional record marks joined without a schema change).
   Dolby failures there); this
   provider sends no episode descriptions for some series.
 - Not yet tried on a Roku: a real provider renumbering, reaching 90% of an
-  episode, the connection-limit message, the usage-ordering effect.
-- Next: off-device backup and sync, planned for V2 (see the requirements:
-  "Off-device backup and sync (V2)").
+  episode (a movie at 90% worked, Oct 9), the connection-limit message, the usage-ordering effect.
+- Next: nothing planned. Ideas: 2-second segments on the Pi for finer
+  live-buffer jumps; rewinding past the buffer's start into the provider's
+  archive. Moving the Pi to its new SD card with `rpi-clone` when it arrives.
