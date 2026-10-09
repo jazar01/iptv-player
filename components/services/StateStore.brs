@@ -1436,15 +1436,18 @@ end function
 '   progress   resume points and watched episodes (series progress)
 '   account    account changes sent from the admin page (not merged: see
 '              MainBackup checkHouseholdAccount)
+'   liveBuffer Settings -> Live buffer, on or off (the newer change wins;
+'              added Oct 9, 2026)
 ' Shared copy: { favorites: [], teams: [], watchlist: [], series: [{ seriesId,
 ' name, year, favorite, favoriteAt, watched, current, progressAt }],
-' resume: [], resumeGone: [] }. Kinds a TV leaves out pass through as they are.
+' resume: [], resumeGone: [], options: { liveBuffer: { on, at } } }. Kinds a
+' TV leaves out pass through as they are.
 
 function getShareSettings() as Object
     share = m.doc.settings.share
     if type(share) <> "roAssociativeArray" then share = {}
     out = {}
-    for each kind in ["favorites", "teams", "series", "progress", "account"]
+    for each kind in ["favorites", "teams", "series", "progress", "account", "liveBuffer"]
         out[kind] = (share[kind] = invalid or isTrue(share[kind]))
     end for
     return out
@@ -1479,12 +1482,46 @@ function mergeShared(json as String) as Object
     if share.series then shared.watchlist = mergeRecords(m.doc.watchlist, shared.watchlist, "id", result)
     if share.series or share.progress then shared.series = mergeSeries(shared.series, share, result)
     if share.progress then mergeResume(shared, result)
+    if share.liveBuffer then mergeLiveBuffer(shared, result)
 
     if result.changed and not persist()
         print "[state] shared changes couldn't be saved here"
         result.changed = false
     end if
     return { changed: result.changed, upload: result.upload, json: FormatJson(shared) }
+end function
+
+' Settings -> Live buffer: the newer change (liveBufferAt, set when it's
+' switched here) wins, on this TV or in the shared copy. A TV that has never
+' switched it takes the shared one; nothing is shared until one TV does.
+sub mergeLiveBuffer(shared as Object, result as Object)
+    if type(shared.options) <> "roAssociativeArray" then shared.options = {}
+    theirs = shared.options.liveBuffer
+    mineAt = toInt(m.doc.settings.liveBufferAt)
+    theirAt = 0
+    if type(theirs) = "roAssociativeArray" then theirAt = toInt(theirs.at)
+    if theirAt > mineAt
+        on = isTrue(theirs.on)
+        if on <> getSettings().liveBuffer then result.changed = true
+        m.doc.settings.liveBuffer = on
+        m.doc.settings.liveBufferAt = theirAt
+        if result.changed then print "[state] live buffer turned "; onOffWord(on); " on another TV"
+    else if mineAt > theirAt
+        shared.options.liveBuffer = { "on": getSettings().liveBuffer, "at": mineAt }
+        result.upload = true
+    end if
+end sub
+
+function onOffWord(on as Boolean) as String
+    if on then return "on"
+    return "off"
+end function
+
+' Settings -> Live buffer, dated so sharing knows which change is newer.
+function setLiveBuffer(on as Boolean) as Boolean
+    m.doc.settings.liveBuffer = on
+    m.doc.settings.liveBufferAt = nowSeconds()
+    return persist()
 end function
 
 ' The same team added on two TVs has two IDs, so it would show twice

@@ -132,7 +132,7 @@ end function
 ' Settings -> Live buffer: takes effect from the next channel tuned.
 sub toggleLiveBuffer()
     on = not m.store.callFunc("getSettings").liveBuffer
-    if not m.store.callFunc("setSetting", "liveBuffer", on)
+    if not m.store.callFunc("setLiveBuffer", on)
         showToast("Couldn't save the change. Storage may be full.")
     else if not on
         showToast("Live buffer off: live channels pause and rewind through the provider's archive")

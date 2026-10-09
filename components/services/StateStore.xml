@@ -21,6 +21,7 @@
     <function name="setMarket" />
     <function name="getSettings" />
     <function name="setSetting" />
+    <function name="setLiveBuffer" />
 
     <function name="getFavorites" />
     <function name="isFavorite" />

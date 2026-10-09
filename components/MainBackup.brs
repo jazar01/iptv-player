@@ -256,7 +256,7 @@ end sub
 sub requestSync(reason as String)
     if not m.store.callFunc("isConfigured") then return
     share = m.store.callFunc("getShareSettings")
-    if not (share.favorites or share.teams or share.series or share.progress or share.account) then return
+    if not (share.favorites or share.teams or share.series or share.progress or share.account or share.liveBuffer) then return
     if m.syncing
         m.syncAgain = true
         return
@@ -328,6 +328,8 @@ sub onSharedChanges()
     requestGames()
     catalog = m.sections.live
     if catalog <> invalid and m.section = "live" then onCatalogShown(catalog)
+    settings = m.sections.settings
+    if settings <> invalid then settings.info = settingsInfo()     ' the live buffer setting may have changed
 end sub
 
 function sharingText() as String
@@ -337,6 +339,7 @@ function sharingText() as String
     if share.teams then names.Push("teams")
     if share.series then names.Push("series and Watch List")
     if share.progress then names.Push("watch progress")
+    if share.liveBuffer then names.Push("live buffer setting")
     if share.account then names.Push("account changes")
     if names.Count() = 0 then return "off"
     text = joinStrings(names, ", ")

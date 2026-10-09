@@ -61,6 +61,11 @@ if (-not (Test-Path (Join-Path $root 'manifest'))) { throw "No manifest found in
 $localConfig = Join-Path $PSScriptRoot 'deploy.local.ps1'
 if (Test-Path $localConfig) { . $localConfig }
 
+# Date and time on the output, so a terminal scrolled back shows when each
+# deploy and install happened.
+function Get-Stamp { return (Get-Date).ToString('ddd MMM d, yyyy  h:mm:ss tt') }
+Write-Host "=== Deploy started $(Get-Stamp) ==="
+
 # --- Check -------------------------------------------------------------------
 
 if (-not $SkipCheck) {
@@ -370,14 +375,15 @@ if ($All) {
             if (-not $devPassword) { throw 'No developer password (set Password for it or $LocalRokuPassword).' }
             $outcome = Install-Roku $roku.Ip $devPassword
             $text = if ($outcome -eq 'identical') { 'already up to date' } else { 'installed' }
-            $results += [pscustomobject]@{ Roku = $name; IP = $roku.Ip; Result = $text }
+            $results += [pscustomobject]@{ Roku = $name; IP = $roku.Ip; Result = $text; Time = (Get-Date).ToString('h:mm:ss tt') }
         }
         catch {
             Write-Warning "  $name failed: $($_.Exception.Message)"
-            $results += [pscustomobject]@{ Roku = $name; IP = $roku.Ip; Result = "FAILED: $($_.Exception.Message)" }
+            $results += [pscustomobject]@{ Roku = $name; IP = $roku.Ip; Result = "FAILED: $($_.Exception.Message)"; Time = (Get-Date).ToString('h:mm:ss tt') }
         }
     }
     Write-Host ''
+    Write-Host "=== Finished $(Get-Stamp) ==="
     $results | Format-Table -AutoSize | Out-String | Write-Host
     if ($results | Where-Object { $_.Result -like 'FAILED*' }) { exit 1 }
     return
@@ -405,10 +411,10 @@ try {
     Test-Backup $RokuIp
     $outcome = Install-Roku $RokuIp $Password
     if ($outcome -eq 'identical') {
-        Write-Host 'The Roku already has this exact build; it was not reinstalled.'
+        Write-Host "The Roku already has this exact build; it was not reinstalled. ($(Get-Stamp))"
     }
     else {
-        Write-Host 'Installed.'
+        Write-Host "Installed $(Get-Stamp)."
     }
 
     if ($consoleClient) {
