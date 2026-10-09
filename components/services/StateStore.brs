@@ -233,6 +233,7 @@ function getSettings() as Object
         myTeamsFirst: isTrue(m.doc.settings.myTeamsFirst)
         showScores: isTrue(m.doc.settings.showScores)
         dolbyConverter: asString(m.doc.settings.dolbyConverter)     ' "address:port" of the Pi, "" = off
+        liveBuffer: (m.doc.settings.liveBuffer = invalid or isTrue(m.doc.settings.liveBuffer))    ' live channels through the Pi's buffer
         serverTimezone: asString(m.doc.settings.serverTimezone)     ' last seen, for timeshift
         householdAccountAt: toInt(m.doc.settings.householdAccountAt)    ' the household account last taken (or refused)
     }

@@ -36,13 +36,21 @@ $address = (& ssh -G $PiHost 2>$null | Select-String '^hostname ' | ForEach-Obje
 function Install-Folder([string]$folder, [string]$remote) {
     Write-Host "Copying $folder to $PiHost ..."
     & ssh -T -o BatchMode=yes $PiHost "rm -rf ~/$remote && mkdir -p ~/$remote"
-    & scp -q -o BatchMode=yes (Join-Path $root "pi\$folder\*") "${PiHost}:$remote/"
-    if ($LASTEXITCODE -ne 0) {
-        # Now and then the first copy fails under Windows PowerShell 5.1 and
-        # the next works (Oct 2026): once more, showing scp's reason this time.
-        Start-Sleep -Seconds 1
-        & scp -o BatchMode=yes (Join-Path $root "pi\$folder\*") "${PiHost}:$remote/"
-        if ($LASTEXITCODE -ne 0) { throw "Copying $folder failed." }
+    # Now and then a copy fails under Windows PowerShell 5.1 and the next one
+    # works (Oct 2026, cause not found): up to 3 tries, the folder made again
+    # each time, scp's reason shown if the last one fails too.
+    for ($try = 1; $try -le 3; $try++) {
+        if ($try -gt 1) {
+            Start-Sleep -Seconds 2
+            & ssh -T -o BatchMode=yes $PiHost "mkdir -p ~/$remote"
+        }
+        $quiet = if ($try -lt 3) { '-q' } else { '-v' }
+        $out = & scp $quiet -o BatchMode=yes (Join-Path $root "pi\$folder\*") "${PiHost}:$remote/" 2>&1
+        if ($LASTEXITCODE -eq 0) { break }
+        if ($try -eq 3) {
+            $out | Where-Object { "$_" -match 'error|denied|No such file|lost connection|not found' } | Select-Object -Last 5 | ForEach-Object { Write-Host "  scp: $_" }
+            throw "Copying $folder failed."
+        }
     }
     Write-Host 'Installing ...'
     & ssh -T -o BatchMode=yes $PiHost "sudo sh ~/$remote/install.sh"

@@ -80,6 +80,8 @@
       <Label id="nowTime" translation="[1424,796]" width="400" horizAlign="right"
         font="font:SmallSystemFont" color="0x8C96A0FF" />
       <Rectangle id="progressTrack" translation="[96,936]" width="1728" height="6" color="0x3A444EFF" />
+      <!-- Up to live: shown lighter past the blue fill when watching behind live. -->
+      <Rectangle id="progressLive" translation="[96,936]" width="0" height="6" color="0x8A96A3FF" />
       <Rectangle id="progressFill" translation="[96,936]" width="0" height="6" color="0x4DA3FFFF" />
       <Label id="nextLine" translation="[96,962]" width="1728" font="font:SmallSystemFont" color="0x8C96A0FF" />
       <Label id="hints" translation="[96,1016]" width="1728" font="font:SmallestSystemFont" color="0x6E7882FF" />
@@ -122,6 +124,12 @@
     <!-- A live channel, movie or episode with no video this long after
          loading, and no error either, counts as failed (onStartTimeout). -->
     <Timer id="startTimer" duration="25" />
+    <!-- Live buffer: jumps (Rewind, Left ...) pressed in a row add up and
+         happen once this long after the last (bufferKey). -->
+    <Timer id="seekTimer" duration="0.5" />
+    <!-- A jump key held down: another step this often until it's let go
+         (shorter than seekTimer, so the jump waits for the release). -->
+    <Timer id="holdTimer" duration="0.4" repeat="true" />
   </children>
 
   <script type="text/brightscript" uri="pkg:/components/common/Utils.brs" />

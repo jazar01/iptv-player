@@ -16,6 +16,7 @@ prefix in front of the URL it would have played:
 
 /x/...  playlists are rewritten; anything else is converted (MPEG-TS)
 /r/...  passed on unchanged (encryption keys and the like)
+/b/, /bc/ ...  the live buffer (buffer.py): instant pause and rewind on every channel
 /health a small JSON status
 UDP 8791 answers the app's search for a converter (Settings -> Dolby converter)
 
@@ -25,6 +26,7 @@ name), and only clients on the networks in --allow are served.
 """
 
 import argparse
+import buffer
 import ipaddress
 import json
 import logging
@@ -38,7 +40,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.1"
+VERSION = "1.2"
 DEFAULT_UA = "Roku/DVP-14.0 (14.0.0.0)"     # the provider refuses non-Roku agents (404)
 UPSTREAM_TIMEOUT = 20                       # seconds, per read
 MAX_SEGMENT = 64 * 1024 * 1024              # archive minutes run about 20 MB
@@ -220,6 +222,11 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/health":
             self.health()
             return
+        try:
+            if self.live_buffer():
+                return
+        except (BrokenPipeError, ConnectionResetError):
+            return
         route = self.path[:3]
         url = upstream_url(self.path)
         if route not in ("/x/", "/r/") or url is None:
@@ -230,9 +237,58 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass        # the Roku moved on (channel change, seek)
 
+    def live_buffer(self):
+        """The live buffer's routes (buffer.py); False for anything else."""
+        prefix = self.path.split("/", 2)[1] if self.path.count("/") >= 2 else ""
+        if prefix not in ("b", "bc", "bs", "bk", "bq"):
+            return False
+        if prefix == "bs":
+            parts = self.path.split("?", 1)[0].split("/")      # ['', 'bs', id, '<seq>.ts']
+            recorder = buffer.find(rid=parts[2]) if len(parts) == 4 else None
+            data = None
+            if recorder and parts[3].endswith(".ts") and parts[3][:-3].isdigit():
+                recorder.touch()
+                data = recorder.segment(int(parts[3][:-3]))
+            if data is None:
+                self.send_error(404)
+                return True
+            self.send_body(200, "video/mp2t", data)
+            count("segments")
+            return True
+        url = upstream_url(self.path)
+        if url is None:
+            self.send_error(404)
+            return True
+        if prefix in ("bk", "bq"):
+            recorder = buffer.find(url=url)
+            if recorder and prefix == "bk":
+                recorder.touch()
+            elif recorder:
+                recorder.stopped = True
+                log.info("buffer: %s left by its TV", recorder.name)
+            self.send_body(200, "application/json", json.dumps({"ok": recorder is not None}).encode())
+            return True
+        agent = self.headers.get("User-Agent", "")
+        if not agent.startswith("Roku"):
+            agent = DEFAULT_UA
+        recorder = buffer.recorder_for(url, prefix == "bc", agent, self.server.ffmpeg)
+        if not recorder.segments:
+            recorder.ready.wait(buffer.FIRST_WAIT)
+        if not recorder.segments:
+            error = recorder.error
+            code = error.code if isinstance(error, buffer.UpstreamError) else 504
+            self.send_error(code)
+            count("failed")
+            return True
+        self.send_body(200, "application/vnd.apple.mpegurl", recorder.playlist().encode())
+        count("playlists")
+        return True
+
     def health(self):
         with stats_lock:
             body = dict(stats, version=VERSION, uptime=int(time.time() - stats["started"]))
+        body["buffers"] = buffer.summaries()
+        body["bufferBudgetMb"] = buffer.BUDGET // (1024 * 1024)
         body.pop("started")
         self.send_body(200, "application/json", json.dumps(body).encode())
 
@@ -424,6 +480,8 @@ def answer_discovery(server, port):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--port", type=int, default=8790)
+    parser.add_argument("--buffer-mb", type=int, default=6000,
+                        help="memory for the live buffer, shared by the channels being watched")
     parser.add_argument("--allow", default="192.168.222.0/24",
                         help="comma-separated networks that may use it (default: the home LAN)")
     args = parser.parse_args()
@@ -432,6 +490,7 @@ def main():
     if not ffmpeg:
         sys.exit("ffmpeg not found: sudo apt install ffmpeg")
     networks = [ipaddress.ip_network(n.strip()) for n in args.allow.split(",") if n.strip()]
+    buffer.BUDGET = args.buffer_mb * 1024 * 1024
     server = Server(("0.0.0.0", args.port), networks, ffmpeg)
     threading.Thread(target=answer_discovery, args=(server, args.port), daemon=True).start()
     log.info("Dolby converter %s on port %d (search on UDP %d), for %s", VERSION, args.port, DISCOVERY_PORT,

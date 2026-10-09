@@ -229,6 +229,7 @@ function settingsInfo() as Object
         showFavoritesInRecent: m.store.callFunc("getSettings").showFavoritesInRecent
         myTeamsFirst: m.store.callFunc("getSettings").myTeamsFirst
         showScores: m.store.callFunc("getSettings").showScores
+        liveBuffer: m.store.callFunc("getSettings").liveBuffer
     }
 end function
 
@@ -254,6 +255,8 @@ sub onSettingsChosen(event as Object)
         editTvName()
     else if choice = "sharing"
         openSharing()
+    else if choice = "liveBuffer"
+        toggleLiveBuffer()
     else if choice = "converter"
         editConverter()
     else if choice = "backup"

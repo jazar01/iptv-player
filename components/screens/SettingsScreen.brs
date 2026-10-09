@@ -1,7 +1,7 @@
 sub init()
     m.menu = m.top.FindNode("menu")
     m.details = m.top.FindNode("details")
-    m.actions = ["teams", "teamsRow", "teamsPosition", "noGameTeams", "scores", "market", "recentFavorites", "converter", "sharing", "tvName", "account"]
+    m.actions = ["teams", "teamsRow", "teamsPosition", "noGameTeams", "scores", "market", "recentFavorites", "converter", "liveBuffer", "sharing", "tvName", "account"]
     m.backupPanel = m.top.FindNode("backupPanel")
     m.top.FindNode("backupText").text = backupExplanation()
     buildMenu({})
@@ -20,6 +20,8 @@ sub buildMenu(info as Object)
     if tvName = "" then tvName = "(not set)"
     converterLabel = "Off"
     if Left(asString(info.converter), 3) <> "off" and asString(info.converter) <> "" then converterLabel = asString(info.converter).Split(" ")[0].Replace(":8790", "")
+    bufferLabel = onOff(info.liveBuffer = invalid or isTrue(info.liveBuffer))
+    if converterLabel = "Off" then bufferLabel = bufferLabel + " (needs the Dolby converter)"
     teamsPosition = "After Favorites"
     if isTrue(info.myTeamsFirst) then teamsPosition = "First"
     titles = [
@@ -31,6 +33,7 @@ sub buildMenu(info as Object)
         "Local stations:   " + marketLabel
         "Favorites in Recently Viewed:   " + onOff(isTrue(info.showFavoritesInRecent))
         "Dolby converter:   " + converterLabel
+        "Live buffer (pause and rewind live TV):   " + bufferLabel
         "Sharing between TVs"
         "TV name:   " + tvName
         "Account and device name"

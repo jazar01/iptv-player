@@ -37,6 +37,11 @@ sub initPlayback()
     ' converter): streams whose Dolby audio this TV refused play through it,
     ' streamId -> until (7 days, kept with the other marks).
     m.convertStreams = marks.convert
+    m.bufferKeepTimer = CreateObject("roSGNode", "Timer")       ' live buffer keep-alive
+    m.bufferKeepTimer.duration = 20
+    m.bufferKeepTimer.repeat = true
+    m.bufferKeepTimer.ObserveField("fire", "onBufferKeepTimer")
+    m.top.AppendChild(m.bufferKeepTimer)
     m.converterDownUntil = 0    ' UTC seconds: converter not answering until then (converterDown)
     m.converterRetry = invalid  ' a converted channel that failed, while the converter is looked for
     m.converterSearchFor = ""   ' "settings" | "playback": who a converter search is for
@@ -97,13 +102,70 @@ sub playLive(item as Object)
         replaceFor: toInt(item.replaceFor)  ' a favorite that failed, this standing in for it (onSwapTimer)
     }
     if archiveDays > 0 then play.timeshift = timeshiftInfo(id)
-    if needsConverter(id)
+    if liveBufferOn() and not isTrue(item.noBuffer)
+        ' Through the Pi's live buffer: pause and rewind on every channel.
+        ' Audio this TV can't take (Dolby, or the AAC the relay fixes) is
+        ' converted there too.
+        bufferPlay(play, needsConverter(id) or needsRelay(id))
+        pingConverter(id)
+    else if needsConverter(id)
         convertPlay(play)
         pingConverter(id)
     else if needsRelay(id)
         relayPlay(play)
     end if
     startPlayer(play, 0)
+end sub
+
+' ---------------------------------------------------------------------------
+' Live buffer: the Pi's converter service (pi/dolby-converter/buffer.py)
+' records the channel being watched in memory and serves it as one growing
+' playlist, so the player can pause and go back. On by default when a Pi is
+' set up (Settings -> Live buffer). The Pi is told when the TV leaves the
+' channel, and kept going while it plays (it stops a channel nobody asks
+' about for 45 s, freeing the account's connection).
+
+function liveBufferOn() as Boolean
+    return converterAddress() <> "" and not converterDown() and m.store.callFunc("getSettings").liveBuffer
+end function
+
+' Settings -> Live buffer: takes effect from the next channel tuned.
+sub toggleLiveBuffer()
+    on = not m.store.callFunc("getSettings").liveBuffer
+    if not m.store.callFunc("setSetting", "liveBuffer", on)
+        showToast("Couldn't save the change. Storage may be full.")
+    else if not on
+        showToast("Live buffer off: live channels pause and rewind through the provider's archive")
+    else if converterAddress() = ""
+        showToast("Live buffer on. It needs the Dolby converter on the Raspberry Pi: set that up above")
+    else
+        showToast("Live buffer on: pause and rewind any live channel from when you tuned in")
+    end if
+    settings = m.sections.settings
+    if settings <> invalid then settings.info = settingsInfo()
+end sub
+
+sub bufferPlay(play as Object, convert as Boolean)
+    p = Instr(1, play.url, "://")
+    if p = 0 then return
+    route = "b"
+    if convert then route = "bc"
+    play.bufferPath = Left(play.url, p - 1) + "/" + Mid(play.url, p + 3)
+    play.url = "http://" + converterAddress() + "/" + route + "/" + play.bufferPath
+    play.buffered = true
+    play.converted = convert
+    ' The provider's archive (Start over) still plays straight from the
+    ' provider, through the converter when the audio needs it.
+    if convert and type(play.timeshift) = "roAssociativeArray" then play.timeshift.url = converterUrl(play.timeshift.url)
+end sub
+
+sub sendBufferNote(play as Dynamic, route as String)
+    if type(play) <> "roAssociativeArray" or not isTrue(play.buffered) then return
+    sendRequest({ id: "buffer", url: "http://" + converterAddress() + "/" + route + "/" + play.bufferPath, priority: "low", timeoutMs: 3000 })
+end sub
+
+sub onBufferKeepTimer()
+    if m.player <> invalid then sendBufferNote(m.playing, "bk")
 end sub
 
 ' Archive (catch-up) URL: an HLS playlist of one-minute segments. {start} is
@@ -260,7 +322,11 @@ end sub
 
 sub startPlayer(play as Object, position as Integer)
     play.startPosition = position
+    ' Leaving a buffered channel: the Pi can stop recording it.
+    previous = m.playing
+    if previous <> invalid and isTrue(previous.buffered) and asString(previous.bufferPath) <> asString(play.bufferPath) then sendBufferNote(previous, "bq")
     m.playing = play
+    if isTrue(play.buffered) then m.bufferKeepTimer.control = "start" else m.bufferKeepTimer.control = "stop"
     m.watchedKey = ""
     m.usageCounted = false      ' one usage point per viewing session
     if m.player = invalid
@@ -297,6 +363,8 @@ sub onPlayerClosed()
     if m.player = invalid then return
     player = m.player
     m.player = invalid
+    sendBufferNote(m.playing, "bq")
+    m.bufferKeepTimer.control = "stop"
     m.playing = invalid
     if m.infoFor <> invalid and m.infoFor.source = "player" then m.infoFor = invalid
     m.stepTimer.control = "stop"
@@ -388,7 +456,7 @@ sub onPlayerFailed(event as Object)
     ' SearchDone): the Pi at a new address plays it again from there; no
     ' answer pauses the converter for 10 minutes; the Pi where it was means
     ' the channel itself failed. Either way but the first, a copy plays.
-    if live and isTrue(m.playing.converted)
+    if live and (isTrue(m.playing.converted) or (isTrue(m.playing.buffered) and not isTrue(failure.audioUnsupported)))
         converterFailed("code " + m.failCode.ToStr())
         return
     end if
@@ -470,8 +538,9 @@ sub converterFailed(reason as String)
     r = m.converterRetry
     if r <> invalid and toInt(r.streamId) = toInt(p.id) then return      ' already looking
     print "[main] stream "; p.id; " failed through the Dolby converter ("; reason; "); looking for the converter"
-    m.converterRetry = { streamId: p.id, name: p.name, epgChannelId: p.epgChannelId, archiveDays: p.archiveDays, stepFrom: p.stepFrom, replaceFor: p.replaceFor, address: converterAddress() }
-    if m.player <> invalid then m.player.errorText = "The Dolby converter didn't play this channel. Checking it ..."
+    m.converterRetry = { streamId: p.id, name: p.name, epgChannelId: p.epgChannelId, archiveDays: p.archiveDays, stepFrom: p.stepFrom, replaceFor: p.replaceFor, address: converterAddress(), bufferOnly: isTrue(p.buffered) and not isTrue(p.converted) }
+    if m.player <> invalid and isTrue(m.converterRetry.bufferOnly) then m.player.errorText = "The live buffer didn't play this channel. Checking it ..."
+    if m.player <> invalid and not isTrue(m.converterRetry.bufferOnly) then m.player.errorText = "The Dolby converter didn't play this channel. Checking it ..."
     m.converterSearchFor = "playback"
     m.converterSearchTimer.control = "stop"
     m.converterSearchTimer.control = "start"
@@ -529,7 +598,15 @@ sub converterSearchDone(result as Object)
         m.converterDownUntil = nowSeconds() + 600
         m.converterStatus = "NOT answering; Dolby channels use other copies"
     end if
-    if stillOn then findPlayableCopy(r, true)
+    if not stillOn then return
+    if isTrue(r.bufferOnly)
+        ' Only the live buffer failed: the channel straight from the provider.
+        r.noBuffer = true
+        r.direct = true
+        playLive(r)
+    else
+        findPlayableCopy(r, true)
+    end if
 end sub
 
 ' http://host:port/path -> http://<pi>/x/http/host:port/path. Placeholders

@@ -9,6 +9,7 @@ sub init()
     m.nowTime = m.top.FindNode("nowTime")
     m.progressTrack = m.top.FindNode("progressTrack")
     m.progressFill = m.top.FindNode("progressFill")
+    m.progressLive = m.top.FindNode("progressLive")
     m.nextLine = m.top.FindNode("nextLine")
     m.hints = m.top.FindNode("hints")
     m.errorPanel = m.top.FindNode("errorPanel")
@@ -26,6 +27,12 @@ sub init()
     m.stallTimer.ObserveField("fire", "onStall")
     m.startTimer = m.top.FindNode("startTimer")
     m.startTimer.ObserveField("fire", "onStartTimeout")
+    m.seekTimer = m.top.FindNode("seekTimer")
+    m.seekTimer.ObserveField("fire", "onSeekTimer")
+    m.holdTimer = m.top.FindNode("holdTimer")
+    m.holdTimer.ObserveField("fire", "onHoldTimer")
+    m.holdKey = invalid
+    m.seekPending = invalid  ' live buffer: seconds of jumps pressed, not made yet
     m.infoPanel = m.top.FindNode("infoPanel")
     m.infoPanel.ObserveField("chosen", "onInfoCopyChosen")
     m.infoPanel.ObserveField("action", "onInfoAction")
@@ -39,6 +46,8 @@ sub init()
     m.stallReloads = []     ' clock ms of recent watchdog reloads
     m.slowReloads = []      ' the same for movies, episodes and the archive
     m.lastFormat = ""       ' last logged stream format
+    m.LIVE_GAP = 30         ' live buffer: at live, the player runs this far behind the newest segment
+    m.bufferStarted = false ' live buffer: checked that this load started at live (watchStall)
 
     m.play = invalid
     m.programs = invalid
@@ -94,6 +103,9 @@ sub onContent()
     print "[player] "; play.kind; " "; play.id; " '"; play.name; "' from "; toInt(play.startPosition); " s"
     m.stallTimer.control = "stop"
     m.startTimer.control = "stop"
+    m.seekTimer.control = "stop"
+    m.seekPending = invalid
+    stopHold()
     m.bufferingSince = -1
     m.livePlayed = false
     m.vodPlayed = false         ' this movie or episode has played
@@ -254,6 +266,8 @@ sub watchStall(state as String)
         if waited >= 1 and (m.livePlayed or m.playedSinceLoad) then print "[player] buffered "; Int(waited); " s ("; m.mode; ", ended "; state; ")"
         m.bufferingSince = -1
     end if
+    ' The live buffer's normal gap behind the newest segment (bufferBehind).
+    if state = "playing" and m.mode = "live" and not m.bufferStarted and m.play <> invalid and isTrue(m.play.buffered) then bufferStartAtLive()
     if state = "playing" and m.mode = "live" and not m.livePlayed
         m.livePlayed = true
         m.top.livePlaying = { streamId: m.play.id }
@@ -636,6 +650,7 @@ sub close()
     m.startTimer.control = "stop"
     m.overlayTimer.control = "stop"
     m.liveTick.control = "stop"
+    stopHold()
     reportProgress()
     m.video.control = "stop"
     m.play = invalid
@@ -649,6 +664,7 @@ end sub
 sub startLive()
     m.timeshiftTimeout.control = "stop"
     m.mode = "live"
+    m.bufferStarted = false ' checked again once it plays (bufferStartAtLive)
     m.video.enableTrickPlay = false     ' our keys, not the Video node's
     loadVideo(m.play.url, asString(m.play.streamFormat), true, 0)
     showOverlay()
@@ -671,6 +687,200 @@ sub pauseLive()
     showOverlay()
     m.overlayTimer.control = "stop"     ' stay up while paused
 end sub
+
+' ---------------------------------------------------------------------------
+' Live buffer (the Pi records the channel; m.play.buffered): the stream is
+' one long live playlist, so pausing holds the picture and the player can go
+' back within it. Play/Pause holds and carries on; Rewind jumps back 30 s,
+' Left / Right 10 s; Fast-forward returns to live. Back always leaves the
+' channel: as "go live" it got pressed once too often and left (Oct 2026).
+
+function bufferKey(key as String) as Boolean
+    if key = "fastforward"
+        m.seekPending = invalid
+        m.seekTimer.control = "stop"
+        if m.mode = "held" or bufferBehind() > 5
+            goLive()
+        else
+            showNote("You're watching live.")
+        end if
+        return true
+    end if
+    if key = "play"
+        if m.mode = "held"
+            m.video.control = "resume"
+            m.mode = "live"
+            print "[player] buffer: carried on at "; Int(m.video.position); " s (duration "; Int(m.video.duration); ")"
+        else
+            m.video.control = "pause"
+            m.heldBehind = bufferBehind()       ' then counting up while held (watchingBehind)
+            m.heldAt = nowSeconds()
+            m.mode = "held"
+            print "[player] buffer: held at "; Int(m.video.position); " s (duration "; Int(m.video.duration); ")"
+        end if
+        showOverlay()
+        if m.mode = "held" then m.overlayTimer.control = "stop"
+        return true
+    end if
+    jump = bufferJump(key)
+    if jump = 0 then return false
+    addJump(jump)
+    ' Held down, the key keeps going (Roku sends one press and one release,
+    ' no repeats): onHoldTimer adds a step each tick until the release.
+    m.holdKey = key
+    m.holdTicks = 0
+    m.holdTimer.control = "stop"
+    m.holdTimer.control = "start"
+    return true
+end function
+
+function bufferJump(key as String) as Integer
+    if key = "rewind" then return -30
+    if key = "left" then return -10
+    if key = "right" then return 10
+    return 0
+end function
+
+' The held key: another step each tick, bigger after a couple of seconds.
+sub onHoldTimer()
+    if m.holdKey = invalid or m.play = invalid or not isTrue(m.play.buffered) or (m.mode <> "live" and m.mode <> "held")
+        stopHold()
+        return
+    end if
+    m.holdTicks = m.holdTicks + 1
+    if m.holdTicks > 300                ' a release that never came
+        stopHold()
+        return
+    end if
+    jump = bufferJump(m.holdKey)
+    if m.holdTicks > 6 then jump = jump * 3
+    addJump(jump)
+end sub
+
+sub stopHold()
+    m.holdKey = invalid
+    m.holdTimer.control = "stop"
+end sub
+
+' Presses add up and the player jumps once, half a second after the last
+' (or after a held key is let go): each jump makes it load again, so five
+' presses felt like five stutters (Oct 2026).
+sub addJump(jump as Integer)
+    if m.seekPending = invalid
+        m.seekPending = 0
+        m.seekFrom = m.video.position
+    end if
+    ' Kept within the buffer: back no further than its start (when the TV
+    ' tuned in), ahead no further than live.
+    m.seekPending = m.seekPending + jump
+    earliest = -Int(m.seekFrom)
+    latest = liveSpot() - Int(m.seekFrom)
+    if latest < 0 then latest = 0
+    if m.seekPending <= earliest
+        m.seekPending = earliest
+        m.note = "Start of the buffer (when you tuned in to this channel)"
+    else if m.seekPending >= latest
+        m.seekPending = latest
+        m.note = "Live"
+    else
+        m.note = seekNote(m.seekPending)
+    end if
+    showOverlay()
+    m.seekTimer.control = "stop"
+    m.seekTimer.control = "start"
+end sub
+
+function seekNote(offset as Integer) as String
+    if offset < 0 then return "Back " + formatDuration(-offset)
+    if offset > 0 then return "Ahead " + formatDuration(offset)
+    return "Here"
+end function
+
+sub onSeekTimer()
+    offset = m.seekPending
+    m.seekPending = invalid
+    if offset = invalid or m.play = invalid then return
+    if m.mode = "held"
+        m.video.control = "resume"
+        m.mode = "live"
+    end if
+    target = m.seekFrom + offset
+    m.note = ""
+    ' The buffer starts when the TV tuned in: say so, so a press that can't
+    ' go further back isn't a mystery. Not past live either.
+    if target < 1
+        target = 0
+        m.note = "Start of the buffer (when you tuned in to this channel)"
+    end if
+    if target >= liveSpot()
+        goLive()
+        return
+    end if
+    print "[player] buffer: jump "; offset; " s, from "; Int(m.seekFrom); " to "; Int(target); " s (duration "; Int(m.video.duration); ")"
+    m.video.seek = target
+    showOverlay()
+end sub
+
+' Where live is in the player's timeline: the newest segment, less the gap
+' the player keeps at live.
+function liveSpot() as Integer
+    spot = Int(m.video.duration) - m.LIVE_GAP
+    if spot < 0 then return 0
+    return spot
+end function
+
+' Back to live within the buffer: a jump, no reload (a reload of a long
+' buffered playlist starts at its beginning, not at live).
+sub goLive()
+    if m.mode = "held"
+        m.video.control = "resume"
+        m.mode = "live"
+    end if
+    print "[player] buffer: back to live ("; liveSpot(); " s of "; Int(m.video.duration); ")"
+    m.video.seek = liveSpot()
+    showNote("Live")
+end sub
+
+' A buffered channel loaded (or reloaded) starts where the player chooses,
+' which for a long buffer is its beginning: move it to live.
+sub bufferStartAtLive()
+    m.bufferStarted = true
+    if m.video.duration - m.video.position > m.LIVE_GAP + 20
+        print "[player] buffer: started "; Int(m.video.duration - m.video.position); " s back; moving to live"
+        m.video.seek = liveSpot()
+    end if
+end sub
+
+' Seconds behind live: the player's duration is how much is buffered, its
+' position where it is in that, and at live it runs m.LIVE_GAP behind.
+function bufferBehind() as Integer
+    if m.play = invalid or not isTrue(m.play.buffered) then return 0
+    behind = Int(m.video.duration - m.video.position) - m.LIVE_GAP
+    if behind < 0 then return 0
+    return behind
+end function
+
+' Seconds the picture is behind live: paused or rewound in the live buffer,
+' or watching the archive; 0 at live.
+function watchingBehind() as Integer
+    if m.play = invalid then return 0
+    if m.mode = "timeshift"
+        position = Int(m.video.position)
+        if not m.tsConfirmed then position = m.tsPlayStart
+        behind = nowSeconds() - (m.tsStart + position)
+        if behind < 0 then return 0
+        return behind
+    end if
+    if m.mode = "paused" then return nowSeconds() - m.pausedAt
+    if m.mode = "held" then return m.heldBehind + nowSeconds() - m.heldAt
+    return bufferBehind()
+end function
+
+function clampFraction(f as Float) as Float
+    if f < 0 then return 0
+    if f > 1 then return 1
+    return f
+end function
 
 ' Newest moment the archive reliably has: it's written in one-minute
 ' segments and lags live (lagSeconds, from data/guide-rules.json).
@@ -849,8 +1059,10 @@ end sub
 sub drawOverlay()
     if m.note <> ""
         m.modeLine.text = m.note
-    else if m.mode = "paused"
+    else if m.mode = "paused" or m.mode = "held"
         m.modeLine.text = "PAUSED  -  press Play to continue"
+    else if isTrue(m.play.buffered) and watchingBehind() > 15
+        m.modeLine.text = "BEHIND LIVE  " + formatDuration(watchingBehind()) + "  -  Fast-forward: back to live"
     else if m.mode = "timeshift"
         ' Until the archive starts playing the Video node reports position 0;
         ' measure from where playback is headed instead.
@@ -865,6 +1077,8 @@ sub drawOverlay()
 
     if m.mode = "timeshift"
         m.hints.text = "Play/Pause, Rewind, Fast-forward: move through the archive     Back: return to live"
+    else if isTrue(m.play.buffered)
+        m.hints.text = "Play/Pause: pause    Rewind: 30 s back    Left / Right: 10 s    Fast-forward: live    Up/Down: change favorite    OK again: channel info and favorites    Back: close"
     else if canRewind()
         m.hints.text = "Up/Down: change favorite    Play/Pause: pause    Rewind: go back    Replay: start this program over    OK again: channel info and favorites    Back: close"
     else
@@ -886,18 +1100,22 @@ sub drawOverlay()
         m.nowTitle.text = current.title
         m.nowDesc.text = asString(current.description)
         m.nowTime.text = formatClock(current.start) + " - " + formatClock(current.ends)
-        fraction = (now - current.start) / (current.ends - current.start)
-        if fraction < 0 then fraction = 0
-        if fraction > 1 then fraction = 1
-        m.progressFill.width = 1728 * fraction
+        ' Blue up to the moment being watched; behind live (paused, rewound
+        ' or in the archive), lighter from there up to live.
+        span = current.ends - current.start
+        watching = now - watchingBehind()
+        m.progressFill.width = 1728 * clampFraction((watching - current.start) / span)
+        m.progressLive.width = 1728 * clampFraction((now - current.start) / span)
         m.progressTrack.visible = true
         m.progressFill.visible = true
+        m.progressLive.visible = true
     else
         m.nowTitle.text = "No guide information"
         m.nowDesc.text = ""
         m.nowTime.text = ""
         m.progressTrack.visible = false
         m.progressFill.visible = false
+        m.progressLive.visible = false
     end if
 
     if type(upcoming) = "roAssociativeArray"
@@ -908,7 +1126,14 @@ sub drawOverlay()
 end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
-    if not press then return false
+    if not press
+        ' A held jump key let go: the jump happens half a second later.
+        if m.holdKey <> invalid and key = m.holdKey
+            stopHold()
+            return true
+        end if
+        return false
+    end if
     ' Channel info open: Back closes it; nothing else reaches the player
     ' (Up/Down at the end of its list mustn't change channel).
     if m.infoPanel.visible
@@ -923,6 +1148,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         end if
         return true
     end if
+    ' Through the Pi's live buffer: pause and go back without the archive.
+    if m.play <> invalid and isTrue(m.play.buffered) and (m.mode = "live" or m.mode = "held") and bufferKey(key) then return true
     ' Error panel with other copies: Up/Down stay in its list.
     if m.errorPanel.visible and m.errorCopyList.visible and (key = "up" or key = "down") then return true
     ' Error panel: OK tries again (a copy chosen in its list never gets here).

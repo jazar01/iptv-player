@@ -122,7 +122,11 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   converter on a home Raspberry Pi"). Settings finds it by a UDP broadcast
   (port 8791) that StreamRelay sends and the Pi answers; playback searches
   the same way when the converter fails (new address saved, or 10 minutes
-  of copies when it's off).
+  of copies when it's off). The same service runs the live buffer
+  (`buffer.py`): with Settings -> Live buffer on, every live channel plays
+  through the Pi, which keeps it in memory since tuning in; PlayerScreen's
+  `bufferKey` handles pause, jumps (held keys repeat) and Fast-forward to
+  live (requirements: "Live buffer on the home Pi").
 
 ## Conventions
 
@@ -278,6 +282,8 @@ optional record marks joined without a schema change).
 - Dolby converter on the home Raspberry Pi (Oct 8, 2026): ESPN 1080p played
   through it on the Basement TV (with `converter_test`) and works on the
   Family Room TV; not yet tried on the Deck TV or with the archive.
+- Live buffer on the Pi (Oct 8, 2026): pause, jumps and back to live
+  checked on the Basement TV; not yet deployed to the Family Room or Deck.
 - Known limits: HD timeshift archives exceed this Roku's video buffer; some
   channels sometimes send an AAC variant no Roku decodes (Tennis Channel 2;
   it played again on Oct 8, 2026, and the Pi converter, which re-encodes the
