@@ -134,6 +134,8 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   the provider's archive into the same pieces, so HD archives fit the Roku. `probe.py` (`/p/`)
   reads the start of a movie or episode file for its details page
   (picture, audio tracks, subtitles; `requestMediaInfo` in MainMovies.brs).
+  `vod.py` (`/v/<start>/`) plays a Dolby-only movie or episode with its audio
+  converted, for TVs that take stereo (`checkVodAudio` in MainPlayback.brs).
 
 ## Conventions
 

@@ -6,6 +6,7 @@ sub initPlayback()
     m.player = invalid
     m.playing = invalid         ' current play request
     m.watchedKey = ""           ' "kind:id" already marked watched in this play
+    m.vodPending = invalid      ' a movie or episode waiting for its audio check (checkVodAudio)
     m.resumeDialog = invalid
     m.tzRules = invalid
     m.guideRules = invalid
@@ -355,6 +356,13 @@ end sub
 ' Player
 
 sub startPlayer(play as Object, position as Integer)
+    ' A movie or episode on a TV that can't play Dolby: its audio is checked
+    ' first, and a file with no track this TV can play goes through the Pi
+    ' (checkVodAudio). Played straight, it was silent, with no error.
+    if (play.kind = "movie" or play.kind = "episode") and not isTrue(play.audioChecked) and vodNeedsCheck()
+        checkVodAudio(play, position)
+        return
+    end if
     play.startPosition = position
     ' Leaving a buffered channel: the Pi can stop recording it.
     previous = m.playing
@@ -392,6 +400,66 @@ sub startPlayer(play as Object, position as Integer)
         m.epg.callFunc("want", [play.id])
     end if
 end sub
+
+' ---------------------------------------------------------------------------
+' Movies and episodes whose only audio is Dolby, on a TV that takes stereo:
+' the Pi reads the file's tracks (probe.py, /p/; often already asked by the
+' details page and kept there), and if none can play here, the file plays
+' through the Pi from the resume point with its audio converted (vod.py,
+' /v/<start>/). The player's position then counts from that point
+' (vodOffset, added back in its progress reports).
+
+function vodNeedsCheck() as Boolean
+    if converterAddress() = "" or converterDown() then return false
+    info = CreateObject("roDeviceInfo")
+    return not (canPlayAudio(info, "ac3") and canPlayAudio(info, "eac3"))
+end function
+
+sub checkVodAudio(play as Object, position as Integer)
+    play.audioChecked = true
+    m.vodPending = { play: play, position: position }
+    showToast("Checking this file's sound ...")
+    path = "movie"
+    if play.kind = "episode" then path = "series"
+    url = streamUrl(path, play.id, asString(play.ext))
+    p = Instr(1, url, "://")
+    sendRequest({ id: "vodAudio", url: "http://" + converterAddress() + "/p/" + Left(url, p - 1) + "/" + Mid(url, p + 3), timeoutMs: 12000, context: { kind: play.kind, id: play.id } })
+end sub
+
+sub onVodAudio(res as Object)
+    pending = m.vodPending
+    if pending = invalid or toInt(res.context.id) <> toInt(pending.play.id) then return
+    m.vodPending = invalid
+    play = pending.play
+    position = pending.position
+    tracks = []
+    if res.ok and type(res.data) = "roAssociativeArray" and isTrue(res.data.ok) and type(res.data.audio) = "roArray" then tracks = res.data.audio
+    if tracks.Count() > 0 and not anyTrackPlays(tracks)
+        url = play.url
+        p = Instr(1, url, "://")
+        play.url = "http://" + converterAddress() + "/v/" + position.ToStr() + "/" + Left(url, p - 1) + "/" + Mid(url, p + 3)
+        play.streamFormat = "hls"
+        play.vodOffset = position
+        play.converted = true
+        print "[main] "; play.kind; " "; play.id; ": no audio track this TV plays ("; asString(tracks[0].codec); "); through the Pi from "; position; " s"
+        startPlayer(play, 0)
+        return
+    end if
+    if tracks.Count() = 0 then print "[main] "; play.kind; " "; play.id; ": audio not checked ("; friendlyRequestError(res); "); playing it directly"
+    startPlayer(play, position)
+end sub
+
+' The Pi's track names (probe.py) this Roku can decode as connected.
+function anyTrackPlays(tracks as Object) as Boolean
+    info = CreateObject("roDeviceInfo")
+    codecs = { "aac": "aac", "mp3": "mp3", "mp2": "mp3", "flac": "flac", "opus": "opus", "vorbis": "vorbis", "pcm": "lpcm", "dolby digital": "ac3", "dolby digital plus": "eac3", "dolby digital plus atmos": "eac3" }
+    for each t in tracks
+        name = LCase(asString(t.codec))
+        codec = codecs[name]
+        if codec <> invalid and canPlayAudio(info, codec) then return true
+    end for
+    return false
+end function
 
 sub onPlayerClosed()
     if m.player = invalid then return

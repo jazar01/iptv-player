@@ -142,6 +142,8 @@ sub routeApiResponse(res as Object)
         onMediaInfo(res)
     else if res.id = "espnFile"
         onEspnFile(res)
+    else if res.id = "vodAudio"
+        onVodAudio(res)
     end if
 end sub
 

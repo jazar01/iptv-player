@@ -14,7 +14,7 @@ fi
 id dolbyconv >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin dolbyconv
 
 install -d /opt/dolby-converter
-install -m 0644 converter.py buffer.py probe.py archive.py /opt/dolby-converter/
+install -m 0644 converter.py buffer.py probe.py archive.py vod.py /opt/dolby-converter/
 install -m 0644 dolby-converter.service /etc/systemd/system/dolby-converter.service
 systemctl daemon-reload
 systemctl enable dolby-converter >/dev/null 2>&1

@@ -627,6 +627,13 @@ sub reportProgress()
     position = Int(m.video.position)
     duration = Int(m.video.duration)
     if duration <= 0 then duration = toInt(m.play.duration)
+    ' Through the Pi with its audio converted, the stream starts at the
+    ' resume point and grows as it's made: the position counts from there,
+    ' and the length is the file's.
+    if toInt(m.play.vodOffset) > 0 or isTrue(m.play.converted)
+        position = position + toInt(m.play.vodOffset)
+        if toInt(m.play.duration) > 0 then duration = toInt(m.play.duration)
+    end if
     m.top.progress = { play: m.play, position: position, duration: duration, finished: m.finished }
 end sub
 

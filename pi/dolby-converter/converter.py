@@ -19,6 +19,7 @@ prefix in front of the URL it would have played:
 /b/, /bc/ ...  the live buffer (buffer.py): instant pause and rewind on every channel
 /p/...  what's inside a movie or episode file (probe.py), for the details pages
 /a/, /ac/ ...  the provider's archive in 2-second pieces (archive.py): HD archives fit the Roku
+/v/<start>/...  a movie or episode with its audio converted to stereo (vod.py)
 /health a small JSON status
 UDP 8791 answers the app's search for a converter (Settings -> Dolby converter)
 
@@ -32,6 +33,7 @@ import argparse
 import buffer
 import ipaddress
 import probe
+import vod
 import json
 import logging
 import shutil
@@ -44,7 +46,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.5"
+VERSION = "1.6"
 DEFAULT_UA = "Roku/DVP-14.0 (14.0.0.0)"     # the provider refuses non-Roku agents (404)
 UPSTREAM_TIMEOUT = 20                       # seconds, per read
 MAX_SEGMENT = 64 * 1024 * 1024              # archive minutes run about 20 MB
@@ -227,7 +229,7 @@ class Handler(BaseHTTPRequestHandler):
             self.health()
             return
         try:
-            if self.live_buffer() or self.archive():
+            if self.live_buffer() or self.archive() or self.vod():
                 return
         except (BrokenPipeError, ConnectionResetError):
             return
@@ -250,6 +252,39 @@ class Handler(BaseHTTPRequestHandler):
             self.relay(url, convert=(route == "/x/"))
         except (BrokenPipeError, ConnectionResetError):
             pass        # the Roku moved on (channel change, seek)
+
+    def vod(self):
+        """Movies and episodes converted (vod.py); False for anything else."""
+        prefix = self.path.split("/", 2)[1] if self.path.count("/") >= 2 else ""
+        if prefix not in ("v", "vs"):
+            return False
+        if prefix == "vs":
+            parts = self.path.split("?", 1)[0].split("/")      # ['', 'vs', id, 'p00001.ts']
+            job = vod.find(parts[2]) if len(parts) == 4 else None
+            data = job.piece(parts[3]) if job else None
+            if data is None:
+                self.send_error(404)
+                return True
+            self.send_body(200, "video/mp2t", data)
+            count("segments")
+            return True
+        # /v/<start>/<scheme>/<host>/<path>
+        pieces = self.path.split("/", 3)                        # ['', 'v', start, rest]
+        url = upstream_url("/v/" + pieces[3]) if len(pieces) == 4 and pieces[2].isdigit() else None
+        if url is None:
+            self.send_error(404)
+            return True
+        agent = self.headers.get("User-Agent", "")
+        if not agent.startswith("Roku"):
+            agent = DEFAULT_UA
+        job = vod.job_for(url, int(pieces[2]), agent, self.server.ffmpeg)
+        if not vod.wait_for_start(job):
+            self.send_error(502)
+            count("failed")
+            return True
+        self.send_body(200, "application/vnd.apple.mpegurl", job.playlist_text().encode())
+        count("playlists")
+        return True
 
     def archive(self):
         """The archive's routes (archive.py); False for anything else."""
