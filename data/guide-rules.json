@@ -69,7 +69,7 @@
       "zone": "America/New_York"
     }
   ],
-  "myTeamsComment": "My Teams: games for saved teams found in event-channel names. eventCategories: live categories to scan (regexes on the category name). sports: the fixed sport list. sportRules: first pattern matching the category name plus channel name (lower case) decides the sport. separators: how a matchup's two sides are joined. replayWords: names containing these are replays. laterLanguages: channels with these words are listed after the others for the same game. Times in hours.",
+  "myTeamsComment": "My Teams: games for saved teams found in event-channel names. eventCategories: live categories to scan (regexes on the category name). sports: the fixed sport list. sportRules: first pattern matching the category name plus channel name (lower case) decides the sport. separators: how a matchup's two sides are joined. replayWords: names containing these are replays. ifNecessaryWords: a network game whose title or description says this may not be played (playoffs): its rebroadcasts are left out and its live airing is labelled (if necessary). On networks whose guide tags live airings (titleTags flag live), game listings without the tag are replays. laterLanguages: channels with these words are listed after the others for the same game. Times in hours.",
   "myTeams": {
     "eventCategories": ["^sports\\s*\\|", "^ppv\\b"],
     "skipCategories": ["\\bteams\\b", "\\breplays?\\b"],
@@ -107,6 +107,7 @@
     ],
     "separators": [" vs\\.? ", " v ", " @ ", " at "],
     "replayWords": "replay|encore|re-air|rebroadcast|highlights|recap|classic",
+    "ifNecessaryWords": "if necessary",
     "laterLanguages": "spanish|español|espanol|portugu|french|punjabi|\\(es\\)",
     "liveHours": 3.5,
     "lookbackHours": 4,

@@ -150,8 +150,13 @@ function Get-RulePatterns($rules) {
     return @($list | Where-Object { $_ })
 }
 foreach ($file in Get-ChildItem (Join-Path $root 'data') -Filter *.json) {
-    try { $rules = Get-Content $file.FullName -Raw | ConvertFrom-Json -ErrorAction Stop }
+    $text = Get-Content $file.FullName -Raw -Encoding UTF8
+    try { $rules = $text | ConvertFrom-Json -ErrorAction Stop }
     catch { throw "data\$($file.Name) isn't valid JSON, so nothing was packaged: $($_.Exception.Message)" }
+    # ConvertFrom-Json lets control characters through, but strict JSON (and
+    # the Roku) may not: a "\b" typed through a shell became a backspace in a
+    # pattern (Oct 9, 2026).
+    if ($text -match '[\x00-\x08\x0B\x0C\x0E-\x1F]') { throw "data\$($file.Name) contains a control character (a mistyped \b or \t?), so nothing was packaged." }
     if ($file.Name -eq 'guide-rules.json') {
         foreach ($pattern in Get-RulePatterns $rules) {
             try { [void][regex]::new($pattern) }

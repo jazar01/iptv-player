@@ -521,8 +521,10 @@ sub onConverterChoice()
     choice = dlg.buttonSelected
     m.converterDialog = invalid
     dlg.close = true
+    refocusAfterDialog()
     if choice < 0 or choice >= m.converterChoice.Count() then return
     action = m.converterChoice[choice]
+    print "[main] Dolby converter: "; action
     if action = "use"
         saveConverter(m.converterFound)
     else if action = "off"
@@ -539,6 +541,33 @@ end sub
 sub onConverterClosed(event as Object)
     closed = event.GetRoSGNode()
     if m.converterDialog <> invalid and m.converterDialog.IsSameNode(closed) then m.converterDialog = invalid
+    refocusAfterDialog()
+end sub
+
+' The converter's dialogs open one after another (searching, then what was
+' found), and when the last one closed the Roku could hand focus back to the
+' first, gone by then: Settings stopped answering the remote until the app
+' was restarted (the Master Bedroom TV, Oct 9, 2026). A moment after a
+' dialog closes, a screen that has lost focus gets it back.
+sub refocusAfterDialog()
+    if m.dialogFocusTimer = invalid
+        m.dialogFocusTimer = CreateObject("roSGNode", "Timer")
+        m.dialogFocusTimer.duration = 0.3
+        m.dialogFocusTimer.ObserveField("fire", "onDialogFocusTimer")
+        m.top.AppendChild(m.dialogFocusTimer)
+    end if
+    m.dialogFocusTimer.control = "stop"
+    m.dialogFocusTimer.control = "start"
+end sub
+
+sub onDialogFocusTimer()
+    dlg = m.top.dialog
+    if dlg <> invalid and dlg.IsInFocusChain() then return     ' another dialog is up
+    if m.topBar.IsInFocusChain() then return
+    if m.overlays.Count() > 0 and m.overlays.Peek().IsInFocusChain() then return
+    if m.overlays.Count() = 0 and m.section <> "" and m.sections[m.section] <> invalid and m.sections[m.section].IsInFocusChain() then return
+    print "[main] nothing had focus after a dialog closed; returned it to the screen"
+    focusContent()
 end sub
 
 ' Back while searching: stop waiting for it.

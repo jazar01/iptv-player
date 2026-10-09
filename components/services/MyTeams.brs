@@ -26,6 +26,7 @@ function teamRules() as Object
         sportRules: []
         sportLabels: {}
         replay: optionalRegex(cfg.replayWords)
+        ifNecessary: optionalRegex(cfg.ifNecessaryWords)
         later: optionalRegex(cfg.laterLanguages)
         separators: optionalRegex(joinPatterns(cfg.separators))
         liveSeconds: hoursToSeconds(cfg.liveHours, 3.5)
@@ -484,6 +485,18 @@ sub addNetworkGames(groups as Object, teams as Object, networks as Object, now a
     for each n in networks
         json = ParseJson(ReadAsciiFile(n.guideFile))
         if type(json) = "roAssociativeArray" and type(json.epg_listings) = "roArray"
+            ' A network whose guide tags live airings ("ᴸᶦᵛᵉ", titleTags flag
+            ' "live"): its game listings without the tag are rebroadcasts. FS1
+            ' listed untagged replays of an NLDS Game 5 "(If necessary)" that
+            ' was never played, at 12:30 and 10 AM, shown as Braves games
+            ' (Oct 9, 2026). Networks that never tag keep the other rules.
+            usesLiveTag = false
+            for each listing in json.epg_listings
+                if type(listing) = "roAssociativeArray" and hasLiveTag(listing.title, rules)
+                    usesLiveTag = true
+                    exit for
+                end if
+            end for
             for each listing in json.epg_listings
                 ' A non-object entry gets no times, so it's skipped below.
                 start = 0
@@ -510,6 +523,17 @@ sub addNetworkGames(groups as Object, teams as Object, networks as Object, now a
                             if sport = "" then noteSkip(n.label + ": " + title, "guide listing doesn't name its sport")
                             if sport <> "" and (t.sports.Count() = 0 or t.sports.DoesExist(sport))
                                 replay = rules.replay <> invalid and rules.replay.IsMatch(title)
+                                if usesLiveTag and not hasLiveTag(listing.title, rules) then replay = true
+                                ' A game that happens only if the series goes that far: a
+                                ' rebroadcast of it is a placeholder (left out); the live
+                                ' airing says so in its title.
+                                maybe = rules.ifNecessary <> invalid and rules.ifNecessary.IsMatch(text)
+                                if maybe and replay
+                                    noteSkip(n.label + ": " + title, "rebroadcast of a game that's only played if necessary")
+                                    sport = ""
+                                end if
+                            end if
+                            if sport <> "" and (t.sports.Count() = 0 or t.sports.DoesExist(sport))
                                 ' Matchup from the title, or from the description's first sentence.
                                 source = title
                                 if inDescription
@@ -517,10 +541,12 @@ sub addNetworkGames(groups as Object, teams as Object, networks as Object, now a
                                     periodAt = Instr(1, source, ". ")
                                     if periodAt > 0 then source = Left(source, periodAt - 1)
                                 end if
+                                gameName = gameTitle(source, "", t, rules)
+                                if maybe then gameName = gameName + " (if necessary)"
                                 mergeGame(groups, t, {
                                     start: start
                                     ends: ends
-                                    title: gameTitle(source, "", t, rules)
+                                    title: gameName
                                     sport: sport
                                     replay: replay
                                 }, { streamId: n.streamId, name: n.label, epgChannelId: n.epgChannelId, network: true, later: false }, now, rules)
@@ -532,6 +558,21 @@ sub addNetworkGames(groups as Object, teams as Object, networks as Object, now a
         end if
     end for
 end sub
+
+' Whether a guide title carries a tag flagged "live" (titleTags).
+function hasLiveTag(value as Dynamic, rules as Object) as Boolean
+    text = asString(value)
+    if rules.base64Titles and text <> ""
+        bytes = CreateObject("roByteArray")
+        bytes.FromBase64String(text)
+        decoded = bytes.ToAsciiString()
+        if decoded <> "" then text = decoded
+    end if
+    for each tag in rules.titleTags
+        if tag.flag = "live" and Instr(1, text, tag.text) > 0 then return true
+    end for
+    return false
+end function
 
 ' Guide text: base64-decoded (if the rules say so), superscript tags removed.
 function guideText(value as Dynamic, rules as Object) as String
