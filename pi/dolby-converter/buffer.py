@@ -106,7 +106,8 @@ class Recorder:
                     break
             except Exception as e:
                 failures += 1
-                log.info("buffer: %s: %s (%d)", self.name, type(e).__name__, failures)
+                log.info("buffer: %s: %s (%d)", self.name, describe(e), failures)
+                self.final = None           # next try starts a new session
                 if failures >= 6:
                     self.error = e
                     break
@@ -126,10 +127,13 @@ class Recorder:
         new_session = False
         text, final = None, None
         if self.final:
+            # Any failure, not only an HTTP refusal: an edge server that stops
+            # answering (timeouts, Oct 8, 2026) was retried until the recorder
+            # gave up, while the original address would have sent it elsewhere.
             try:
                 text, final = self.fetch_text(self.final)
-            except UpstreamError as e:
-                log.info("buffer: %s: provider session ended (%s); starting a new one", self.name, e)
+            except Exception as e:
+                log.info("buffer: %s: provider session lost (%s); starting a new one", self.name, describe(e))
                 self.final = None
         if text is None:
             text, final = self.fetch_text(self.url)
@@ -256,6 +260,13 @@ def summaries():
     with recorders_lock:
         active = list(recorders.values())
     return [r.summary() for r in active]
+
+
+def describe(e):
+    """A failure for the log, without the address (it holds the password)."""
+    if isinstance(e, urllib.error.URLError):
+        return f"URLError: {type(e.reason).__name__}"
+    return type(e).__name__
 
 
 def safe_name(url):
