@@ -4,6 +4,11 @@
 
 sub initTeams()
     m.games = []                ' last SearchTask result (see MyTeams.brs)
+    m.nextGames = {}            ' team ID -> its next game from ESPN (nextGames in MyTeams.brs)
+    m.espnPending = 0           ' ESPN team lists and schedules still to arrive
+    m.espnBatch = 0
+    m.espnAt = 0                ' when the last batch was asked for
+    m.espnLastKey = ""         ' its files, so the same ones wait 10 minutes
     m.guideReady = false        ' network guides saved to cachefs: at least once
     m.guideFetchedAt = 0
     m.guidePending = 0          ' network guides still to arrive in this batch
@@ -171,6 +176,36 @@ sub onTeamGuide(res as Object)
     requestGames()
 end sub
 
+' ESPN team lists and schedules SearchTask asked for (missing or old), saved
+' to cachefs: for it to read; the games are searched again once they're in.
+' The same files are asked for at most every 10 minutes, so ones that keep
+' failing don't repeat on every Home visit; new ones (the schedules, once
+' the team lists are in) go at once.
+sub fetchEspnFiles(needed as Object)
+    if needed.Count() = 0 then return
+    if m.espnPending > 0 and nowSeconds() - m.espnAt < 180 then return
+    key = ""
+    for each f in needed
+        key = key + asString(f.file) + "|"
+    end for
+    if key = m.espnLastKey and nowSeconds() - m.espnAt < 600 then return
+    m.espnLastKey = key
+    m.espnAt = nowSeconds()
+    m.espnBatch = m.espnBatch + 1
+    m.espnPending = needed.Count()
+    for each f in needed
+        sendRequest({ id: "espnFile", priority: "low", url: asString(f.url), cacheFile: asString(f.file), saveOnly: true, maxAgeSeconds: toInt(f.maxAge), timeoutMs: 30000, context: { batch: m.espnBatch } })
+    end for
+end sub
+
+sub onEspnFile(res as Object)
+    if type(res.context) <> "roAssociativeArray" or toInt(res.context.batch) <> m.espnBatch then return
+    if not res.ok then print "[main] My Teams: an ESPN schedule didn't download: "; redact(asString(res.error))
+    m.espnPending = m.espnPending - 1
+    if m.espnPending > 0 then return
+    requestGames()
+end sub
+
 sub onGamesTimer()
     if m.section = "home" and m.overlays.Count() = 0 then requestGames()
 end sub
@@ -195,10 +230,26 @@ sub onGamesResult(event as Object)
         end if
         starts.Push(toInt(s.start))
     end for
+    ' With days of listings, the live game and its rebroadcast can both be
+    ' ahead: the same matchup 6 to 15 hours after another in this list is a
+    ' replay too (Falcons on NBC at 8:15 PM, NFL Network at 2:30 AM).
+    listed = {}
+    for each g in result.games
+        key = matchupKey(g)
+        starts = listed[key]
+        if starts = invalid
+            starts = []
+            listed[key] = starts
+        end if
+        starts.Push(g.start)
+    end for
     started = []
     for each g in result.games
         key = matchupKey(g)
-        for each earlier in asArray(seen[key])
+        earliers = []
+        earliers.Append(asArray(seen[key]))
+        earliers.Append(listed[key])
+        for each earlier in earliers
             gap = g.start - earlier
             if gap > 6 * 3600 and gap < 15 * 3600 then g.replay = true
         end for
@@ -206,6 +257,8 @@ sub onGamesResult(event as Object)
     end for
     if started.Count() > 0 then m.store.callFunc("recordSeenGames", started)
     m.games = result.games
+    if type(result.next) = "roAssociativeArray" then m.nextGames = result.next
+    if type(result.nextNeeded) = "roArray" then fetchEspnFiles(result.nextNeeded)
     refreshHome()
     fetchScores()
     if type(result.networks) = "roArray" then fetchNetworkGuides(result.networks)

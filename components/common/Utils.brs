@@ -276,6 +276,21 @@ function monthNumber(name as String) as Integer
 end function
 
 ' UTC seconds -> local "Sun 1:00 PM".
+' A game's day and time: "Sun 8:20 PM" within the coming week, else with
+' the date ("Sun Oct 19, 8:20 PM"); without a set time, the day alone
+' ("Sun Oct 19, time to be announced").
+function formatGameWhen(utc as Integer, timeKnown as Boolean) as String
+    dt = CreateObject("roDateTime")
+    dt.FromSeconds(utc)
+    dt.ToLocalTime()
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    day = Left(dt.GetWeekday(), 3)
+    if utc - nowSeconds() >= 6 * 86400 or not timeKnown then day = day + " " + months[dt.GetMonth() - 1] + " " + dt.GetDayOfMonth().ToStr()
+    if not timeKnown then return day + ", time to be announced"
+    if Instr(1, day, " ") > 0 then return day + ", " + formatClock(utc)
+    return day + " " + formatClock(utc)
+end function
+
 function formatDayTime(utc as Integer) as String
     dt = CreateObject("roDateTime")
     dt.FromSeconds(utc)

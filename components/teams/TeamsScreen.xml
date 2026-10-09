@@ -14,7 +14,7 @@
     <Poster width="1920" height="1080" uri="pkg:/images/ui/background.jpg" />
     <Label translation="[96,56]" width="1600" font="font:LargeBoldSystemFont" color="0xFFFFFFFF" text="My Teams" />
     <Label translation="[96,120]" width="1500" wrap="true" font="font:SmallSystemFont" color="0x8C96A0FF"
-      text="Games for these teams in the next 24 hours appear on Home. Pick each team's sports so other teams with the same name stay out." />
+      text="Games for these teams in the next 3 days appear on Home, and each team's next game after that. Pick each team's sports so other teams with the same name stay out." />
     <LabelList id="list" translation="[96,230]" itemSize="[1200,68]" numRows="11"
       font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont"
       color="0xB8C1CAFF" focusedColor="0xFFFFFFFF" focusBitmapUri="pkg:/images/ui/row-focus.9.png" />

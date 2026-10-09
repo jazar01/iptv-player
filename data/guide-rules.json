@@ -111,7 +111,7 @@
     "laterLanguages": "spanish|español|espanol|portugu|french|punjabi|\\(es\\)",
     "liveHours": 3.5,
     "lookbackHours": 4,
-    "aheadHours": 24,
+    "aheadHours": 72,
     "networksComment": "Network broadcasts: these national channels' short guides are searched for teams (title first, then description), plus the local stations of the device's market (Settings -> Local stations). By guide ID, so renumbering doesn't matter; among channels sharing a guide ID, the first whose name doesn't match networkAvoid is used.",
     "localStationsComment": "Local stations: channels in categories matching localCategories (the capture group is the network) whose names match localName ('GA | Atlanta | ABC 2 WSB': state, city, station). A market is a state and city.",
     "localCategories": "^US \\| Local (ABC|CBS|NBC|FOX)\\b",
@@ -159,6 +159,13 @@
     "guideAction": "get_simple_data_table",
     "guideListings": 30,
     "guideMaxAgeMinutes": 60,
+    "nextGames": {
+      "comment": "For teams with nothing in the guide yet: their next game from ESPN's public site API (no key; unofficial, so it may change or stop: then the card says there's no game in the guide window). The team is found by name or alias in each league of its sports (the leagues are those of scores, without their query), its schedule read for the first game not started. Team lists are fetched again after teamsMaxAgeDays, schedules after scheduleMaxAgeHours.",
+      "teamsUrl": "https://site.api.espn.com/apis/site/v2/sports/{league}/teams?limit=1000",
+      "scheduleUrl": "https://site.api.espn.com/apis/site/v2/sports/{league}/teams/{id}/schedule",
+      "teamsMaxAgeDays": 30,
+      "scheduleMaxAgeHours": 6
+    },
     "scores": {
       "comment": "Live scores on game cards, from ESPN's public scoreboard JSON (no key; unofficial, so it may change or stop: then cards just show no score). Fetched only while Home shows a live game, every refreshSeconds, for that game's sport's leagues (our sport ID -> ESPN league paths, filled into url). groups=80 / 50 list every FBS football / Division I basketball game, not just the featured ones.",
       "url": "https://site.api.espn.com/apis/site/v2/sports/{league}/scoreboard",

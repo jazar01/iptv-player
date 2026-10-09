@@ -35,6 +35,7 @@ function teamRules() as Object
         segments: CreateObject("roRegex", "[:|]", "")
         parens: CreateObject("roRegex", "\([^)]*\)|\[[^\]]*\]", "")
         ranks: CreateObject("roRegex", "#\d+\s*|(^|\s)\d{1,2}\s+(?=[A-Za-z])|^\s*(19|20)\d{2}\s+", "")
+        rankNo: CreateObject("roRegex", "\bNo\.\s*\d+\s+", "i")
         spaces: CreateObject("roRegex", "\s+", "")
         networks: []
         networkAvoid: optionalRegex(cfg.networkAvoid)
@@ -238,6 +239,9 @@ function findGames(req as Object) as Object
 
     result.networks = resolveNetworks(req.market)
     if isTrue(req.withGuide) then addNetworkGames(groups, teams, result.networks, now, rules)
+    upcoming = nextGames(req.teams, now)
+    result.next = upcoming.games
+    result.nextNeeded = upcoming.needed
 
     ' Weak listings only add channels to games already found.
     for each w in weak
@@ -266,6 +270,17 @@ function findGames(req as Object) as Object
         end if
     end for
     if locals <> "" then print "[teams]   local stations: "; locals
+    for each t in req.teams
+        n = result.next[asString(t.id)]
+        if n <> invalid
+            if isTrue(n.none) or toInt(n.start) = 0
+                print "[teams]   next "; asString(t.name); ": none scheduled (ESPN)"
+            else
+                print "[teams]   next "; asString(t.name); ": "; formatDayTime(n.start); " vs/at "; n.opponent; " | "; n.tv
+            end if
+        end if
+    end for
+    if result.nextNeeded.Count() > 0 then print "[teams]   ESPN files to fetch: "; result.nextNeeded.Count()
     for each s in m.teamSkips
         print "[teams]   skipped: "; s
     end for
@@ -534,10 +549,14 @@ sub addNetworkGames(groups as Object, teams as Object, networks as Object, now a
                                 end if
                             end if
                             if sport <> "" and (t.sports.Count() = 0 or t.sports.DoesExist(sport))
-                                ' Matchup from the title, or from the description's first sentence.
+                                ' Matchup from the title (also when only the description
+                                ' names the team, if the title is a matchup: "College
+                                ' Football : Georgia at Alabama"), else from the
+                                ' description's first sentence, rankings taken out first:
+                                ' "The No. 2 Georgia Bulldogs ..." was cut to "The No".
                                 source = title
-                                if inDescription
-                                    source = description
+                                if inDescription and not (rules.separators <> invalid and rules.separators.IsMatch(title))
+                                    source = rules.rankNo.ReplaceAll(description, "")
                                     periodAt = Instr(1, source, ". ")
                                     if periodAt > 0 then source = Left(source, periodAt - 1)
                                 end if
@@ -711,4 +730,223 @@ function namesMatch(ours as Dynamic, theirs as Object) as Boolean
         end if
     end for
     return false
+end function
+
+' ---------------------------------------------------------------------------
+' Next games beyond the guide (myTeams.nextGames in data/guide-rules.json):
+' each team's schedule from ESPN's public site API, for the cards of teams
+' with nothing in the guide yet ("Next: Sun Oct 18, 1:00 PM / vs Chicago
+' Bears - FOX"). MainTeams downloads ESPN's team lists (a month) and the
+' teams' schedules (6 hours) to cachefs: (saveOnly); this reads them. Files
+' missing or old are listed in `needed`; old ones are still used meanwhile.
+' Information only: a game becomes playable when it shows up in the guide.
+
+function nextGameRules() as Dynamic
+    if m.nextGameRules <> invalid then return m.nextGameRules
+    m.nextGameRules = false
+    json = ParseJson(ReadAsciiFile("pkg:/data/guide-rules.json"))
+    if type(json) <> "roAssociativeArray" or type(json.myTeams) <> "roAssociativeArray" then return invalid
+    cfg = json.myTeams.nextGames
+    scores = json.myTeams.scores
+    if type(cfg) <> "roAssociativeArray" or type(scores) <> "roAssociativeArray" or type(scores.leagues) <> "roAssociativeArray" then return invalid
+    ' ESPN league paths per sport, as for live scores, without their query.
+    leagues = {}
+    for each sport in scores.leagues
+        list = []
+        for each path in asArray(scores.leagues[sport])
+            p = asString(path)
+            q = Instr(1, p, "?")
+            if q > 0 then p = Left(p, q - 1)
+            if p <> "" then list.Push(p)
+        end for
+        leagues[sport] = list
+    end for
+    m.nextGameRules = {
+        teamsUrl: asString(cfg.teamsUrl)
+        scheduleUrl: asString(cfg.scheduleUrl)
+        teamsMaxAge: toInt(cfg.teamsMaxAgeDays) * 86400
+        scheduleMaxAge: toInt(cfg.scheduleMaxAgeHours) * 3600
+        leagues: leagues
+    }
+    if m.nextGameRules.teamsMaxAge <= 0 then m.nextGameRules.teamsMaxAge = 30 * 86400
+    if m.nextGameRules.scheduleMaxAge <= 0 then m.nextGameRules.scheduleMaxAge = 6 * 3600
+    return m.nextGameRules
+end function
+
+' teams: as in gamesRequest. Returns { games: { "<team ID>": game or
+' { none: true } }, needed: [{ url, file, maxAge }] }; game: { start,
+' timeValid, opponent, home, tv, preseason }.
+function nextGames(teams as Object, now as Integer) as Object
+    out = { games: {}, needed: [] }
+    cfg = nextGameRules()
+    if type(cfg) <> "roAssociativeArray" or cfg.teamsUrl = "" or cfg.scheduleUrl = "" then return out
+    if m.espnIds = invalid then m.espnIds = {}
+    if m.espnParsed = invalid then m.espnParsed = {}
+    asked = {}
+    for each t in teams
+        names = [LCase(asString(t.name).Trim())]
+        for each alias in asArray(t.aliases)
+            if asString(alias).Trim() <> "" then names.Push(LCase(asString(alias).Trim()))
+        end for
+        sports = asArray(t.sports)
+        if sports.Count() = 0
+            sports = []
+            for each s in cfg.leagues
+                sports.Push(s)
+            end for
+        end if
+        best = invalid
+        known = false
+        for each sport in sports
+            for each league in asArray(cfg.leagues[asString(sport)])
+                key = league.Replace("/", "_")
+                teamsFile = "cachefs:/teams/espn_" + key + ".json"
+                if not fileFresh(teamsFile, cfg.teamsMaxAge, now) then addNeeded(out, asked, cfg.teamsUrl.Replace("{league}", league), teamsFile, cfg.teamsMaxAge)
+                espnId = espnTeamId(teamsFile, names)
+                if espnId <> ""
+                    schedule = "cachefs:/teams/espn_" + key + "_" + espnId + ".json"
+                    if not fileFresh(schedule, cfg.scheduleMaxAge, now) then addNeeded(out, asked, cfg.scheduleUrl.Replace("{league}", league).Replace("{id}", espnId), schedule, cfg.scheduleMaxAge)
+                    g = nextFromSchedule(schedule, espnId, now)
+                    if g <> invalid
+                        known = true
+                        if g.start > 0 and (best = invalid or g.start < best.start) then best = g
+                    end if
+                end if
+            end for
+        end for
+        if best <> invalid
+            out.games[asString(t.id)] = best
+        else if known
+            out.games[asString(t.id)] = { none: true }
+        end if
+    end for
+    return out
+end function
+
+sub addNeeded(out as Object, asked as Object, url as String, file as String, maxAge as Integer)
+    if asked.DoesExist(file) then return
+    asked[file] = true
+    out.needed.Push({ url: url, file: file, maxAge: maxAge })
+end sub
+
+' ApiTask's ".time" stamp for a saved file ("" when there's none; checked
+' first, since reading a missing file logs an error).
+function fileStamp(file as String) as String
+    if m.fileSystem = invalid then m.fileSystem = CreateObject("roFileSystem")
+    if not m.fileSystem.Exists(file + ".time") or not m.fileSystem.Exists(file) then return ""
+    return ReadAsciiFile(file + ".time")
+end function
+
+' Written by ApiTask less than maxAge ago (its ".time" stamp).
+function fileFresh(file as String, maxAge as Integer, now as Integer) as Boolean
+    stamp = fileStamp(file)
+    if stamp = "" then return false
+    return now - Val(stamp, 10) < maxAge
+end function
+
+' A team's ESPN ID in a league's team list ("" if it isn't there): its name
+' or an alias equal to the team's full name, short name, place, or place and
+' nickname ("Alabama Crimson Tide", "Alabama"; not "South Alabama"). Lists
+' are read once per download.
+function espnTeamId(file as String, names as Object) as String
+    stamp = fileStamp(file)
+    if stamp = "" then return ""
+    cacheKey = file + "|" + names[0]
+    hit = m.espnIds[cacheKey]
+    if hit <> invalid and hit.stamp = stamp then return hit.id
+    lookup = m.espnParsed[file]
+    if lookup = invalid or lookup.stamp <> stamp
+        lookup = { stamp: stamp, byName: {} }
+        json = ParseJson(ReadAsciiFile(file))
+        teams = []
+        if type(json) = "roAssociativeArray" and type(json.sports) = "roArray" and json.sports.Count() > 0
+            leagues = json.sports[0].leagues
+            if type(leagues) = "roArray" and leagues.Count() > 0 and type(leagues[0].teams) = "roArray" then teams = leagues[0].teams
+        end if
+        for each entry in teams
+            team = invalid
+            if type(entry) = "roAssociativeArray" then team = entry.team
+            if type(team) = "roAssociativeArray"
+                id = asString(team.id)
+                for each n in [team.displayName, team.shortDisplayName, team.location, asString(team.location) + " " + asString(team.name)]
+                    k = LCase(asString(n).Trim())
+                    ' A name two teams share ("Alabama St" vs ...) isn't used.
+                    if k <> ""
+                        if lookup.byName.DoesExist(k) and lookup.byName[k] <> id then lookup.byName[k] = "" else lookup.byName[k] = id
+                    end if
+                end for
+            end if
+        end for
+        m.espnParsed[file] = lookup
+    end if
+    found = ""
+    for each n in names
+        id = lookup.byName[n]
+        if id <> invalid and id <> ""
+            found = id
+            exit for
+        end if
+    end for
+    m.espnIds[cacheKey] = { stamp: stamp, id: found }
+    return found
+end function
+
+' The first game in a team's ESPN schedule that hasn't started; { start: 0 }
+' when the schedule has none (season over, or not out yet); invalid when
+' there's no schedule file.
+function nextFromSchedule(file as String, espnId as String, now as Integer) as Dynamic
+    stamp = fileStamp(file)
+    if stamp = "" then return invalid
+    cached = m.espnParsed[file]
+    if cached <> invalid and cached.stamp = stamp
+        events = cached.events
+    else
+        json = ParseJson(ReadAsciiFile(file))
+        events = []
+        if type(json) = "roAssociativeArray" and type(json.events) = "roArray"
+            for each e in json.events
+                g = scheduleGame(e, espnId)
+                if g <> invalid then events.Push(g)
+            end for
+        end if
+        events.SortBy("start")
+        m.espnParsed[file] = { stamp: stamp, events: events }
+    end if
+    for each g in events
+        if g.start > now then return g
+    end for
+    return { start: 0 }
+end function
+
+function scheduleGame(e as Dynamic, espnId as String) as Dynamic
+    if type(e) <> "roAssociativeArray" or type(e.competitions) <> "roArray" or e.competitions.Count() = 0 then return invalid
+    c = e.competitions[0]
+    if type(c) <> "roAssociativeArray" then return invalid
+    ' "2026-10-11T00:20Z": seconds added for roDateTime.
+    iso = asString(e.date)
+    if Len(iso) = 17 and Right(iso, 1) = "Z" then iso = Left(iso, 16) + ":00Z"
+    dt = CreateObject("roDateTime")
+    dt.FromISO8601String(iso)
+    start = dt.AsSeconds()
+    if start <= 0 then return invalid
+    g = { start: start, timeValid: (c.timeValid = invalid or isTrue(c.timeValid)), opponent: "", home: false, tv: "", preseason: false }
+    for each team in asArray(c.competitors)
+        if type(team) = "roAssociativeArray"
+            if asString(team.id) = espnId
+                g.home = (asString(team.homeAway) = "home")
+            else if type(team.team) = "roAssociativeArray"
+                g.opponent = asString(team.team.displayName)
+            end if
+        end if
+    end for
+    tv = []
+    for each b in asArray(c.broadcasts)
+        if type(b) = "roAssociativeArray" and type(b.media) = "roAssociativeArray" and asString(b.media.shortName) <> "" then tv.Push(asString(b.media.shortName))
+    end for
+    for each name in tv
+        if g.tv <> "" then g.tv += ", "
+        g.tv += name
+    end for
+    if type(e.seasonType) = "roAssociativeArray" then g.preseason = (toInt(e.seasonType.type) = 1)
+    return g
 end function

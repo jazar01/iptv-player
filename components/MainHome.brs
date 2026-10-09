@@ -16,7 +16,7 @@ end sub
 sub refreshHome()
     home = m.sections.home
     if home = invalid then return
-    rows = buildHomeRows({ store: m.store, epg: m.epg, games: m.games, usage: m.usageScores, launchTime: m.launchTime, icons: m.channelIcons, missingMovies: m.missingMovies, scores: m.scores })
+    rows = buildHomeRows({ store: m.store, epg: m.epg, games: m.games, nextGames: m.nextGames, usage: m.usageScores, launchTime: m.launchTime, icons: m.channelIcons, missingMovies: m.missingMovies, scores: m.scores })
     home.rows = rows
     requestChannelIcons(rows)
     if m.rowGrid <> invalid

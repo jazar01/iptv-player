@@ -140,6 +140,8 @@ sub routeApiResponse(res as Object)
         onBufferNote(res)
     else if res.id = "mediaInfo"
         onMediaInfo(res)
+    else if res.id = "espnFile"
+        onEspnFile(res)
     end if
 end sub
 

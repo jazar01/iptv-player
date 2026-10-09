@@ -121,7 +121,7 @@ function myTeamsRow() as Object
     return {
         id: "teams"
         title: "My Teams"
-        emptyText: "No games for your teams in the next 24 hours."
+        emptyText: "No games for your teams in the next " + aheadText() + "."
         items: myTeamsRowItems
     }
 end function
@@ -167,13 +167,18 @@ function myTeamsRowItems(services as Object) as Object
         })
     end for
 
-    ' Teams with nothing in the next 24 hours, at the end in team order
-    ' (Settings -> Show teams with no game).
+    ' Teams with nothing in the guide yet, at the end in team order
+    ' (Settings -> Show teams with no game): their next game from ESPN
+    ' when it's known ("Next: Sun Oct 18, 1:00 PM" / "vs Chicago Bears -
+    ' FOX"), "No games scheduled" when ESPN has none (season over), else
+    ' nothing in the window the guide covers.
     if services.store.callFunc("getSettings").showNoGameTeams
         playing = {}
         for each g in services.games
             playing[asString(g.teamId)] = true
         end for
+        nextGames = services.nextGames
+        if type(nextGames) <> "roAssociativeArray" then nextGames = {}
         labels = sportLabelMap()
         for each t in services.store.callFunc("getTeams")
             if not playing.DoesExist(t.id)
@@ -182,19 +187,45 @@ function myTeamsRowItems(services as Object) as Object
                     if sports <> "" then sports += ", "
                     sports += asString(labels[s])
                 end for
+                message = "No game in the next " + aheadText()
+                detail = sports
+                n = nextGames[asString(t.id)]
+                if type(n) = "roAssociativeArray"
+                    if toInt(n.start) > nowSeconds()
+                        message = "Next: " + formatGameWhen(toInt(n.start), isTrue(n.timeValid))
+                        detail = "at "
+                        if isTrue(n.home) then detail = "vs "
+                        detail = detail + asString(n.opponent)
+                        if asString(n.tv) <> "" then detail = detail + "  -  " + asString(n.tv)
+                        if isTrue(n.preseason) then detail = detail + "  (preseason)"
+                    else
+                        message = "No games scheduled"
+                    end if
+                end if
                 items.Push({
                     kind: "noGame"
                     itemKey: "team:" + t.id
                     name: t.name
                     teamName: t.name
-                    subtitle: sports
+                    subtitle: detail
                     logo: asString(t.logo)
-                    message: "No game in 24 hours"
+                    message: message
                 })
             end if
         end for
     end if
     return items
+end function
+
+' How far ahead the guide is searched for games (myTeams.aheadHours):
+' "24 hours", "3 days".
+function aheadText() as String
+    hours = 24
+    cfg = guideRules().myTeams
+    if type(cfg) = "roAssociativeArray" and toInt(cfg.aheadHours) > 0 then hours = toInt(cfg.aheadHours)
+    days = hours \ 24
+    if hours mod 24 = 0 and hours > 24 then return days.ToStr() + " days"
+    return hours.ToStr() + " hours"
 end function
 
 ' Sport ID -> label, from data/guide-rules.json "myTeams".
