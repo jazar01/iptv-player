@@ -130,7 +130,8 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   the same way when the converter fails (new address saved, or 10 minutes
   of copies when it's off). The same service runs the live buffer
   (`buffer.py`): with Settings -> Live buffer on, every live channel plays
-  through the Pi, which keeps it in memory since tuning in; PlayerScreen's
+  through the Pi, which keeps it in memory since tuning in (one provider
+  connection per channel, shared by every TV on it: `Source` in buffer.py); PlayerScreen's
   `bufferKey` handles pause, jumps (held keys repeat) and Fast-forward to
   live (requirements: "Live buffer on the home Pi"); it keeps a small
   picture per piece, shown while jumping (`/bt/`). `archive.py` (`/a/`) cuts

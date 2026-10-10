@@ -46,7 +46,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.10"
+VERSION = "1.11"
 DEFAULT_UA = "Roku/DVP-14.0 (14.0.0.0)"     # the provider refuses non-Roku agents (404)
 UPSTREAM_TIMEOUT = 20                       # seconds, per read
 MAX_SEGMENT = 64 * 1024 * 1024              # archive minutes run about 20 MB
@@ -339,7 +339,7 @@ class Handler(BaseHTTPRequestHandler):
             return False
         if prefix == "bt":
             parts = self.path.split("?", 1)[0].split("/")      # ['', 'bt', id, '<behind>.jpg']
-            recorder = buffer.find(rid=parts[2]) if len(parts) == 4 else None
+            recorder = buffer.find(parts[2]) if len(parts) == 4 else None
             data = None
             if recorder and parts[3].endswith(".jpg") and parts[3][:-4].isdigit():
                 data = recorder.thumb_at(int(parts[3][:-4]))
@@ -350,7 +350,7 @@ class Handler(BaseHTTPRequestHandler):
             return True
         if prefix == "bs":
             parts = self.path.split("?", 1)[0].split("/")      # ['', 'bs', id, '<seq>.ts']
-            recorder = buffer.find(rid=parts[2]) if len(parts) == 4 else None
+            recorder = buffer.find(parts[2]) if len(parts) == 4 else None
             data = None
             if recorder and parts[3].endswith(".ts") and parts[3][:-3].isdigit():
                 recorder.touch()
@@ -367,15 +367,16 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404)
             return True
         if prefix in ("bk", "bq"):
-            recorder = buffer.find(url=url)
-            answer = {"ok": recorder is not None}
-            if recorder and prefix == "bk":
-                recorder.touch()
-                recorder.seen_by(self.client_address[0])
-                answer = recorder.status()
-            elif recorder:
-                recorder.stopped = True
-                log.info("buffer: %s left by its TV", recorder.name)
+            address = self.client_address[0]
+            mine = buffer.recorders_of(url, address)
+            answer = {"ok": bool(mine)}
+            for recorder in mine:
+                if prefix == "bk":
+                    recorder.touch()
+                    recorder.seen_by(address)
+                    answer = recorder.status()
+                else:
+                    recorder.leave(address)
             self.send_body(200, "application/json", json.dumps(answer).encode())
             return True
         agent = self.headers.get("User-Agent", "")

@@ -15,15 +15,14 @@ from memory. Nothing is written to disk.
     /bk/<scheme>/<host>/<path>.m3u8   keep the recorder going (sent while paused)
     /bq/<scheme>/<host>/<path>.m3u8   stop it (the TV left the channel)
 
-Memory: BUDGET (--buffer-mb, about 6 GB) shared equally by the channels being
-recorded; each drops its oldest segments past its share. A recorder stops when
-its TV leaves the channel (/bq/), or after IDLE seconds with no request at all
-(playlist, segment or keep-alive), so a channel left behind doesn't hold one of
-the account's connections.
+Memory: BUDGET (--buffer-mb, about 6 GB) shared equally by the recorders; each
+drops its oldest segments past its share. A recorder stops when the last TV
+using it leaves the channel (/bq/), or after IDLE seconds with no request at
+all (playlist, segment or keep-alive), so a channel left behind doesn't hold
+one of the account's connections. Several TVs on one channel share one
+provider connection (Source), and one recorder per kind of audio.
 
-The provider's live sessions (see Channel in converter.py): the redirect is
-followed once and the redirected playlist reloaded; when a session ends, a new
-one starts and its newest segment follows a discontinuity marker.
+The provider's live sessions: see Source.
 """
 
 import hashlib
@@ -55,8 +54,11 @@ BUDGET = 6000 * 1024 * 1024
 PIECE = 2               # seconds: each provider segment is split this fine, so
                         # the TV's jumps land within 2 s and restart sooner
 
-recorders = {}          # original URL -> Recorder
-recorders_lock = threading.Lock()
+recorders = {}          # (original URL, convert) -> Recorder
+sources = {}            # original URL -> Source
+recorders_lock = threading.RLock()     # re-entrant: a new Recorder finds its Source under it
+SOURCE_KEEP = 6         # provider segments a source holds for recorders joining late
+LEAVE_GRACE = 30        # seconds: a TV seen this recently still counts as watching
 
 
 class UpstreamError(Exception):
@@ -74,60 +76,45 @@ class Segment:
         self.thumb = None                   # a small JPEG of its first picture
 
 
-class Recorder:
-    def __init__(self, url, convert, agent, ffmpeg):
-        self.url = url
-        self.convert = convert
-        self.agent = agent
-        self.ffmpeg = ffmpeg
-        self.id = hashlib.sha1(url.encode()).hexdigest()[:12]
+class Source:
+    """One provider connection per channel, however many TVs watch it: it
+    fetches each new segment once, and every recorder of the channel (the
+    original audio, the converted) cuts its own pieces from it. Two TVs on
+    the same game take one of the account's connections, not two (Oct 10,
+    2026). Holds the newest SOURCE_KEEP segments for recorders that join
+    late; stops when no recorder is left.
+
+    The provider's live sessions (see Channel in converter.py): the redirect
+    is followed once and the redirected playlist reloaded; when a session
+    ends, a new one starts and its newest segment is marked new_session."""
+
+    def __init__(self, url, agent):
+        self.url, self.agent = url, agent
         self.name = safe_name(url)
-        self.lock = threading.Lock()
-        self.ready = threading.Event()       # first segment in, or failed
-        self.error = None                    # UpstreamError or another failure
-        self.segments = []                   # Segment, oldest first
-        self.bytes = 0
-        self.next_seq = 0
-        self.disc_seq = 0
+        self.cond = threading.Condition()
+        self.raw = []                        # (index, duration, data, new_session)
+        self.next_index = 0
         self.target = 10                     # the provider's segment length
         self.final = None                    # redirected playlist of this session
-        self.video = None                    # {width, height, fps}, measured per provider session
         self.sessions = 0
         self.seen = set()
-        self.used = time.monotonic()
-        self.clients = {}                    # TV address -> when it last asked
+        self.error = None
         self.stopped = False
-        self.started = time.monotonic()
-        self.thread = threading.Thread(target=self.run, daemon=True)
-        self.thread.start()
-
-    def touch(self):
-        self.used = time.monotonic()
-
-    def seen_by(self, address):
-        """Notes the TV asking (its address), for /health's "clients"."""
-        if address:
-            self.clients[address] = time.monotonic()
-
-    def recent_clients(self):
-        now = time.monotonic()
-        return sorted(a for a, t in list(self.clients.items()) if now - t < 60)
-
-    # -- recording ------------------------------------------------------------
+        self.subscribers = set()
+        threading.Thread(target=self.run, daemon=True).start()
 
     def run(self):
-        log.info("buffer: recording %s%s", self.name, " (converting audio)" if self.convert else "")
         failures = 0
         while not self.stopped:
-            if time.monotonic() - self.used > IDLE:
-                log.info("buffer: %s unused for %d s; stopped", self.name, IDLE)
-                break
+            with recorders_lock:
+                if not self.subscribers:
+                    break
             try:
                 self.poll()
                 failures = 0
             except UpstreamError as e:
                 failures += 1
-                if not self.segments or failures >= 3:
+                if not self.raw or failures >= 3:
                     log.info("buffer: %s: provider answered %s; stopped", self.name, e)
                     self.error = e
                     break
@@ -138,21 +125,18 @@ class Recorder:
                 if failures >= 6:
                     self.error = e
                     break
-            self.ready.set() if self.segments else None
             # Every 2 s: a new segment is picked up 1 s after it appears on
             # average (5 s left the picture 2-3 s further behind live).
             time.sleep(POLL)
         self.stopped = True
-        self.ready.set()
+        with self.cond:
+            self.cond.notify_all()
         with recorders_lock:
-            if recorders.get(self.url) is self:
-                del recorders[self.url]
-        with self.lock:
-            self.segments, self.bytes = [], 0
-        log.info("buffer: %s released (%.0f min recorded)", self.name, (time.monotonic() - self.started) / 60)
+            if sources.get(self.url) is self:
+                del sources[self.url]
 
     def poll(self):
-        """Fetches the provider's playlist and any segments not yet kept."""
+        """Fetches the provider's playlist and any segments not yet fetched."""
         new_session = False
         text, final = None, None
         if self.final:
@@ -171,7 +155,7 @@ class Recorder:
             new_session = self.sessions > 1
         target, listed = parse_media_playlist(text, final)
         self.target = target or self.target
-        if self.next_seq == 0 and not self.segments:
+        if self.next_index == 0:
             fresh = listed[-3:]                 # start near live, as a player would
             self.seen = set(url for _, url in listed)
         elif new_session:
@@ -183,44 +167,17 @@ class Recorder:
             if self.stopped:
                 return
             self.seen.add(url)
-            pieces = self.fetch_segment(url, duration)
-            if self.video is None or (new_session and i == 0):
-                self.video = self.probe(pieces[0][1]) or self.video
-            added = []
-            with self.lock:
-                disc = new_session and i == 0 and bool(self.segments)
-                for piece_duration, data in pieces:
-                    added.append(Segment(self.next_seq, piece_duration, data, disc))
-                    self.segments.append(added[-1])
-                    disc = False
-                    self.next_seq += 1
-                    self.bytes += len(data)
-            # Pictures after the pieces are in, so they don't hold up live.
-            for segment in added:
-                thumb = self.thumbnail(segment.data)
-                if thumb:
-                    with self.lock:
-                        segment.thumb = thumb
-                        self.bytes += len(thumb)
-            if self.sessions == 1 and self.next_seq == len(pieces):
-                log.info("buffer: %s: segments of %ss split into %d piece(s)", self.name, duration, len(pieces))
-            # (ready is set by run() once this batch is in: a player starting a
-            # live stream wants a few segments, not one)
-        self.trim()
+            with self.open(url, SEGMENT_TIMEOUT) as response:
+                data = response.read(64 * 1024 * 1024)
+            with self.cond:
+                self.raw.append((self.next_index, duration, data, new_session and i == 0))
+                self.next_index += 1
+                del self.raw[:-SOURCE_KEEP]
+                self.cond.notify_all()
 
-    def trim(self):
-        """Oldest segments go once this channel is past its share of the budget."""
-        with recorders_lock:
-            share = BUDGET // max(1, len(recorders))
-        with self.lock:
-            while self.bytes > share and len(self.segments) > 30:
-                old = self.segments.pop(0)
-                self.bytes -= len(old.data) + len(old.thumb or b"")
-                if old.disc:
-                    self.disc_seq += 1
-            if self.segments and self.segments[0].disc:
-                self.segments[0].disc = False
-                self.disc_seq += 1
+    def since(self, index):
+        with self.cond:
+            return [r for r in self.raw if r[0] >= index]
 
     def open(self, url, timeout=PLAYLIST_TIMEOUT):
         request = urllib.request.Request(url, headers={"User-Agent": self.agent, "Accept": "*/*"})
@@ -233,10 +190,147 @@ class Recorder:
         with self.open(url) as response:
             return response.read(4 * 1024 * 1024).decode("utf-8", "replace"), response.geturl()
 
-    def fetch_segment(self, url, duration):
-        with self.open(url, SEGMENT_TIMEOUT) as response:
-            data = response.read(64 * 1024 * 1024)
-        return split_segment(self.ffmpeg, data, duration, self.convert)
+
+class Recorder:
+    """One kind of audio (original, or converted to stereo) of one channel:
+    the pieces its TVs play and go back through, cut from the channel's
+    Source."""
+
+    def __init__(self, url, convert, agent, ffmpeg):
+        self.url = url
+        self.convert = convert
+        self.agent = agent
+        self.ffmpeg = ffmpeg
+        self.id = hashlib.sha1((url + ("|c" if convert else "")).encode()).hexdigest()[:12]
+        self.name = safe_name(url)
+        self.lock = threading.Lock()
+        self.ready = threading.Event()       # first segment in, or failed
+        self.error = None                    # UpstreamError or another failure
+        self.segments = []                   # Segment, oldest first
+        self.bytes = 0
+        self.next_seq = 0
+        self.disc_seq = 0
+        self.video = None                    # {width, height, fps}, measured per provider session
+        self.used = time.monotonic()
+        self.clients = {}                    # TV address -> when it last asked
+        self.stopped = False
+        self.started = time.monotonic()
+        self.source = source_for(url, agent, self)
+        # A recorder joining a channel already recorded starts from the
+        # newest few segments the source holds.
+        self.cursor = max(0, self.source.next_index - 3)
+        self.thread = threading.Thread(target=self.run, daemon=True)
+        self.thread.start()
+
+    @property
+    def target(self):
+        return self.source.target
+
+    def touch(self):
+        self.used = time.monotonic()
+
+    def seen_by(self, address):
+        """Notes the TV asking (its address), for /health's "clients"."""
+        if address:
+            self.clients[address] = time.monotonic()
+
+    def recent_clients(self, within=60):
+        now = time.monotonic()
+        return sorted(a for a, t in list(self.clients.items()) if now - t < within)
+
+    def leave(self, address):
+        """A TV left the channel (/bq/): the recorder stops only if no other
+        TV has used it lately. One TV leaving used to stop it for all."""
+        self.clients.pop(address, None)
+        others = self.recent_clients(LEAVE_GRACE)
+        if others:
+            log.info("buffer: %s left by %s; still watched by %s", self.name, address, ", ".join(others))
+            return False
+        self.stopped = True
+        log.info("buffer: %s left by its TV", self.name)
+        return True
+
+    # -- recording ------------------------------------------------------------
+
+    def run(self):
+        log.info("buffer: recording %s%s%s", self.name, " (converting audio)" if self.convert else "",
+                 " (shared with another recording)" if len(self.source.subscribers) > 1 else "")
+        failed_pieces = 0
+        while not self.stopped:
+            if time.monotonic() - self.used > IDLE:
+                log.info("buffer: %s unused for %d s; stopped", self.name, IDLE)
+                break
+            with self.source.cond:
+                if self.source.next_index <= self.cursor and not self.source.stopped:
+                    self.source.cond.wait(POLL)
+            for index, duration, data, new_session in self.source.since(self.cursor):
+                self.cursor = index + 1
+                try:
+                    pieces = split_segment(self.ffmpeg, data, duration, self.convert)
+                    failed_pieces = 0
+                except Exception as e:
+                    failed_pieces += 1
+                    log.info("buffer: %s: %s (%d)", self.name, describe(e), failed_pieces)
+                    continue
+                self.add(pieces, duration, new_session)
+            if self.segments:
+                self.ready.set()
+            if self.source.stopped:
+                self.error = self.source.error
+                if not self.segments or self.error is not None:
+                    break
+                self.source = source_for(self.url, self.agent, self)    # the provider came back: a new connection
+                self.cursor = max(0, self.source.next_index - 1)
+            if failed_pieces >= 6:
+                self.error = RuntimeError("the pieces couldn't be made")
+                break
+            self.trim()
+        self.stopped = True
+        self.ready.set()
+        with recorders_lock:
+            if recorders.get((self.url, self.convert)) is self:
+                del recorders[(self.url, self.convert)]
+            self.source.subscribers.discard(self)
+        with self.lock:
+            self.segments, self.bytes = [], 0
+        log.info("buffer: %s%s released (%.0f min recorded)", self.name, " (converted)" if self.convert else "",
+                 (time.monotonic() - self.started) / 60)
+
+    def add(self, pieces, duration, new_session):
+        if self.video is None or new_session:
+            self.video = self.probe(pieces[0][1]) or self.video
+        added = []
+        with self.lock:
+            disc = new_session and bool(self.segments)
+            for piece_duration, data in pieces:
+                added.append(Segment(self.next_seq, piece_duration, data, disc))
+                self.segments.append(added[-1])
+                disc = False
+                self.next_seq += 1
+                self.bytes += len(data)
+        if self.next_seq == len(pieces):
+            log.info("buffer: %s: segments of %ss split into %d piece(s)", self.name, duration, len(pieces))
+        # Pictures after the pieces are in, so they don't hold up live.
+        for segment in added:
+            thumb = self.thumbnail(segment.data)
+            if thumb:
+                with self.lock:
+                    segment.thumb = thumb
+                    self.bytes += len(thumb)
+
+    def trim(self):
+        """Oldest segments go once this recorder is past its share of the budget."""
+        with recorders_lock:
+            share = BUDGET // max(1, len(recorders))
+        with self.lock:
+            while self.bytes > share and len(self.segments) > 30:
+                old = self.segments.pop(0)
+                self.bytes -= len(old.data) + len(old.thumb or b"")
+                if old.disc:
+                    self.disc_seq += 1
+            if self.segments and self.segments[0].disc:
+                self.segments[0].disc = False
+                self.disc_seq += 1
 
     def thumbnail(self, data):
         """A 320-pixel JPEG of the piece's first picture (a keyframe: pieces
@@ -330,27 +424,45 @@ class Recorder:
                     "converted": self.convert, "clients": self.recent_clients()}
 
 
-def recorder_for(url, convert, agent, ffmpeg):
-    """The channel's recorder, started if it isn't running."""
+def source_for(url, agent, recorder):
+    """The channel's provider connection, started if there's none; the
+    recorder is counted as using it."""
     with recorders_lock:
-        r = recorders.get(url)
-        if r is not None and not r.stopped and r.convert != convert:
-            r.stopped = True        # now wanted converted (or not): start over
-            r = None
+        source = sources.get(url)
+        if source is None or source.stopped:
+            source = sources[url] = Source(url, agent)
+        source.subscribers.add(recorder)
+        return source
+
+
+def recorder_for(url, convert, agent, ffmpeg):
+    """The channel's recorder for this kind of audio, started if it isn't
+    running. A TV taking Dolby and one taking stereo on the same channel get
+    a recorder each, sharing one Source (it was one recorder, restarted each
+    time the other TV asked for its kind)."""
+    with recorders_lock:
+        r = recorders.get((url, convert))
         if r is None or r.stopped:
-            r = recorders[url] = Recorder(url, convert, agent, ffmpeg)
+            r = recorders[(url, convert)] = Recorder(url, convert, agent, ffmpeg)
         r.touch()
         return r
 
 
-def find(url=None, rid=None):
+def find(rid):
     with recorders_lock:
-        if url is not None:
-            return recorders.get(url)
         for r in recorders.values():
             if r.id == rid:
                 return r
     return None
+
+
+def recorders_of(url, address):
+    """The channel's recorders this TV uses (by its recent requests), or all
+    of the channel's when it isn't known: for its keep-alive and leaving."""
+    with recorders_lock:
+        mine = [r for (u, _), r in recorders.items() if u == url and not r.stopped]
+    used = [r for r in mine if address in r.recent_clients()]
+    return used or mine
 
 
 def summaries():
