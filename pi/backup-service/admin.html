@@ -530,8 +530,8 @@ async function loadStatus() {
   kv(card("Copies"), [
     ["Cloud copy (nightly)", off.lastOk ? "last copied " + when(off.lastOk) + (off.ok ? "" : "; last try failed: " + off.message) : "not run yet", off.ok === false ? "bad" : ""],
     ["USB stick (nightly)", sc.at ? (sc.ok ? "" : "FAILED: ") + sc.message + ", " + new Date(sc.at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "not run yet", sc.ok === false ? "bad" : ""],
-    ["USB stick", c.stick || "not plugged in", c.stick ? "" : "bad"],
   ]);
+  drawDrives(c);
 
   const sysCard = card("System");
   const u = sys.update || {};
@@ -553,6 +553,46 @@ let statusTimer = null;
 function statusTab(on) {
   clearInterval(statusTimer);
   if (on) { loadStatus(); statusTimer = setInterval(() => { if (!document.hidden) loadStatus(); }, 10000); }
+}
+
+// The USB backup drive (pi-selfclone): which drive it is, whether it's in its
+// proper layout, and other USB drives that could become it.
+function drawDrives(c) {
+  const box = card("USB backup drive");
+  const info = c.drives || { drives: [] }, job = c.driveSetup || {};
+  const running = job.state === "running";
+  if (running) box.append(el("p", "Setting up " + job.drive.replace(/^.*\/usb-/, "") + ": " + job.message + " (since " + when(job.startedAt) + ")", "warn"));
+  else if (job.state && Date.now() / 1000 - job.finishedAt < 86400) box.append(el("p", "Last set up " + when(job.finishedAt) + ": " + job.message, job.state === "failed" ? "bad" : "ok"));
+  if (!info.target) box.append(el("p", "No backup drive set up: the nightly copy of the Pi's system has nowhere to go.", "warn"));
+  else if (!info.targetPresent) box.append(el("p", "The backup drive isn't plugged in, so tonight's copy will fail. Plug it back in, or set up another drive below.", "bad"));
+  if (!info.drives.length) { box.append(el("p", "No USB drive plugged in.", "dim")); return; }
+  for (const d of info.drives) {
+    const row = el("div", undefined, "row"); row.style.cssText = "border-top:1px solid var(--line);padding:8px 0";
+    const text = el("div", undefined, "grow");
+    const contents = d.partitions.length ? d.partitions.map((p) => (p.fstype || "unformatted") + (p.label ? " '" + p.label + "'" : "") + " " + p.size).join(", ") : "no partitions";
+    text.append(el("div", (d.model || "USB drive") + ", " + d.size));
+    let state, cls;
+    if (d.runningFromIt) { state = "the Pi is running from this drive (the card is missing or failed)"; cls = "warn"; }
+    else if (d.isBackup && d.layoutOk) { state = "the backup drive, ready"; cls = "ok"; }
+    else if (d.isBackup) { state = "the backup drive, but not in its proper layout (" + contents + "): set it up again"; cls = "bad"; }
+    else { state = "not the backup drive (" + contents + ")"; cls = "dim"; }
+    text.append(el("div", state, cls));
+    row.append(text);
+    if (!running && !d.runningFromIt && d.id && !(d.isBackup && d.layoutOk)) {
+      const b = el("button", d.isBackup ? "Set it up again" : "Use as the backup drive");
+      b.onclick = () => setupDrive(d, contents);
+      row.append(b);
+    }
+    box.append(row);
+  }
+}
+
+async function setupDrive(d, contents) {
+  const answer = prompt("Erase " + (d.model || "this USB drive") + " (" + d.size + ", now: " + contents + ") and make it the Pi's backup drive?\n\nEverything on it is deleted. The first copy takes about 12 minutes on a stick.\n\nType ERASE to go ahead:");
+  if (answer === null) return;
+  if (answer.trim() !== "ERASE") { note("Not erased: type ERASE to go ahead."); return; }
+  try { await api("POST", "drive", { id: d.id, confirm: "ERASE" }); note("Setting up the drive; progress shows here."); setTimeout(loadStatus, 3000); }
+  catch (e) { note("Not started: " + e.message); }
 }
 
 async function installUpdates() {

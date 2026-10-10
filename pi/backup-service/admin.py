@@ -170,6 +170,13 @@ class Admin:
             result = status.collect(self.provider_server())
             result["tvs"] = self.tv_players()
             self.send(h, 200, result)
+        elif parts == ["drive"] and method == "POST":
+            value = self.body(h)
+            if str(value.get("confirm", "")) != "ERASE":
+                raise ValueError("type ERASE to confirm")
+            status.request_drive_setup(str(value.get("id", "")), h.client_address[0])
+            self.log.info("admin asked to set up %s as the backup drive from %s", value.get("id"), h.client_address[0])
+            self.send(h, 200, {"ok": True})
         elif parts == ["power"] and method == "POST":
             action = str(self.body(h).get("action", ""))
             status.request_power(action, h.client_address[0])

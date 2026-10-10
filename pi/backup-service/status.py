@@ -20,6 +20,10 @@ import urllib.request
 POWER_REQUEST = "/var/lib/iptv-backup/power-request"
 UPDATE_STATUS = "/var/lib/iptv-backup/update.json"
 UPDATE_LOG = "/var/lib/iptv-backup/update.log"
+DRIVE_TARGET = "/var/lib/iptv-backup/drive-target"
+DRIVE_STATUS = "/var/lib/iptv-backup/drive-setup.json"
+SELFCLONE_CONF = "/etc/pi-selfclone.conf"
+BY_ID = "/dev/disk/by-id"
 SERVICES = [
     ("dolby-converter.service", "Dolby converter and live buffer"),
     ("iptv-backup.service", "Backup service and this admin page"),
@@ -215,7 +219,63 @@ def copies():
     except (OSError, ValueError):
         pass
     stick = run(["lsblk", "-dno", "MODEL,SIZE,TRAN", "/dev/sda"])
-    return {"offsite": offsite, "selfclone": selfclone, "stick": " ".join(stick.split())}
+    return {"offsite": offsite, "selfclone": selfclone, "stick": " ".join(stick.split()), "drives": usb_drives(),
+            "driveSetup": read_json(DRIVE_STATUS)}
+
+
+def read_json(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def usb_drives():
+    """The USB drives plugged in, and whether each is the nightly copy's
+    backup drive (pi-selfclone) in its proper layout: a FAT "bootfs" and an
+    ext4 "rootfs" partition. Each is named by its /dev/disk/by-id path (its
+    serial), as pi-selfclone names it."""
+    target = ""
+    for line in read(SELFCLONE_CONF).splitlines():
+        if line.startswith("TARGET="):
+            target = line.split("=", 1)[1].strip().strip("'\"")
+    ids = {}
+    try:
+        for name in os.listdir(BY_ID):
+            if name.startswith("usb-") and "-part" not in name:
+                ids[os.path.basename(os.path.realpath(os.path.join(BY_ID, name)))] = os.path.join(BY_ID, name)
+    except OSError:
+        pass
+    try:
+        devices = json.loads(run(["lsblk", "-J", "-o", "NAME,SIZE,MODEL,SERIAL,TRAN,FSTYPE,LABEL,TYPE"]) or "{}").get("blockdevices", [])
+    except ValueError:
+        devices = []
+    card_root = ""
+    for line in read("/proc/mounts").splitlines():
+        parts = line.split()
+        if len(parts) > 1 and parts[1] == "/":
+            card_root = parts[0]
+    out = []
+    for d in devices:
+        if d.get("tran") != "usb" or d.get("type") != "disk":
+            continue
+        name = d.get("name", "")
+        parts = [{"fstype": p.get("fstype") or "", "label": p.get("label") or "", "size": p.get("size") or ""} for p in d.get("children") or []]
+        layout_ok = (len(parts) == 2 and parts[0]["fstype"] == "vfat" and parts[0]["label"] == "bootfs"
+                     and parts[1]["fstype"] == "ext4" and parts[1]["label"] == "rootfs")
+        by_id = ids.get(name, "")
+        out.append({
+            "id": by_id,
+            "model": (d.get("model") or "").strip(),
+            "size": d.get("size") or "",
+            "serial": d.get("serial") or "",
+            "partitions": parts,
+            "isBackup": bool(target) and by_id == target,
+            "layoutOk": layout_ok,
+            "runningFromIt": card_root.startswith("/dev/" + name),
+        })
+    return {"target": target, "targetPresent": any(x["isBackup"] for x in out), "drives": out}
 
 
 def system():
@@ -229,6 +289,11 @@ def system():
     if update:
         lines = [l for l in read(UPDATE_LOG).splitlines() if l.strip()]
         update["log"] = lines[-8:]
+        # Restarted since the update finished: nothing left to finish.
+        uptime = float((read("/proc/uptime", "0 0").split() or ["0"])[0])
+        if update.get("rebootNeeded") and now - uptime > update.get("finishedAt", 0):
+            update["rebootNeeded"] = False
+            update["message"] = str(update.get("message", "")).split("; restart to finish")[0] + "; restarted since, so it's finished"
     # After an update, count again (and not while one runs).
     if update.get("state") == "done" and update.get("finishedAt", 0) > _updates["at"]:
         _updates["at"] = 0
@@ -245,9 +310,24 @@ def system():
     }
 
 
+def request_drive_setup(drive_id, who):
+    """Asks the root helper to make this USB drive the backup drive (erasing
+    it): only a drive plugged in now, not the one the Pi runs from."""
+    drives = usb_drives()["drives"]
+    match = [d for d in drives if d["id"] and d["id"] == drive_id]
+    if not match:
+        raise ValueError("that drive isn't plugged in now")
+    if match[0]["runningFromIt"]:
+        raise ValueError("the Pi is running from that drive")
+    with open(DRIVE_TARGET + ".tmp", "w") as f:
+        f.write(drive_id + "\n")
+    os.replace(DRIVE_TARGET + ".tmp", DRIVE_TARGET)
+    request_power("setupdrive", who)
+
+
 def request_power(action, who):
     """Writes the request iptv-power.service carries out (as root)."""
-    if action not in ("reboot", "poweroff", "update"):
+    if action not in ("reboot", "poweroff", "update", "setupdrive"):
         raise ValueError("unknown action")
     with open(POWER_REQUEST + ".tmp", "w") as f:
         f.write(action + "\n")

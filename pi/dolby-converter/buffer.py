@@ -43,7 +43,13 @@ log = logging.getLogger("converter")
 
 IDLE = 45               # seconds without any request before a recorder stops
 FIRST_WAIT = 20         # seconds a new channel's first playlist waits for video
-UPSTREAM_TIMEOUT = 20
+# Waits for the provider: short, because the TV plays only about 15 s behind
+# the newest piece. A segment that didn't come within 20 s left ESPN to run
+# dry before the new session took over (Oct 10, 2026); healthy playlists
+# answer in well under a second and a 10-second 1080p segment downloads in
+# about one here.
+PLAYLIST_TIMEOUT = 6
+SEGMENT_TIMEOUT = 10
 POLL = 2                # seconds between checks of the provider's playlist
 BUDGET = 6000 * 1024 * 1024
 PIECE = 2               # seconds: each provider segment is split this fine, so
@@ -216,10 +222,10 @@ class Recorder:
                 self.segments[0].disc = False
                 self.disc_seq += 1
 
-    def open(self, url):
+    def open(self, url, timeout=PLAYLIST_TIMEOUT):
         request = urllib.request.Request(url, headers={"User-Agent": self.agent, "Accept": "*/*"})
         try:
-            return urllib.request.urlopen(request, timeout=UPSTREAM_TIMEOUT)
+            return urllib.request.urlopen(request, timeout=timeout)
         except urllib.error.HTTPError as e:
             raise UpstreamError(e.code)
 
@@ -228,7 +234,7 @@ class Recorder:
             return response.read(4 * 1024 * 1024).decode("utf-8", "replace"), response.geturl()
 
     def fetch_segment(self, url, duration):
-        with self.open(url) as response:
+        with self.open(url, SEGMENT_TIMEOUT) as response:
             data = response.read(64 * 1024 * 1024)
         return split_segment(self.ffmpeg, data, duration, self.convert)
 

@@ -46,7 +46,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.9"
+VERSION = "1.10"
 DEFAULT_UA = "Roku/DVP-14.0 (14.0.0.0)"     # the provider refuses non-Roku agents (404)
 UPSTREAM_TIMEOUT = 20                       # seconds, per read
 MAX_SEGMENT = 64 * 1024 * 1024              # archive minutes run about 20 MB
