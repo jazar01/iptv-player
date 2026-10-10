@@ -32,6 +32,7 @@ import urllib.parse
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
+import cloud
 import status
 
 SESSION_SECONDS = 12 * 3600
@@ -155,6 +156,16 @@ class Admin:
             self.send(h, 200, self.read_household())
         elif parts == ["household"] and method == "PUT":
             self.save_household(h, self.body(h))
+        elif parts == ["cloud"] and method == "GET":
+            self.send(h, 200, cloud.state())
+        elif parts == ["cloud"] and method == "PUT":
+            result = cloud.save(self.body(h))
+            self.log.info("admin set the cloud backup to %s from %s", result["current"].get("label", "off"), h.client_address[0])
+            self.send(h, 200, result)
+        elif parts == ["cloud", "test"] and method == "POST":
+            self.send(h, 200, cloud.test())
+        elif parts == ["cloud", "copy"] and method == "POST":
+            self.send(h, 200, {"started": cloud.copy_now()})
         elif parts == ["status"] and method == "GET":
             self.send(h, 200, status.collect(self.provider_server()))
         elif parts == ["power"] and method == "POST":

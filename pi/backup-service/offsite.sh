@@ -1,18 +1,18 @@
 #!/bin/sh
-# Nightly off-site copy of the backup service's data (iptv-offsite.timer).
-# Copies /var/lib/iptv-backup (every file sealed with the household key, so
-# unreadable without it) to OneDrive with rclone: DixieTV-backups/<date>/,
-# keeping KEEP_DAYS of them. The rclone remote "dixie-onedrive" lives in
-# /etc/iptv-backup/rclone.conf (set up once; see the requirements, "Off-site
-# copy"). Writes its result to offsite.json there for the admin page.
+# Nightly off-site copy of the backup service's data (iptv-offsite.timer, and
+# the admin page's "Copy now"). Copies /var/lib/iptv-backup (every file sealed
+# with the household key, so unreadable without it) to the cloud service set
+# on the admin page's Cloud backup tab (cloud.py): FOLDER/<date>/, keeping
+# KEEP_DAYS of them. The connection and these settings are in cloud/, which
+# is never uploaded. Writes its result to offsite.json for the admin page.
 set -u
-CONF=/etc/iptv-backup/rclone.conf
-REMOTE=dixie-onedrive:DixieTV-backups
 DATA=/var/lib/iptv-backup
+CLOUD=$DATA/cloud
+CONF=$CLOUD/rclone.conf
 STATUS=$DATA/offsite.json
-KEEP_DAYS=30
 NOW=$(date +%s)
 DAY=$(date +%F)
+export HOME=$CLOUD RCLONE_CACHE_DIR=$CLOUD/cache
 
 status() {     # status <ok: true|false> <message>
     last_ok=0
@@ -28,13 +28,16 @@ status() {     # status <ok: true|false> <message>
     mv "$STATUS.part" "$STATUS"
 }
 
-if [ ! -s "$CONF" ]; then
-    status false "not set up: no OneDrive connection in $CONF"
+if [ ! -s "$CONF" ] || [ ! -s "$CLOUD/cloud.env" ]; then
+    status false "not set up: choose a cloud service on the admin page (Cloud backup)"
     exit 0
 fi
+LABEL=cloud FOLDER=DixieTV-backups KEEP_DAYS=30
+. "$CLOUD/cloud.env"
+REMOTE="cloud:$FOLDER"
 
-if ! out=$(rclone --config "$CONF" copy "$DATA" "$REMOTE/$DAY" --exclude offsite.json --exclude '*.part' 2>&1); then
-    status false "copy failed: $(printf '%s' "$out" | tail -n 1)"
+if ! out=$(rclone --config "$CONF" copy "$DATA" "$REMOTE/$DAY" --exclude offsite.json --exclude '*.part' --exclude 'cloud/**' --exclude power-request 2>&1); then
+    status false "copy to $LABEL failed: $(printf '%s' "$out" | tail -n 1)"
     exit 1
 fi
 
@@ -50,5 +53,5 @@ for folder in $(rclone --config "$CONF" lsf --dirs-only "$REMOTE" 2>/dev/null); 
     esac
 done
 
-status true "copied to OneDrive, DixieTV-backups/$DAY"
-echo "off-site copy done: DixieTV-backups/$DAY"
+status true "copied to $LABEL, $FOLDER/$DAY"
+echo "off-site copy done: $LABEL, $FOLDER/$DAY"

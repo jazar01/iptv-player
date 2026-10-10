@@ -49,6 +49,7 @@
     <button data-tab="tvs" class="on">TVs</button>
     <button data-tab="household">Household setup</button>
     <button data-tab="sharing">Sharing</button>
+    <button data-tab="cloud">Cloud backup</button>
     <button data-tab="pi">Pi status</button>
     <button id="signout">Sign out</button>
   </nav>
@@ -120,6 +121,27 @@
     <div id="sharingInfo" class="card"></div>
   </section>
 
+  <section id="cloud">
+    <p class="dim">Every night at 3:30 AM the Pi copies its backups (each sealed with the household key, so unreadable without it) to this cloud service, one folder per night. The account details stay on the Pi and are never uploaded or shown here again.</p>
+    <div id="cloudNow" class="card"></div>
+    <div class="card">
+      <h2>Cloud service</h2>
+      <label class="field"><span>Service</span><select id="cloudService"></select></label>
+      <div id="cloudHelp" class="dim"></div>
+      <div id="cloudFields"></div>
+      <div class="row">
+        <label class="field grow"><span>Folder</span><input type="text" id="cloudFolder" value="DixieTV-backups"></label>
+        <label class="field" style="width:140px"><span>Nights kept</span><input type="text" id="cloudKeep" value="30"></label>
+      </div>
+      <div class="row">
+        <button class="primary" id="cloudSave">Save</button>
+        <button id="cloudTest">Test connection</button>
+        <button id="cloudCopy">Copy now</button>
+        <button id="cloudOff" class="danger">Turn off</button>
+      </div>
+    </div>
+  </section>
+
   <section id="pi">
     <div class="row" style="margin-bottom:10px">
       <p class="dim grow" id="piUpdated">Loading ...</p>
@@ -181,9 +203,9 @@ async function start() {
 
 // ---- TVs ---------------------------------------------------------------
 function drawOffsite() {
-  const box = $("offsite"); box.replaceChildren(el("h2", "Off-site copy (OneDrive)"));
+  const box = $("offsite"); box.replaceChildren(el("h2", "Off-site copy (cloud)"));
   const o = state.offsite || {};
-  if (!o.lastTry) { box.append(el("div", "Not run yet. Every night at 3:30 AM the Pi copies its backups to OneDrive, DixieTV-backups.", "dim")); return; }
+  if (!o.lastTry) { box.append(el("div", "Not run yet. Every night at 3:30 AM the Pi copies its backups to the cloud service on the Cloud backup tab.", "dim")); return; }
   const day = 86400, age = Date.now() / 1000 - (o.lastOk || 0);
   box.append(el("div", o.lastOk ? "Last copied " + when(o.lastOk) : "Never copied yet", age > 2 * day ? "warn" : ""));
   if (!o.ok) box.append(el("div", "Last try " + when(o.lastTry) + ": " + o.message, "bad"));
@@ -330,6 +352,78 @@ function drawSharing() {
   section(box, "Favorites", s.favorites);
 }
 
+// ---- Cloud backup ------------------------------------------------------------
+let cloudState = null;
+const PASTE_HELP = "Services you sign in to with a browser are set up once on a computer with rclone: " +
+  "1) install it (Windows: winget install Rclone.Rclone); " +
+  "2) run  rclone config , choose n (new remote), name it cloud, pick your service and sign in when the browser opens (OneDrive: choose your personal OneDrive); " +
+  "3) run  rclone config show cloud  and paste everything it prints below.";
+
+async function loadCloud() {
+  cloudState = await api("GET", "cloud");
+  const sel = $("cloudService"); sel.replaceChildren();
+  for (const [key, svc] of Object.entries(cloudState.services)) { const o = el("option", svc.label); o.value = key; sel.append(o); }
+  const cur = cloudState.current || {};
+  sel.value = cur.service || "pasted";
+  $("cloudFolder").value = (cur.folder || "DixieTV-backups").replace(cur.bucket ? cur.bucket + "/" : "", "");
+  $("cloudKeep").value = cur.keep || 30;
+  drawCloudFields(); drawCloudNow();
+}
+
+function drawCloudNow() {
+  const box = $("cloudNow"); box.replaceChildren(el("h2", "Now"));
+  const cur = cloudState.current || {}, o = (state && state.offsite) || {};
+  if (!cloudState.configured) { box.append(el("p", "No cloud service set up: backups stay on the Pi (and the TVs).", "warn")); return; }
+  const pairs = [["Service", cur.label], ["Folder", cur.folder], ["Nights kept", cur.keep]];
+  for (const [k, label] of [["account", "Key ID"], ["access_key_id", "Access key ID"], ["host", "Host"], ["user", "User"], ["url", "Address"], ["region", "Region"], ["endpoint", "Endpoint"]]) if (cur[k]) pairs.push([label, cur[k]]);
+  pairs.push(["Password / key", "saved (not shown)"]);
+  pairs.push(["Last copy", o.lastOk ? when(o.lastOk) : "not yet", o.ok === false ? "bad" : ""]);
+  if (o.ok === false) pairs.push(["Last try", when(o.lastTry) + ": " + o.message, "bad"]);
+  kv(box, pairs);
+}
+
+function drawCloudFields() {
+  const key = $("cloudService").value, svc = cloudState.services[key], cur = cloudState.current || {};
+  const same = cur.service === key;
+  $("cloudHelp").textContent = key === "pasted" ? PASTE_HELP : "";
+  const box = $("cloudFields"); box.replaceChildren();
+  for (const f of svc.fields) {
+    const lab = el("label", undefined, "field");
+    const input = f.name === "config" ? document.createElement("textarea") : document.createElement("input");
+    if (f.name === "config") { input.rows = 7; input.style.width = "100%"; input.style.background = "#0d1216"; input.style.color = "var(--text)"; input.style.border = "1px solid var(--line)"; input.style.borderRadius = "8px"; input.style.font = "13px monospace"; }
+    else input.type = f.secret ? "password" : "text";
+    input.id = "cloud_" + f.name; input.autocomplete = "off";
+    if (!f.secret && same && cur[f.name]) input.value = cur[f.name];
+    if (f.secret && same) input.placeholder = "saved; leave blank to keep it";
+    lab.append(el("span", f.label), input); box.append(lab);
+  }
+}
+
+async function saveCloud(service) {
+  const body = { service, folder: $("cloudFolder").value, keep: $("cloudKeep").value, fields: {} };
+  if (service !== "off") for (const f of cloudState.services[service].fields) body.fields[f.name] = $("cloud_" + f.name).value;
+  if (service === "off" && !confirm("Turn off the nightly cloud copy? The account details are deleted from the Pi; what's already in the cloud stays.")) return;
+  try {
+    cloudState = await api("PUT", "cloud", body);
+    note(service === "off" ? "Cloud copy turned off" : "Saved. Testing the connection ...");
+    await loadCloud();
+    if (service !== "off") await testCloud();
+  } catch (e) { note("Not saved: " + e.message); }
+}
+
+async function testCloud() {
+  try { const r = await api("POST", "cloud/test"); note((r.ok ? "Connection works: " : "Connection failed: ") + r.message); }
+  catch (e) { note("Test failed: " + e.message); }
+}
+
+async function copyCloud() {
+  try {
+    const r = await api("POST", "cloud/copy");
+    note(r.started ? "Copying now; the result shows here in a minute or two." : "A copy is already running.");
+    setTimeout(async () => { state = await api("GET", "state"); drawCloudNow(); drawOffsite(); }, 60000);
+  } catch (e) { note("Couldn't start: " + e.message); }
+}
+
 // ---- Pi status -------------------------------------------------------------
 function kv(box, pairs) {
   const grid = el("div", undefined, "kv");
@@ -407,7 +501,7 @@ async function loadStatus() {
 
   const off = c.offsite || {}, sc = c.selfclone || {};
   kv(card("Copies"), [
-    ["OneDrive (nightly)", off.lastOk ? "last copied " + when(off.lastOk) + (off.ok ? "" : "; last try failed: " + off.message) : "not run yet", off.ok === false ? "bad" : ""],
+    ["Cloud copy (nightly)", off.lastOk ? "last copied " + when(off.lastOk) + (off.ok ? "" : "; last try failed: " + off.message) : "not run yet", off.ok === false ? "bad" : ""],
     ["USB stick (nightly)", sc.at ? (sc.ok ? "" : "FAILED: ") + sc.message + ", " + new Date(sc.at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "not run yet", sc.ok === false ? "bad" : ""],
     ["USB stick", c.stick || "not plugged in", c.stick ? "" : "bad"],
   ]);
@@ -449,6 +543,7 @@ for (const b of document.querySelectorAll("#tabs button[data-tab]")) {
     for (const x of document.querySelectorAll("#tabs button[data-tab]")) x.classList.toggle("on", x === b);
     for (const s of document.querySelectorAll("section")) s.classList.toggle("on", s.id === b.dataset.tab);
     statusTab(b.dataset.tab === "pi");
+    if (b.dataset.tab === "cloud") loadCloud().catch((e) => note(e.message));
   };
 }
 $("signinButton").onclick = signIn;
@@ -456,6 +551,11 @@ $("password").onkeydown = (e) => { if (e.key === "Enter") signIn(); };
 $("signout").onclick = async () => { await api("POST", "logout").catch(() => {}); showSignIn(); };
 $("copyAll").onclick = copyAll;
 $("piRefresh").onclick = loadStatus;
+$("cloudService").onchange = drawCloudFields;
+$("cloudSave").onclick = () => saveCloud($("cloudService").value);
+$("cloudTest").onclick = testCloud;
+$("cloudCopy").onclick = copyCloud;
+$("cloudOff").onclick = () => saveCloud("off");
 $("piReboot").onclick = () => power("reboot");
 $("piPoweroff").onclick = () => power("poweroff");
 $("saveHousehold").onclick = () => saveHousehold(false);

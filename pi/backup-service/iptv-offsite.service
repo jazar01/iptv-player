@@ -1,8 +1,16 @@
 [Unit]
-Description=Dixie TV off-site copy of the backups (to OneDrive)
+Description=Dixie TV off-site copy of the backups (to the cloud service set on the admin page)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=oneshot
+# The backup service's own user: it owns the backups and the cloud
+# connection (/var/lib/iptv-backup/cloud), which the admin page manages.
+User=iptvbackup
 ExecStart=/bin/sh /opt/iptv-backup/offsite.sh
+ProtectSystem=strict
+ReadWritePaths=/var/lib/iptv-backup
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true

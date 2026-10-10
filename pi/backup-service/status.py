@@ -21,7 +21,7 @@ POWER_REQUEST = "/var/lib/iptv-backup/power-request"
 SERVICES = [
     ("dolby-converter.service", "Dolby converter and live buffer"),
     ("iptv-backup.service", "Backup service and this admin page"),
-    ("iptv-offsite.timer", "Nightly OneDrive copy (timer)"),
+    ("iptv-offsite.timer", "Nightly cloud copy (timer)"),
     ("pi-selfclone.timer", "Nightly copy to the USB stick (timer)"),
     ("iptv-power.path", "Restart and shut down from this page"),
 ]

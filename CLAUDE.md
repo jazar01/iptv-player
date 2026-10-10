@@ -102,8 +102,9 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   the household setup; a new TV starts from it (`applyHousehold`). Its Pi status tab
   (`pi/backup-service/status.py`) shows the Pi's health, services and copies,
   with Restart and Shut down carried out by a root unit (`iptv-power.*`). Nightly
-  off-site copy to OneDrive (`offsite.sh`, rclone, `iptv-offsite.timer`;
-  requirements "Off-site copy"). Keep `$BackupKey` somewhere off this PC.
+  off-site copy (`offsite.sh`, rclone, `iptv-offsite.timer`; requirements
+  "Off-site copy") to the cloud service set on the admin page's Cloud backup
+  tab (`cloud.py`; connection in `/var/lib/iptv-backup/cloud/`, now OneDrive). Keep `$BackupKey` somewhere off this PC.
   "Save and send to all TVs" on the admin page pushes the account: each TV
   tries a login first (`checkHouseholdAccount`, `onAccountTry`).
 - `components/services/StateStore.*`: interface functions called via
