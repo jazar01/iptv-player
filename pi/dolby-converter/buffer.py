@@ -88,14 +88,14 @@ class Recorder:
         self.video = None                    # {width, height, fps}, measured per provider session
         self.sessions = 0
         self.seen = set()
-        self.used = time.time()
+        self.used = time.monotonic()
         self.stopped = False
-        self.started = time.time()
+        self.started = time.monotonic()
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.thread.start()
 
     def touch(self):
-        self.used = time.time()
+        self.used = time.monotonic()
 
     # -- recording ------------------------------------------------------------
 
@@ -103,7 +103,7 @@ class Recorder:
         log.info("buffer: recording %s%s", self.name, " (converting audio)" if self.convert else "")
         failures = 0
         while not self.stopped:
-            if time.time() - self.used > IDLE:
+            if time.monotonic() - self.used > IDLE:
                 log.info("buffer: %s unused for %d s; stopped", self.name, IDLE)
                 break
             try:
@@ -133,7 +133,7 @@ class Recorder:
                 del recorders[self.url]
         with self.lock:
             self.segments, self.bytes = [], 0
-        log.info("buffer: %s released (%.0f min recorded)", self.name, (time.time() - self.started) / 60)
+        log.info("buffer: %s released (%.0f min recorded)", self.name, (time.monotonic() - self.started) / 60)
 
     def poll(self):
         """Fetches the provider's playlist and any segments not yet kept."""

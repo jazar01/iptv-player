@@ -227,11 +227,16 @@ state (wiped, reinstalled) restores itself at launch:
 
     .\scripts\backup-roku.ps1 -Roku Basement
 
-Install or update the services on the Pi, the Dolby converter and the backup
-service (`-Service converter|backup` for one; SSH host `iptv-pi`, a key
-without a passphrase; `$LocalPi` in `deploy.local.ps1` overrides):
+Install or update the services on the Pi: the Dolby converter, the backup
+service and the nightly bootable self-copy to its USB stick (`-Service
+converter|backup|selfclone` for one; SSH host `iptv-pi`, a key without a
+passphrase; `$LocalPi` in `deploy.local.ps1` overrides):
 
     .\scripts\pi-deploy.ps1
+
+If the Pi's microSD card dies, take it out and power on: it starts from the
+USB stick's copy (`pi/selfclone/`, made every night at 4:30; last result in
+`/var/lib/pi-selfclone/last.json` on the Pi).
 
 Home-screen logo and splash: `.\scripts\make-icons.ps1` draws them into
 `images/`: Dixie from `art/dixie.svg` (her face, drawn from her photo; edit

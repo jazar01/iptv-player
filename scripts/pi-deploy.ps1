@@ -1,11 +1,16 @@
 <#
 Installs or updates the services on the home Raspberry Pi: the Dolby
-converter (pi\dolby-converter) and the backup service (pi\backup-service).
+converter (pi\dolby-converter), the backup service (pi\backup-service) and
+the nightly copy of the Pi's system to its USB backup drive (pi\selfclone).
 Copies each folder over SSH and runs its install.sh.
 
-    .\scripts\pi-deploy.ps1                     both
+    .\scripts\pi-deploy.ps1                     all three
     .\scripts\pi-deploy.ps1 -Service converter
     .\scripts\pi-deploy.ps1 -Service backup
+    .\scripts\pi-deploy.ps1 -Service selfclone
+
+The USB backup drive is set up once on the Pi (it erases the drive):
+    ssh -t iptv-pi sudo pi-selfclone --setup /dev/disk/by-id/usb-...
 
 -PiHost is an SSH host: a Host entry in ~\.ssh\config with a key the Pi
 accepts (no password prompts), or user@address. Default: $LocalPi from
@@ -17,7 +22,7 @@ to /etc/iptv-backup/key over SSH's input, never on a command line.
 #>
 param(
     [string]$PiHost,
-    [ValidateSet('all', 'converter', 'backup')][string]$Service = 'all'
+    [ValidateSet('all', 'converter', 'backup', 'selfclone')][string]$Service = 'all'
 )
 
 # Not 'Stop': Windows PowerShell 5.1 turns any line a native program writes to
@@ -90,4 +95,8 @@ if ($Service -eq 'all' -or $Service -eq 'backup') {
     }
     Test-Health 'Backup service' 8792
     Write-Host "Admin page: http://${address}:8792/admin"
+}
+
+if ($Service -eq 'all' -or $Service -eq 'selfclone') {
+    Install-Folder 'selfclone' 'pi-selfclone'
 }

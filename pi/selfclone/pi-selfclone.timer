@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly copy of the Pi's system to its USB backup drive
+
+[Timer]
+# After the OneDrive copy (3:30), so the night's backups are on the drive too.
+OnCalendar=*-*-* 04:30
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

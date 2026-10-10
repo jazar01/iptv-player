@@ -51,11 +51,11 @@ class Job:
         self.done = False                   # every segment is in
         self.error = None
         self.stopped = False
-        self.used = time.time()
+        self.used = time.monotonic()
         threading.Thread(target=self.run, daemon=True).start()
 
     def touch(self):
-        self.used = time.time()
+        self.used = time.monotonic()
 
     def open(self, url):
         request = urllib.request.Request(url, headers={"User-Agent": self.agent, "Accept": "*/*"})
@@ -65,7 +65,7 @@ class Job:
             raise buffer.UpstreamError(e.code)
 
     def run(self):
-        started = time.time()
+        started = time.monotonic()
         try:
             with self.open(self.url) as response:
                 text = response.read(4 * 1024 * 1024).decode("utf-8", "replace")
@@ -74,7 +74,7 @@ class Job:
             log.info("archive: %s: %d segment(s)%s", self.name, len(listed), " (converting audio)" if self.convert else "")
             seq = 0
             for duration, url in listed:
-                if self.stopped or time.time() - self.used > IDLE:
+                if self.stopped or time.monotonic() - self.used > IDLE:
                     log.info("archive: %s unused; stopped", self.name)
                     return
                 with self.open(url) as response:
@@ -89,7 +89,7 @@ class Job:
                              self.name, duration, len(data) // (1024 * 1024), len(pieces))
                 self.ready.set()
             self.done = True
-            log.info("archive: %s ready (%.0f s)", self.name, time.time() - started)
+            log.info("archive: %s ready (%.0f s)", self.name, time.monotonic() - started)
         except Exception as e:
             self.error = e
             log.info("archive: %s: %s", self.name, buffer.describe(e))
@@ -119,7 +119,7 @@ def job_for(url, convert, agent, ffmpeg):
     """The archive address's job, started if there's none (or it failed)."""
     key = (url, convert)
     with jobs_lock:
-        for k in [k for k, j in jobs.items() if j.stopped or time.time() - j.used > IDLE]:
+        for k in [k for k, j in jobs.items() if j.stopped or time.monotonic() - j.used > IDLE]:
             jobs.pop(k).stopped = True
         job = jobs.get(key)
         if job is not None and job.error is not None and not job.pieces:

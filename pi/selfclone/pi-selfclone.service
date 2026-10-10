@@ -1,0 +1,9 @@
+[Unit]
+Description=Nightly copy of the Pi's system to its USB backup drive (bootable)
+ConditionPathExists=/etc/pi-selfclone.conf
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /usr/local/sbin/pi-selfclone
+Nice=10
+IOSchedulingClass=idle

@@ -46,7 +46,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.6"
+VERSION = "1.7"
 DEFAULT_UA = "Roku/DVP-14.0 (14.0.0.0)"     # the provider refuses non-Roku agents (404)
 UPSTREAM_TIMEOUT = 20                       # seconds, per read
 MAX_SEGMENT = 64 * 1024 * 1024              # archive minutes run about 20 MB
@@ -80,13 +80,13 @@ class Channel:
         self.disc_seq = 0       # discontinuities dropped off the front
         self.target = 10
         self.added_at = 0.0
-        self.used = time.time()
+        self.used = time.monotonic()
 
     def add(self, playlist, base, new_session):
         """Adds the upstream playlist's new segments; returns our playlist."""
         target, segments = parse_media_playlist(playlist, base)
         self.target = target or self.target
-        now = time.time()
+        now = time.monotonic()
         if not self.entries:
             self.next_seq = media_sequence(playlist)
             fresh = segments
@@ -123,7 +123,7 @@ class Channel:
 
 
 def channel_for(url):
-    now = time.time()
+    now = time.monotonic()
     with channels_lock:
         for key in [k for k, c in channels.items() if now - c.used > SESSION_IDLE]:
             del channels[key]
@@ -160,7 +160,11 @@ def is_live_media(text):
     """A live media playlist (not a master playlist, not a finished archive)."""
     return "#EXTINF" in text and "#EXT-X-ENDLIST" not in text and "#EXT-X-STREAM-INF" not in text \
         and "#EXT-X-KEY" not in text
-stats = {"started": time.time(), "playlists": 0, "segments": 0, "failed": 0, "active": 0}
+# Durations here (idle channels and jobs, waits, uptime) use time.monotonic():
+# after a power cut long enough to drain the UPS, the Pi starts with an old
+# time and jumps hours ahead when it reaches the internet, which made every
+# channel and job look idle at once (Oct 9, 2026). Never time.time() for these.
+stats = {"started": time.monotonic(), "playlists": 0, "segments": 0, "failed": 0, "active": 0}
 stats_lock = threading.Lock()
 
 
@@ -384,7 +388,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def health(self):
         with stats_lock:
-            body = dict(stats, version=VERSION, uptime=int(time.time() - stats["started"]))
+            body = dict(stats, version=VERSION, uptime=int(time.monotonic() - stats["started"]))
         body["buffers"] = buffer.summaries()
         body["bufferBudgetMb"] = buffer.BUDGET // (1024 * 1024)
         body.pop("started")

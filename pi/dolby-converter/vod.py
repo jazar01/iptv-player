@@ -52,7 +52,7 @@ class Job:
         self.id = hashlib.sha1(f"{url}|{start}".encode()).hexdigest()[:12]
         self.name = buffer.safe_name(url)
         self.folder = tempfile.mkdtemp(prefix="dixie-vod-")
-        self.used = time.time()
+        self.used = time.monotonic()
         self.newest = 0                     # highest piece number asked for
         self.stopped = False
         self.process = subprocess.Popen([
@@ -75,7 +75,7 @@ class Job:
             log.info("vod: %s: all converted", self.name)
 
     def touch(self):
-        self.used = time.time()
+        self.used = time.monotonic()
 
     def playlist_text(self):
         try:
@@ -131,7 +131,7 @@ class Job:
 def job_for(url, start, agent, ffmpeg):
     key = (url, start)
     with jobs_lock:
-        for k in [k for k, j in jobs.items() if time.time() - j.used > IDLE]:
+        for k in [k for k, j in jobs.items() if time.monotonic() - j.used > IDLE]:
             old = jobs.pop(k)
             log.info("vod: %s unused; stopped", old.name)
             old.stop()
@@ -160,8 +160,8 @@ def find(jid):
 
 def wait_for_start(job):
     """Until a few pieces are made (or ffmpeg has stopped), at most FIRST_WAIT s."""
-    deadline = time.time() + FIRST_WAIT
-    while time.time() < deadline:
+    deadline = time.monotonic() + FIRST_WAIT
+    while time.monotonic() < deadline:
         count, ended = job.pieces_ready()
         if count >= 3 or ended or job.process.poll() is not None:
             return count > 0
