@@ -109,6 +109,31 @@ class Store:
             write_atomic(os.path.join(self.history_dir(device), day + ".json"), body)
             self.trim_history(device)
 
+    # Each TV's address, from its latest backup, so the admin page's status
+    # tab can name the TVs the Dolby converter is serving.
+    def addresses_path(self):
+        return os.path.join(self.root, "addresses.json")
+
+    def note_address(self, address, device, name):
+        with write_lock:
+            try:
+                with open(self.addresses_path()) as f:
+                    known = json.load(f)
+            except (OSError, ValueError):
+                known = {}
+            if known.get(address, {}).get("device") == device and known[address].get("name") == name:
+                return
+            known = {a: v for a, v in known.items() if v.get("device") != device}
+            known[address] = {"device": device, "name": name, "at": int(time.time())}
+            write_atomic(self.addresses_path(), json.dumps(known).encode())
+
+    def addresses(self):
+        try:
+            with open(self.addresses_path()) as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return {}
+
     def trim_history(self, device):
         folder = self.history_dir(device)
         days = sorted(f for f in os.listdir(folder) if f.endswith(".json"))
@@ -282,6 +307,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(code, reply)
             return
         self.server.store.save(parts[1], body)
+        self.server.store.note_address(self.client_address[0], parts[1], str(sealed.get("name", "")))
         log.info("saved %s (%s), %d bytes", parts[1], sealed.get("name", ""), len(body))
         self.send_json(200, {"ok": True})
 

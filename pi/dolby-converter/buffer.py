@@ -89,6 +89,7 @@ class Recorder:
         self.sessions = 0
         self.seen = set()
         self.used = time.monotonic()
+        self.clients = {}                    # TV address -> when it last asked
         self.stopped = False
         self.started = time.monotonic()
         self.thread = threading.Thread(target=self.run, daemon=True)
@@ -96,6 +97,15 @@ class Recorder:
 
     def touch(self):
         self.used = time.monotonic()
+
+    def seen_by(self, address):
+        """Notes the TV asking (its address), for /health's "clients"."""
+        if address:
+            self.clients[address] = time.monotonic()
+
+    def recent_clients(self):
+        now = time.monotonic()
+        return sorted(a for a, t in list(self.clients.items()) if now - t < 60)
 
     # -- recording ------------------------------------------------------------
 
@@ -311,7 +321,7 @@ class Recorder:
         with self.lock:
             seconds = sum(float(s.duration or 0) for s in self.segments)
             return {"channel": self.name, "minutes": round(seconds / 60, 1), "mb": self.bytes // (1024 * 1024),
-                    "converted": self.convert}
+                    "converted": self.convert, "clients": self.recent_clients()}
 
 
 def recorder_for(url, convert, agent, ffmpeg):

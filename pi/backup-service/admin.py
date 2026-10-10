@@ -48,7 +48,7 @@ CANONICAL = {k.lower(): k for k in [
     "showFavoritesInRecent", "myTeamsFirst", "showScores", "serverTimezone", "dolbyConverter",
     "logoFor", "resumeGone", "seenGames", "watchlist"]}
 
-SETTINGS = ["showMyTeams", "showNoGameTeams", "showFavoritesInRecent", "myTeamsFirst", "showScores"]
+SETTINGS = ["showMyTeams", "showNoGameTeams", "showFavoritesInRecent", "myTeamsFirst", "showScores", "useConverter", "liveBuffer"]
 
 
 def canonical(value):
@@ -167,7 +167,9 @@ class Admin:
         elif parts == ["cloud", "copy"] and method == "POST":
             self.send(h, 200, {"started": cloud.copy_now()})
         elif parts == ["status"] and method == "GET":
-            self.send(h, 200, status.collect(self.provider_server()))
+            result = status.collect(self.provider_server())
+            result["tvs"] = self.tv_players()
+            self.send(h, 200, result)
         elif parts == ["power"] and method == "POST":
             action = str(self.body(h).get("action", ""))
             status.request_power(action, h.client_address[0])
@@ -314,6 +316,25 @@ class Admin:
         shutil.copyfile(source, self.store.device_path(device))
         self.log.info("admin made %s's copy of %s the current backup", day, device)
         self.send(h, 200, {"ok": True})
+
+    def tv_players(self):
+        """Each TV's address and its live buffer and converter settings, from
+        its latest backup, for the status tab's "who's using the Pi"."""
+        addresses = {v.get("device"): a for a, v in self.store.addresses().items()}
+        out = []
+        for d in self.store.devices():
+            entry = {"name": d.get("name") or "(no name)", "address": addresses.get(d["id"], ""),
+                     "liveBuffer": None, "converter": ""}
+            try:
+                doc = self.sealer.open(self.read_sealed(self.store.device_path(d["id"])))
+                settings = {str(k).lower(): v for k, v in (doc.get("settings") or {}).items()}
+                buffer_on = settings.get("livebuffer")
+                entry["liveBuffer"] = True if buffer_on is None else bool(buffer_on)
+                entry["converter"] = str(settings.get("dolbyconverter") or "")
+            except (OSError, ValueError, KeyError, AttributeError):
+                pass
+            out.append(entry)
+        return out
 
     def provider_server(self):
         """The provider's address from the household setup, for the status

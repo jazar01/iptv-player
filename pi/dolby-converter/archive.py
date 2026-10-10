@@ -52,10 +52,20 @@ class Job:
         self.error = None
         self.stopped = False
         self.used = time.monotonic()
+        self.clients = {}
         threading.Thread(target=self.run, daemon=True).start()
 
     def touch(self):
         self.used = time.monotonic()
+
+    def seen_by(self, address):
+        """Notes the TV asking (its address), for /health's "clients"."""
+        if address:
+            self.clients[address] = time.monotonic()
+
+    def recent_clients(self):
+        now = time.monotonic()
+        return sorted(a for a, t in list(self.clients.items()) if now - t < 60)
 
     def open(self, url):
         request = urllib.request.Request(url, headers={"User-Agent": self.agent, "Accept": "*/*"})
@@ -145,7 +155,7 @@ def summaries():
             seconds = sum(float(p.duration or 0) for p in j.pieces)
             mb = sum(len(p.data) for p in j.pieces) // (1024 * 1024)
         out.append({"channel": j.name, "minutes": round(seconds / 60, 1), "mb": mb, "done": j.done,
-                    "converted": j.convert, "idle": int(time.monotonic() - j.used)})
+                    "converted": j.convert, "idle": int(time.monotonic() - j.used), "clients": j.recent_clients()})
     return out
 
 

@@ -120,10 +120,15 @@ function applyHousehold(json as String, deviceName as String) as Boolean
     end for
     if type(h.market) = "roAssociativeArray" then doc.market = { key: asString(h.market.key), label: asString(h.market.label) }
     if type(h.settings) = "roAssociativeArray"
-        for each name in ["showMyTeams", "showNoGameTeams", "showFavoritesInRecent", "myTeamsFirst", "showScores"]
+        for each name in ["showMyTeams", "showNoGameTeams", "showFavoritesInRecent", "myTeamsFirst", "showScores", "liveBuffer"]
             if h.settings[name] <> invalid then doc.settings[name] = isTrue(h.settings[name])
         end for
     end if
+    ' Look for the Dolby converter once set up (MainBackup, findConverterForNewTv):
+    ' on unless the household setup turns it off (setups saved before this
+    ' was a choice count as on, Oct 10, 2026).
+    doc.settings.useConverter = true
+    if type(h.settings) = "roAssociativeArray" and h.settings.useConverter <> invalid then doc.settings.useConverter = isTrue(h.settings.useConverter)
     previous = m.doc
     m.doc = doc
     normalizeDocument(m.doc)
@@ -235,6 +240,7 @@ function getSettings() as Object
         dolbyConverter: asString(m.doc.settings.dolbyConverter)     ' "address:port" of the Pi, "" = off
         liveBuffer: (m.doc.settings.liveBuffer = invalid or isTrue(m.doc.settings.liveBuffer))    ' live channels through the Pi's buffer
         guideChoices: m.doc.settings.guideChoices   ' the Guide's ticked channel sets (array of IDs), or invalid
+        useConverter: isTrue(m.doc.settings.useConverter)  ' set up from the household: look for the converter
         serverTimezone: asString(m.doc.settings.serverTimezone)     ' last seen, for timeshift
         householdAccountAt: toInt(m.doc.settings.householdAccountAt)    ' the household account last taken (or refused)
     }

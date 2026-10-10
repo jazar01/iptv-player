@@ -46,7 +46,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.8"
+VERSION = "1.9"
 DEFAULT_UA = "Roku/DVP-14.0 (14.0.0.0)"     # the provider refuses non-Roku agents (404)
 UPSTREAM_TIMEOUT = 20                       # seconds, per read
 MAX_SEGMENT = 64 * 1024 * 1024              # archive minutes run about 20 MB
@@ -265,6 +265,8 @@ class Handler(BaseHTTPRequestHandler):
         if prefix == "vs":
             parts = self.path.split("?", 1)[0].split("/")      # ['', 'vs', id, 'p00001.ts']
             job = vod.find(parts[2]) if len(parts) == 4 else None
+            if job:
+                job.seen_by(self.client_address[0])
             data = job.piece(parts[3]) if job else None
             if data is None:
                 self.send_error(404)
@@ -282,6 +284,7 @@ class Handler(BaseHTTPRequestHandler):
         if not agent.startswith("Roku"):
             agent = DEFAULT_UA
         job = vod.job_for(url, int(pieces[2]), agent, self.server.ffmpeg)
+        job.seen_by(self.client_address[0])
         if not vod.wait_for_start(job):
             self.send_error(502)
             count("failed")
@@ -298,6 +301,8 @@ class Handler(BaseHTTPRequestHandler):
         if prefix == "as":
             parts = self.path.split("?", 1)[0].split("/")      # ['', 'as', id, '<seq>.ts']
             job = archive.find(parts[2]) if len(parts) == 4 else None
+            if job:
+                job.seen_by(self.client_address[0])
             data = None
             if job and parts[3].endswith(".ts") and parts[3][:-3].isdigit():
                 data = job.piece(int(parts[3][:-3]))
@@ -315,6 +320,7 @@ class Handler(BaseHTTPRequestHandler):
         if not agent.startswith("Roku"):
             agent = DEFAULT_UA
         job = archive.job_for(url, prefix == "ac", agent, self.server.ffmpeg)
+        job.seen_by(self.client_address[0])
         job.ready.wait(archive.FIRST_WAIT)
         if not job.pieces:
             error = job.error
@@ -348,6 +354,7 @@ class Handler(BaseHTTPRequestHandler):
             data = None
             if recorder and parts[3].endswith(".ts") and parts[3][:-3].isdigit():
                 recorder.touch()
+                recorder.seen_by(self.client_address[0])
                 data = recorder.segment(int(parts[3][:-3]))
             if data is None:
                 self.send_error(404)
@@ -364,6 +371,7 @@ class Handler(BaseHTTPRequestHandler):
             answer = {"ok": recorder is not None}
             if recorder and prefix == "bk":
                 recorder.touch()
+                recorder.seen_by(self.client_address[0])
                 answer = recorder.status()
             elif recorder:
                 recorder.stopped = True
@@ -374,6 +382,7 @@ class Handler(BaseHTTPRequestHandler):
         if not agent.startswith("Roku"):
             agent = DEFAULT_UA
         recorder = buffer.recorder_for(url, prefix == "bc", agent, self.server.ffmpeg)
+        recorder.seen_by(self.client_address[0])
         if not recorder.segments:
             recorder.ready.wait(buffer.FIRST_WAIT)
         if not recorder.segments:

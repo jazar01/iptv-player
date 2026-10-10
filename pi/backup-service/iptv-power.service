@@ -1,6 +1,8 @@
 [Unit]
-Description=Carry out a restart / shut down request from the Dixie TV admin page
+Description=Carry out a restart / shut down / update request from the Dixie TV admin page
 
 [Service]
 Type=oneshot
 ExecStart=/bin/sh /opt/iptv-backup/iptv-power.sh
+# Installing updates can take a while.
+TimeoutStartSec=2h

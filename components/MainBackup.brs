@@ -193,6 +193,7 @@ sub onHouseholdName()
     name = UCase(Left(typed, 1)) + Mid(typed, 2)        ' voice entry comes in lower case
     if m.store.callFunc("applyHousehold", m.householdJson, name)
         finishRestore("Set up from your household setup as " + name)
+        if m.store.callFunc("getSettings").useConverter then findConverterForNewTv()
     else if m.setup <> invalid
         m.setup.status = "The household setup couldn't be used. Set this TV up below."
     end if

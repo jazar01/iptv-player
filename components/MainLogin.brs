@@ -466,12 +466,40 @@ sub onConverterFound(event as Object)
         converterSearchDone(result)
         return
     end if
+    if m.converterSearchFor = "newtv"
+        newTvConverterFound(result)
+        return
+    end if
     showConverterChoice(result)
 end sub
 
 sub onConverterSearchTimeout()
     if m.converterSearchFor = "settings" then showConverterChoice({ found: false })
     if m.converterSearchFor = "playback" then converterSearchDone({ found: false })
+    if m.converterSearchFor = "newtv" then newTvConverterFound({ found: false })
+end sub
+
+' A TV just set up from the household setup (its "Use the Dolby converter"
+' on, as it is unless turned off on the admin page): look for the converter
+' quietly, with no dialog, and use it if it answers. Settings -> Dolby
+' converter can change it later.
+sub findConverterForNewTv()
+    if converterAddress() <> "" then return
+    m.converterSearchFor = "newtv"
+    m.converterSearchTimer.control = "stop"
+    m.converterSearchTimer.control = "start"     ' in case the relay doesn't answer
+    m.relay.discover = { id: "newtv" }
+end sub
+
+sub newTvConverterFound(result as Object)
+    m.converterSearchFor = ""
+    m.converterSearchTimer.control = "stop"
+    if not isTrue(result.found)
+        print "[main] new TV: no Dolby converter answered on this network"
+        return
+    end if
+    print "[main] new TV: using the Dolby converter at "; asString(result.address)
+    saveConverter(asString(result.address))
 end sub
 
 sub showConverterChoice(result as Object)

@@ -168,6 +168,8 @@ const SETTINGS = [
   ["showNoGameTeams", "Show teams with no game", true],
   ["showScores", "Live scores on My Teams", true],
   ["showFavoritesInRecent", "Favorites in Recently Viewed", false],
+  ["useConverter", "Use the Dolby converter on this Pi (a new TV finds it by itself)", true],
+  ["liveBuffer", "Live buffer: pause and rewind live TV (needs the Dolby converter)", true],
 ];
 let state = null;
 let household = { credentials: {}, favorites: [], teams: [], market: { key: "", label: "" }, settings: {} };
@@ -454,6 +456,31 @@ async function loadStatus() {
     ["Clock", o.clockSynced ? "synced with the internet" : "not synced yet", o.clockSynced ? "" : "warn"],
   ]);
 
+  // Who's using the Pi: each TV's live buffer setting (from its backup), and
+  // what it's playing through the Pi now (the converter's clients).
+  const names = {};
+  for (const t of s.tvs || []) if (t.address) names[t.address] = t.name;
+  const who = (clients) => (clients || []).map((a) => names[a] || a).join(", ") || "a TV";
+  const now = {};
+  const add = (clients, text) => { for (const a of (clients && clients.length ? clients : ["?"])) (now[names[a] || a] = now[names[a] || a] || []).push(text); };
+  if (!conv.error) {
+    for (const b of conv.buffers || []) add(b.clients, "live buffer: " + b.channel + ", " + b.minutes + " min kept" + (b.converted ? ", audio converted" : ""));
+    for (const a of conv.archives || []) add(a.clients, "archive: " + a.channel);
+    for (const v of conv.vod || []) add(v.clients, "movie / episode with converted audio: " + v.file);
+  }
+  const tvRows = [];
+  for (const t of s.tvs || []) {
+    const using = now[t.name];
+    let setting = t.liveBuffer === null ? "setting unknown" : t.liveBuffer ? (t.converter ? "live buffer on" : "live buffer on, but no converter set") : "live buffer off";
+    tvRows.push([t.name, (using ? "NOW: " + using.join("; ") + "  -  " : "") + setting, using ? "ok" : t.liveBuffer && t.converter ? "" : "dim"]);
+    delete now[t.name];
+  }
+  for (const [name, list] of Object.entries(now)) tvRows.push([name === "?" ? "Unknown TV" : name, "NOW: " + list.join("; "), "ok"]);
+  const inUse = tvRows.filter((r) => r[1].startsWith("NOW")).length;
+  const tvCard = card("TVs and the live buffer");
+  tvCard.append(el("p", inUse ? inUse + " TV(s) playing through the Pi now." : "No TV is playing through the Pi right now.", "dim"));
+  kv(tvCard, tvRows.length ? tvRows : [["TVs", "none have backed up yet"]]);
+
   const memUsed = h.memoryTotal - h.memoryAvailable;
   kv(card("Health"), [
     ["Temperature", h.temperatureC + " °C", h.temperatureC >= 80 ? "bad" : h.temperatureC >= 70 ? "warn" : ""],
@@ -491,9 +518,9 @@ async function loadStatus() {
   if (conv.error) kv(cv, [["Converter", "didn't answer (" + conv.error + ")", "bad"]]);
   else {
     const items = [];
-    for (const b of conv.buffers || []) items.push(["Live buffer", b.channel + ": " + b.minutes + " min, " + b.mb + " MB" + (b.converted ? ", audio converted" : "")]);
-    for (const a of conv.archives || []) items.push(["Archive", a.channel + ": " + a.minutes + " min cut" + (a.done ? " (all in)" : " so far") + ", " + a.mb + " MB"]);
-    for (const v of conv.vod || []) items.push(["Movie / episode", v.file + ": from " + span(v.from) + ", " + v.minutes + " min converted" + (v.done ? " (to the end)" : "") + ", watched to " + v.watched + " min"]);
+    for (const b of conv.buffers || []) items.push(["Live buffer", b.channel + ": " + b.minutes + " min, " + b.mb + " MB" + (b.converted ? ", audio converted" : "") + " (" + who(b.clients) + ")"]);
+    for (const a of conv.archives || []) items.push(["Archive", a.channel + ": " + a.minutes + " min cut" + (a.done ? " (all in)" : " so far") + ", " + a.mb + " MB (" + who(a.clients) + ")"]);
+    for (const v of conv.vod || []) items.push(["Movie / episode", v.file + ": from " + span(v.from) + ", " + v.minutes + " min converted" + (v.done ? " (to the end)" : "") + ", watched to " + v.watched + " min (" + who(v.clients) + ")"]);
     if (!items.length) items.push(["In use", "nothing playing through the Pi right now"]);
     items.push(["Version", conv.version + ", up " + span(conv.uptime)], ["Since start", conv.playlists + " playlists, " + conv.segments + " pieces served, " + conv.failed + " failed"], ["Live buffer memory", "up to " + conv.bufferBudgetMb + " MB"]);
     kv(cv, items);
@@ -506,16 +533,32 @@ async function loadStatus() {
     ["USB stick", c.stick || "not plugged in", c.stick ? "" : "bad"],
   ]);
 
-  kv(card("System"), [
-    ["Updates waiting", sys.updatesWaiting === null ? "not checked" : sys.updatesWaiting + " package(s)" + (sys.updatesWaiting ? " (install by hand, with steady power)" : "")],
-    ["Bootloader", sys.bootloader],
-  ]);
+  const sysCard = card("System");
+  const u = sys.update || {};
+  const running = u.state === "running";
+  const sysRows = [
+    ["Updates waiting", running ? "installing now ..." : sys.updatesWaiting === null ? "not checked" : sys.updatesWaiting + " package(s)"],
+  ];
+  if (u.state) sysRows.push(["Last update", (running ? "running since " + when(u.startedAt) + ": " : when(u.finishedAt) + ": ") + u.message, u.state === "failed" ? "bad" : u.rebootNeeded ? "warn" : running ? "" : "ok"]);
+  sysRows.push(["Bootloader", sys.bootloader]);
+  kv(sysCard, sysRows);
+  if (running && u.log && u.log.length) { const pre = el("pre", u.log.join("\n")); pre.style.cssText = "font-size:12px;white-space:pre-wrap;color:var(--dim);margin:8px 0 0"; sysCard.append(pre); }
+  const buttons = el("div", undefined, "row"); buttons.style.marginTop = "10px";
+  if (!running && sys.updatesWaiting) { const b = el("button", "Install " + sys.updatesWaiting + " update(s)", "primary"); b.onclick = installUpdates; buttons.append(b); }
+  if (!running && u.rebootNeeded) { const b = el("button", "Restart to finish the update"); b.onclick = () => power("reboot"); buttons.append(b); }
+  if (buttons.childNodes.length) { sysCard.append(buttons, el("p", "Updates take a few minutes; the TVs keep playing meanwhile. Best with steady power (on the UPS). Nothing restarts by itself: a restart is offered when a new kernel or firmware needs one.", "dim")); }
 }
 
 let statusTimer = null;
 function statusTab(on) {
   clearInterval(statusTimer);
   if (on) { loadStatus(); statusTimer = setInterval(() => { if (!document.hidden) loadStatus(); }, 10000); }
+}
+
+async function installUpdates() {
+  if (!confirm("Install the waiting system updates now? It takes a few minutes. The Pi keeps running; a restart may be needed afterwards (you choose when).")) return;
+  try { await api("POST", "power", { action: "update" }); note("Installing updates; progress shows here."); setTimeout(loadStatus, 3000); }
+  catch (e) { note("Couldn't ask the Pi: " + e.message); }
 }
 
 async function power(action) {

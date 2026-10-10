@@ -18,6 +18,8 @@ import urllib.parse
 import urllib.request
 
 POWER_REQUEST = "/var/lib/iptv-backup/power-request"
+UPDATE_STATUS = "/var/lib/iptv-backup/update.json"
+UPDATE_LOG = "/var/lib/iptv-backup/update.log"
 SERVICES = [
     ("dolby-converter.service", "Dolby converter and live buffer"),
     ("iptv-backup.service", "Backup service and this admin page"),
@@ -218,7 +220,19 @@ def copies():
 
 def system():
     now = time.time()
-    if now - _updates["at"] > 3600:
+    update = {}
+    try:
+        with open(UPDATE_STATUS) as f:
+            update = json.load(f)
+    except (OSError, ValueError):
+        pass
+    if update:
+        lines = [l for l in read(UPDATE_LOG).splitlines() if l.strip()]
+        update["log"] = lines[-8:]
+    # After an update, count again (and not while one runs).
+    if update.get("state") == "done" and update.get("finishedAt", 0) > _updates["at"]:
+        _updates["at"] = 0
+    if now - _updates["at"] > 3600 and update.get("state") != "running":
         lines = run(["apt", "list", "--upgradable"], timeout=20).splitlines()
         _updates["count"] = len([l for l in lines if "/" in l and "upgradable" in l])
         _updates["at"] = now
@@ -227,12 +241,13 @@ def system():
         "updatesCheckedAt": int(_updates["at"]),
         "bootloader": " ".join(run(["vcgencmd", "bootloader_version"]).splitlines()[:1]),
         "powerRequest": read(POWER_REQUEST),
+        "update": update,
     }
 
 
 def request_power(action, who):
     """Writes the request iptv-power.service carries out (as root)."""
-    if action not in ("reboot", "poweroff"):
+    if action not in ("reboot", "poweroff", "update"):
         raise ValueError("unknown action")
     with open(POWER_REQUEST + ".tmp", "w") as f:
         f.write(action + "\n")

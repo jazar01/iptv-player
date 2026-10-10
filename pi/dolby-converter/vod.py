@@ -54,6 +54,7 @@ class Job:
         self.folder = tempfile.mkdtemp(prefix="dixie-vod-")
         self.used = time.monotonic()
         self.newest = 0                     # highest piece number asked for
+        self.clients = {}
         self.stopped = False
         self.process = subprocess.Popen([
             ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin",
@@ -76,6 +77,15 @@ class Job:
 
     def touch(self):
         self.used = time.monotonic()
+
+    def seen_by(self, address):
+        """Notes the TV asking (its address), for /health's "clients"."""
+        if address:
+            self.clients[address] = time.monotonic()
+
+    def recent_clients(self):
+        now = time.monotonic()
+        return sorted(a for a, t in list(self.clients.items()) if now - t < 60)
 
     def playlist_text(self):
         try:
@@ -157,7 +167,8 @@ def summaries():
     for j in active:
         count, ended = j.pieces_ready()
         out.append({"file": j.name, "from": j.start, "minutes": round(count * PIECE / 60, 1), "done": ended,
-                    "watched": round(j.newest * PIECE / 60, 1), "idle": int(time.monotonic() - j.used)})
+                    "watched": round(j.newest * PIECE / 60, 1), "idle": int(time.monotonic() - j.used),
+                    "clients": j.recent_clients()})
     return out
 
 
