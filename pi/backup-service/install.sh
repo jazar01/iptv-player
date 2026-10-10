@@ -20,7 +20,7 @@ chmod 0750 /etc/iptv-backup
 chmod 0640 /etc/iptv-backup/key
 
 install -d /opt/iptv-backup
-install -m 0644 backup.py admin.py admin.html /opt/iptv-backup/
+install -m 0644 backup.py admin.py admin.html status.py /opt/iptv-backup/
 install -m 0644 iptv-backup.service /etc/systemd/system/iptv-backup.service
 # Nightly off-site copy to OneDrive (offsite.sh; does nothing until the
 # rclone connection in /etc/iptv-backup/rclone.conf is set up).
@@ -40,8 +40,14 @@ if [ -z "$rclone_minor" ] || [ "$rclone_minor" -lt 65 ]; then
 fi
 install -m 0755 offsite.sh /opt/iptv-backup/offsite.sh
 install -m 0644 iptv-offsite.service iptv-offsite.timer /etc/systemd/system/
+# Restart / Shut down from the admin page: the page writes a request file,
+# this root unit carries it out (status.py, iptv-power.sh).
+install -m 0755 iptv-power.sh /opt/iptv-backup/iptv-power.sh
+install -m 0644 iptv-power.path iptv-power.service /etc/systemd/system/
+rm -f /var/lib/iptv-backup/power-request
 systemctl daemon-reload
 systemctl enable --now iptv-offsite.timer >/dev/null 2>&1
+systemctl enable --now iptv-power.path >/dev/null 2>&1
 systemctl enable iptv-backup >/dev/null 2>&1
 systemctl restart iptv-backup
 sleep 1

@@ -1,0 +1,8 @@
+[Unit]
+Description=Restart / shut down requests from the Dixie TV admin page
+
+[Path]
+PathExists=/var/lib/iptv-backup/power-request
+
+[Install]
+WantedBy=multi-user.target

@@ -99,7 +99,9 @@ Full requirements: docs/requirements.md. Read it before making design decisions.
   (`components/screens/SharingScreen.*`) picks the kinds per TV. Stage 3:
   the admin page `http://<pi>:8792/admin` (`pi/backup-service/admin.*`,
   password `$AdminPassword` in `deploy.local.ps1`) shows the backups and edits
-  the household setup; a new TV starts from it (`applyHousehold`). Nightly
+  the household setup; a new TV starts from it (`applyHousehold`). Its Pi status tab
+  (`pi/backup-service/status.py`) shows the Pi's health, services and copies,
+  with Restart and Shut down carried out by a root unit (`iptv-power.*`). Nightly
   off-site copy to OneDrive (`offsite.sh`, rclone, `iptv-offsite.timer`;
   requirements "Off-site copy"). Keep `$BackupKey` somewhere off this PC.
   "Save and send to all TVs" on the admin page pushes the account: each TV

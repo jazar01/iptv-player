@@ -35,6 +35,10 @@
   ul.items li:last-child { border-bottom: 0; }
   ul.items li .grow { min-width: 0; overflow-wrap: anywhere; }
   #signin { max-width: 380px; margin: 60px auto; }
+  .kv { display: grid; grid-template-columns: minmax(130px, max-content) 1fr; gap: 4px 14px; }
+  .kv div:nth-child(odd) { color: var(--dim); font-size: 14px; }
+  .ok { color: #6fdc8c; }
+  button.danger { border-color: var(--bad); color: var(--bad); }
   #message { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #2e3946; padding: 10px 16px; border-radius: 8px; display: none; max-width: 90vw; }
 </style>
 </head>
@@ -45,6 +49,7 @@
     <button data-tab="tvs" class="on">TVs</button>
     <button data-tab="household">Household setup</button>
     <button data-tab="sharing">Sharing</button>
+    <button data-tab="pi">Pi status</button>
     <button id="signout">Sign out</button>
   </nav>
 </header>
@@ -113,6 +118,22 @@
   <section id="sharing">
     <p class="dim">What the TVs share (each TV chooses in Settings &gt; Sharing between TVs). The newest change to each item wins.</p>
     <div id="sharingInfo" class="card"></div>
+  </section>
+
+  <section id="pi">
+    <div class="row" style="margin-bottom:10px">
+      <p class="dim grow" id="piUpdated">Loading ...</p>
+      <button id="piRefresh" class="small">Refresh</button>
+    </div>
+    <div id="piCards"></div>
+    <div class="card">
+      <h2>Restart or shut down</h2>
+      <p class="dim">The TVs play straight from the provider while the Pi is off: no live buffer, Dolby conversion or backups until it's back. A restart takes about 15 seconds. After a shut down, the Pi stays off until its power is unplugged and plugged in again.</p>
+      <div class="row">
+        <button id="piReboot">Restart the Pi</button>
+        <button id="piPoweroff" class="danger">Shut down the Pi</button>
+      </div>
+    </div>
   </section>
 </main>
 <div id="message"></div>
@@ -309,17 +330,134 @@ function drawSharing() {
   section(box, "Favorites", s.favorites);
 }
 
+// ---- Pi status -------------------------------------------------------------
+function kv(box, pairs) {
+  const grid = el("div", undefined, "kv");
+  for (const [k, v, cls] of pairs) { grid.append(el("div", k), el("div", v === null || v === undefined || v === "" ? "unknown" : String(v), cls || "")); }
+  box.append(grid);
+}
+function card(title) { const c = el("div", undefined, "card"); c.append(el("h2", title)); $("piCards").append(c); return c; }
+function size(bytes) { return bytes >= 1e9 ? (bytes / 1e9).toFixed(1) + " GB" : Math.round(bytes / 1e6) + " MB"; }
+function span(seconds) {
+  const d = Math.floor(seconds / 86400), h = Math.floor(seconds % 86400 / 3600), m = Math.floor(seconds % 3600 / 60);
+  return (d ? d + " d " : "") + (d || h ? h + " h " : "") + m + " min";
+}
+function stamp(seconds) { return seconds > 0 ? when(seconds) : ""; }
+function ms(v) { return v === null || v === undefined ? ["no answer", "bad"] : ["answers (" + v + " ms)", "ok"]; }
+
+async function loadStatus() {
+  let s;
+  try { s = await api("GET", "status"); }
+  catch (e) { $("piUpdated").textContent = "The Pi didn't answer: " + e.message; return; }
+  $("piCards").replaceChildren();
+  $("piUpdated").textContent = "Updated " + new Date(s.at * 1000).toLocaleTimeString() + " - refreshes every 10 seconds while this tab is open.";
+  const o = s.overview, h = s.health, n = s.network, c = s.copies, sys = s.system, conv = s.converter;
+
+  kv(card("Overview"), [
+    ["Model", o.model], ["System", o.os + " (kernel " + o.kernel + ")"], ["Name", o.hostname],
+    ["Up", span(o.uptimeSeconds) + " (since " + when(o.startedAt) + ")"],
+    ["Running from", o.runningFrom, o.runningFromCard ? "" : "warn"],
+    ["Clock", o.clockSynced ? "synced with the internet" : "not synced yet", o.clockSynced ? "" : "warn"],
+  ]);
+
+  const memUsed = h.memoryTotal - h.memoryAvailable;
+  kv(card("Health"), [
+    ["Temperature", h.temperatureC + " °C", h.temperatureC >= 80 ? "bad" : h.temperatureC >= 70 ? "warn" : ""],
+    ["Fan", h.fanRpm === null ? "not found" : h.fanRpm ? h.fanRpm + " rpm" : "off (cool enough)"],
+    ["Processor", h.cpuMhz + " of " + h.cpuMaxMhz + " MHz, " + h.cores + " cores"],
+    ["Load", h.load.map((x) => x.toFixed(2)).join(", ") + " (1, 5, 15 min)", h.load[1] > h.cores ? "warn" : ""],
+    ["Slowdowns", !h.throttledKnown ? "unknown" : h.throttled.length ? h.throttled.join("; ") : "none since start", h.throttled.some((t) => t.includes("now")) ? "bad" : h.throttled.length ? "warn" : "ok"],
+    ["Power supply", h.supplyVolts ? h.supplyVolts + " V" : "", h.supplyVolts && h.supplyVolts < 4.9 ? "warn" : ""],
+    ["Memory", size(memUsed) + " used of " + size(h.memoryTotal) + " (" + size(h.memoryAvailable) + " free)"],
+    ["Card space", size(h.diskTotal - h.diskFree) + " used of " + size(h.diskTotal), h.diskFree < h.diskTotal * 0.1 ? "warn" : ""],
+  ]);
+
+  const gw = ms(n.gatewayMs), net = ms(n.internetMs), prov = n.provider && n.provider.host ? ms(n.provider.ms) : ["no account set up", ""];
+  kv(card("Network"), [
+    ["Address", n.address], ["Link", n.linkMbps ? n.linkMbps + " Mbit/s wired" : "", n.linkMbps && n.linkMbps < 1000 ? "warn" : ""],
+    ["Router (" + n.gateway + ")", gw[0], gw[1]], ["Internet", net[0], net[1]],
+    ["Provider" + (n.provider && n.provider.host ? " (" + n.provider.host + ")" : ""), prov[0], prov[1]],
+  ]);
+
+  const svc = card("Services");
+  const rows = [];
+  for (const u of s.services.units) {
+    if (!u.installed) { rows.push([u.label, "not installed", "warn"]); continue; }
+    const running = u.state === "active";
+    let text = running ? (u.sub === "waiting" ? "waiting" : "running") : u.state + (u.sub ? " (" + u.sub + ")" : "");
+    if (u.unit.endsWith(".timer")) text += (u.lastRun ? "; last " + stamp(u.lastRun) : "") + (u.nextRun ? "; next " + stamp(u.nextRun) : "");
+    else if (running && u.since) text += " since " + stamp(u.since);
+    if (+u.restarts > 0) text += "; restarted " + u.restarts + " time(s)";
+    rows.push([u.label, text, running ? "ok" : "bad"]);
+  }
+  rows.push(["Failed units", s.services.failed.length ? s.services.failed.join(", ") : "none", s.services.failed.length ? "bad" : "ok"]);
+  kv(svc, rows);
+
+  const cv = card("Converter now");
+  if (conv.error) kv(cv, [["Converter", "didn't answer (" + conv.error + ")", "bad"]]);
+  else {
+    const items = [];
+    for (const b of conv.buffers || []) items.push(["Live buffer", b.channel + ": " + b.minutes + " min, " + b.mb + " MB" + (b.converted ? ", audio converted" : "")]);
+    for (const a of conv.archives || []) items.push(["Archive", a.channel + ": " + a.minutes + " min cut" + (a.done ? " (all in)" : " so far") + ", " + a.mb + " MB"]);
+    for (const v of conv.vod || []) items.push(["Movie / episode", v.file + ": from " + span(v.from) + ", " + v.minutes + " min converted" + (v.done ? " (to the end)" : "") + ", watched to " + v.watched + " min"]);
+    if (!items.length) items.push(["In use", "nothing playing through the Pi right now"]);
+    items.push(["Version", conv.version + ", up " + span(conv.uptime)], ["Since start", conv.playlists + " playlists, " + conv.segments + " pieces served, " + conv.failed + " failed"], ["Live buffer memory", "up to " + conv.bufferBudgetMb + " MB"]);
+    kv(cv, items);
+  }
+
+  const off = c.offsite || {}, sc = c.selfclone || {};
+  kv(card("Copies"), [
+    ["OneDrive (nightly)", off.lastOk ? "last copied " + when(off.lastOk) + (off.ok ? "" : "; last try failed: " + off.message) : "not run yet", off.ok === false ? "bad" : ""],
+    ["USB stick (nightly)", sc.at ? (sc.ok ? "" : "FAILED: ") + sc.message + ", " + new Date(sc.at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "not run yet", sc.ok === false ? "bad" : ""],
+    ["USB stick", c.stick || "not plugged in", c.stick ? "" : "bad"],
+  ]);
+
+  kv(card("System"), [
+    ["Updates waiting", sys.updatesWaiting === null ? "not checked" : sys.updatesWaiting + " package(s)" + (sys.updatesWaiting ? " (install by hand, with steady power)" : "")],
+    ["Bootloader", sys.bootloader],
+  ]);
+}
+
+let statusTimer = null;
+function statusTab(on) {
+  clearInterval(statusTimer);
+  if (on) { loadStatus(); statusTimer = setInterval(() => { if (!document.hidden) loadStatus(); }, 10000); }
+}
+
+async function power(action) {
+  const text = action === "reboot"
+    ? "Restart the Raspberry Pi now? It takes about 15 seconds; the TVs play straight from the provider meanwhile."
+    : "Shut the Raspberry Pi down now? It stays off until its power is unplugged and plugged in again. The TVs play straight from the provider meanwhile.";
+  if (!confirm(text)) return;
+  try { await api("POST", "power", { action }); }
+  catch (e) { note("Couldn't ask the Pi: " + e.message); return; }
+  clearInterval(statusTimer);
+  $("piUpdated").textContent = action === "reboot" ? "Restarting ... this page reconnects when the Pi is back." : "Shutting down. Unplug and plug in its power to start it again.";
+  if (action !== "reboot") return;
+  const started = Date.now();
+  await new Promise((r) => setTimeout(r, 8000));
+  while (Date.now() - started < 180000) {
+    try { const r = await fetch("/admin/api/status", { credentials: "same-origin" }); if (r.status === 200 || r.status === 401) break; } catch (e) { /* still restarting */ }
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  start().then(() => statusTab($("pi").classList.contains("on"))).catch(() => showSignIn());
+}
+
 // ---- Wiring ---------------------------------------------------------------
 for (const b of document.querySelectorAll("#tabs button[data-tab]")) {
   b.onclick = () => {
     for (const x of document.querySelectorAll("#tabs button[data-tab]")) x.classList.toggle("on", x === b);
     for (const s of document.querySelectorAll("section")) s.classList.toggle("on", s.id === b.dataset.tab);
+    statusTab(b.dataset.tab === "pi");
   };
 }
 $("signinButton").onclick = signIn;
 $("password").onkeydown = (e) => { if (e.key === "Enter") signIn(); };
 $("signout").onclick = async () => { await api("POST", "logout").catch(() => {}); showSignIn(); };
 $("copyAll").onclick = copyAll;
+$("piRefresh").onclick = loadStatus;
+$("piReboot").onclick = () => power("reboot");
+$("piPoweroff").onclick = () => power("poweroff");
 $("saveHousehold").onclick = () => saveHousehold(false);
 $("pushAccount").onclick = pushAccount;
 $("clearMarket").onclick = () => { household.market = { key: "", label: "" }; drawHousehold(); };

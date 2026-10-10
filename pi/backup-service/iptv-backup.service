@@ -6,6 +6,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=iptvbackup
+# video: vcgencmd (throttling, supply voltage) for the admin page's status tab.
+SupplementaryGroups=video
 ExecStart=/usr/bin/python3 /opt/iptv-backup/backup.py --port 8792 --allow 192.168.222.0/24
 Restart=always
 RestartSec=3

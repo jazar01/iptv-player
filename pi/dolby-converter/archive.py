@@ -135,6 +135,20 @@ def job_for(url, convert, agent, ffmpeg):
         return job
 
 
+def summaries():
+    """For /health: each archive job, how much is cut and whether it's all in."""
+    with jobs_lock:
+        active = list(jobs.values())
+    out = []
+    for j in active:
+        with j.lock:
+            seconds = sum(float(p.duration or 0) for p in j.pieces)
+            mb = sum(len(p.data) for p in j.pieces) // (1024 * 1024)
+        out.append({"channel": j.name, "minutes": round(seconds / 60, 1), "mb": mb, "done": j.done,
+                    "converted": j.convert, "idle": int(time.monotonic() - j.used)})
+    return out
+
+
 def find(jid):
     with jobs_lock:
         for job in jobs.values():

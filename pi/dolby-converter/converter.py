@@ -46,7 +46,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.7"
+VERSION = "1.8"
 DEFAULT_UA = "Roku/DVP-14.0 (14.0.0.0)"     # the provider refuses non-Roku agents (404)
 UPSTREAM_TIMEOUT = 20                       # seconds, per read
 MAX_SEGMENT = 64 * 1024 * 1024              # archive minutes run about 20 MB
@@ -390,6 +390,8 @@ class Handler(BaseHTTPRequestHandler):
         with stats_lock:
             body = dict(stats, version=VERSION, uptime=int(time.monotonic() - stats["started"]))
         body["buffers"] = buffer.summaries()
+        body["archives"] = archive.summaries()
+        body["vod"] = vod.summaries()
         body["bufferBudgetMb"] = buffer.BUDGET // (1024 * 1024)
         body.pop("started")
         self.send_body(200, "application/json", json.dumps(body).encode())

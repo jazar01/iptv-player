@@ -149,6 +149,18 @@ def job_for(url, start, agent, ffmpeg):
         return job
 
 
+def summaries():
+    """For /health: each movie or episode being converted."""
+    with jobs_lock:
+        active = list(jobs.values())
+    out = []
+    for j in active:
+        count, ended = j.pieces_ready()
+        out.append({"file": j.name, "from": j.start, "minutes": round(count * PIECE / 60, 1), "done": ended,
+                    "watched": round(j.newest * PIECE / 60, 1), "idle": int(time.monotonic() - j.used)})
+    return out
+
+
 def find(jid):
     with jobs_lock:
         for job in jobs.values():

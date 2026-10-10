@@ -1,0 +1,6 @@
+[Unit]
+Description=Carry out a restart / shut down request from the Dixie TV admin page
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /opt/iptv-backup/iptv-power.sh

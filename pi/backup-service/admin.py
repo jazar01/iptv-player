@@ -32,6 +32,8 @@ import urllib.parse
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
+import status
+
 SESSION_SECONDS = 12 * 3600
 PBKDF2_ROUNDS = 200000
 DEVICE_ID = re.compile(r"^[A-Za-z0-9-]{1,64}$")
@@ -153,6 +155,13 @@ class Admin:
             self.send(h, 200, self.read_household())
         elif parts == ["household"] and method == "PUT":
             self.save_household(h, self.body(h))
+        elif parts == ["status"] and method == "GET":
+            self.send(h, 200, status.collect(self.provider_server()))
+        elif parts == ["power"] and method == "POST":
+            action = str(self.body(h).get("action", ""))
+            status.request_power(action, h.client_address[0])
+            self.log.info("admin asked for %s from %s", action, h.client_address[0])
+            self.send(h, 200, {"ok": True})
         else:
             self.send(h, 404, {"error": "not found"})
 
@@ -294,6 +303,14 @@ class Admin:
         shutil.copyfile(source, self.store.device_path(device))
         self.log.info("admin made %s's copy of %s the current backup", day, device)
         self.send(h, 200, {"ok": True})
+
+    def provider_server(self):
+        """The provider's address from the household setup, for the status
+        page's "provider answers" check ("" if there's none)."""
+        try:
+            return str(self.read_household().get("credentials", {}).get("server", ""))
+        except (OSError, ValueError, KeyError, AttributeError):
+            return ""
 
     def household_path(self):
         return os.path.join(self.store.root, "household.json")
