@@ -24,6 +24,11 @@
     ]
   },
   "epg": {
+    "cardTitle": {
+      "comment": "Home cards show a program in one line: a title that is a sport and a matchup ('College Football : South Carolina at Kentucky') shows just the matchup. sportPrefix: the part dropped (from the start, up to the colon); matchup: what the rest must contain.",
+      "sportPrefix": "^[^:]{3,40}?\\s*:\\s+",
+      "matchup": " at | vs\\.? | v | @ "
+    },
     "base64Titles": true
   },
   "titleTags": [

@@ -112,7 +112,17 @@ sub onSchedule()
         m.schedules[key] = s.listings
         m.failed.Delete(key)
     end if
-    redraw()
+    ' Only its own row, and only if it's on screen: a pause in scrolling
+    ' brings in about 14 schedules, and a whole-grid redraw for each rebuilt
+    ' some 1,000 nodes in a burst, so Up/Down lagged, then caught up all at
+    ' once (Basement, Oct 10, 2026).
+    for r = 0 to m.ROWS - 1
+        idx = m.topRow + r
+        if idx < m.channels.Count() and toInt(m.channels[idx].streamId).ToStr() = key
+            drawRow(r)
+            if idx = m.row then drawInfo()
+        end if
+    end for
 end sub
 
 sub onStatus()
@@ -340,10 +350,19 @@ end function
 sub moveRow(delta as Integer)
     target = m.row + delta
     if target < 0 or target >= m.channels.Count() then return
+    previous = m.row
+    previousTop = m.topRow
     m.row = target
     if m.row < m.topRow then m.topRow = m.row
     if m.row >= m.topRow + m.ROWS then m.topRow = m.row - m.ROWS + 1
-    redraw()
+    if m.topRow = previousTop
+        ' Within the rows on screen: only the one left and the one reached.
+        drawRow(previous - m.topRow)
+        drawRow(m.row - m.topRow)
+        drawInfo()
+    else
+        redraw()
+    end if
     m.wantDelay.control = "stop"
     m.wantDelay.control = "start"
 end sub
@@ -368,10 +387,21 @@ sub moveNext()
     end if
     if target > nowSeconds() + 26 * 3600 then return
     m.focusTime = target
+    windowBefore = m.windowStart
     while m.focusTime >= m.windowStart + m.WINDOW - m.STEP
         m.windowStart = m.windowStart + m.STEP
     end while
-    redraw()
+    redrawFocusOrAll(windowBefore)
+end sub
+
+' After Left/Right: the focused row alone when the time window stayed put.
+sub redrawFocusOrAll(windowBefore as Integer)
+    if m.windowStart = windowBefore
+        drawRow(m.row - m.topRow)
+        drawInfo()
+    else
+        redraw()
+    end if
 end sub
 
 ' Left: the previous program (not before now).
@@ -394,10 +424,11 @@ sub movePrevious()
         target = now                    ' the program on now
     end if
     m.focusTime = target
+    windowBefore = m.windowStart
     while m.focusTime < m.windowStart and m.windowStart > m.windowMin
         m.windowStart = m.windowStart - m.STEP
     end while
-    redraw()
+    redrawFocusOrAll(windowBefore)
 end sub
 
 function rowListings() as Dynamic
@@ -507,20 +538,20 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         else if key = "down"
             m.onButton = false
             drawButton()
-            redraw()
+            drawRow(m.row - m.topRow)
             return true
         else if key = "left" or key = "right"
             return true
         end if
         m.onButton = false
         drawButton()
-        redraw()
+        drawRow(m.row - m.topRow)
         return false
     end if
     if key = "up" and m.row = 0
         m.onButton = true
         drawButton()
-        redraw()
+        drawRow(m.row - m.topRow)
         return true
     end if
     if key = "up" and m.row > 0

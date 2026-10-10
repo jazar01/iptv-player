@@ -155,7 +155,7 @@ function myTeamsRowItems(services as Object) as Object
         items.Push({
             kind: "game"
             itemKey: "game:" + g.key
-            name: g.title
+            name: cardTitle(g.title)        ' "Georgia at Alabama", not "College Football : Georgia..."
             teamName: g.teamName
             subtitle: g.sportLabel
             logo: asString(logos[asString(g.teamId)])

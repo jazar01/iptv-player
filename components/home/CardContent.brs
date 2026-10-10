@@ -6,17 +6,39 @@ function programFields(entry as Object) as Object
     fields = { nowTitle: "", nowFlags: "", nowStart: 0, nowEnd: 0, nextTitle: "", nextStart: 0 }
     current = entry.now
     if type(current) = "roAssociativeArray"
-        fields.nowTitle = current.title
+        fields.nowTitle = cardTitle(current.title)
         fields.nowFlags = joinFlags(current.flags)
         fields.nowStart = current.start
         fields.nowEnd = current.ends
     end if
     upcoming = entry.upcoming
     if type(upcoming) = "roAssociativeArray"
-        fields.nextTitle = upcoming.title
+        fields.nextTitle = cardTitle(upcoming.title)
         fields.nextStart = upcoming.start
     end if
     return fields
+end function
+
+' A card's one line for a program: "College Football : South Carolina at
+' Kentucky" left room for "College Football : Sout..."; when what follows
+' the sport is a matchup, the card shows just the matchup (Oct 10, 2026).
+' The patterns are epg.cardTitle in data/guide-rules.json.
+function cardTitle(title as Dynamic) as String
+    text = asString(title)
+    if m.cardTitleRules = invalid
+        m.cardTitleRules = {}
+        json = ParseJson(ReadAsciiFile("pkg:/data/guide-rules.json"))
+        if type(json) = "roAssociativeArray" and type(json.epg) = "roAssociativeArray" and type(json.epg.cardTitle) = "roAssociativeArray"
+            m.cardTitleRules = { prefix: rulesRegex(json.epg.cardTitle.sportPrefix, "i"), matchup: rulesRegex(json.epg.cardTitle.matchup, "i") }
+        end if
+    end if
+    r = m.cardTitleRules
+    if r.prefix = invalid or r.matchup = invalid then return text
+    match = r.prefix.Match(text)
+    if match.Count() = 0 then return text
+    rest = Mid(text, Len(match[0]) + 1).Trim()
+    if rest <> "" and r.matchup.IsMatch(rest) then return rest
+    return text
 end function
 
 function joinFlags(flags as Dynamic) as String
