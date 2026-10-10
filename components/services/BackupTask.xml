@@ -28,6 +28,10 @@
     <field id="fetchResult" type="assocarray" alwaysNotify="true" />
     <field id="syncRequest" type="assocarray" alwaysNotify="true" />
     <field id="syncResult" type="assocarray" alwaysNotify="true" />
+    <!-- What this TV is playing, for the admin page's status tab: { deviceId, name,
+         kind ("live" | "movie" | "episode" | "none"), title, program, via }. Sent only
+         once the service has been found (no search for it), newest only, no answer. -->
+    <field id="nowPlaying" type="assocarray" alwaysNotify="true" />
     <field id="status" type="assocarray" alwaysNotify="true" />
     <!-- True once the thread is listening: requests set before that are lost. -->
     <field id="ready" type="boolean" value="false" />

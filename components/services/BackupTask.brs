@@ -12,7 +12,7 @@ sub backupLoop()
     m.savedAt = 0
     m.lastError = ""
     m.keys = loadKeys()
-    for each f in ["upload", "listRequest", "fetchRequest", "syncRequest"]
+    for each f in ["upload", "listRequest", "fetchRequest", "syncRequest", "nowPlaying"]
         m.top.ObserveField(f, m.port)
     end for
     m.top.ready = true
@@ -45,6 +45,13 @@ sub backupLoop()
                     m.top.syncResult = sync(req)
                 else if field = "fetchRequest"
                     m.top.fetchResult = fetchBackup(req)
+                else if field = "nowPlaying"
+                    pending = m.port.PeekMessage()
+                    while pending <> invalid and type(pending) = "roSGNodeEvent" and pending.GetField() = "nowPlaying"
+                        req = m.port.GetMessage().GetData()
+                        pending = m.port.PeekMessage()
+                    end while
+                    sendNowPlaying(req)
                 end if
             catch e
                 print "[backup] ERROR handling "; field; " (recovered): "; redact(e.message)
@@ -227,6 +234,14 @@ end function
 ' One HTTP request to the service: { code, body, error }. Finds the service
 ' first if needed, and once more if it doesn't answer where it was (the Pi
 ' got a new address).
+' The admin page's "what's being watched": a short note to the service, only
+' if it has already been found (a backup or sync finds it), never retried.
+sub sendNowPlaying(req as Dynamic)
+    if m.address = "" or type(req) <> "roAssociativeArray" then return
+    body = FormatJson({ "deviceId": asString(req.deviceId), "name": asString(req.name), "kind": asString(req.kind), "title": asString(req.title), "program": asString(req.program), "via": asString(req.via) })
+    httpCall("PUT", "http://" + m.address + "/now-playing", body, invalid)
+end sub
+
 function request(method as String, path as String, body as String, headers = invalid as Dynamic) as Object
     for attempt = 1 to 2
         if m.address = "" then m.address = findService()

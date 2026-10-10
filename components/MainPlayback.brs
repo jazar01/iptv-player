@@ -199,6 +199,43 @@ function pictureText(width as Integer, height as Integer, fps as Integer) as Str
     return text
 end function
 
+' What this TV is playing, for the admin page's status tab ("Basement:
+' ESPN, South Carolina at Florida, live buffer"): on each start, every 30 s
+' while the player is open, and "none" once it closes. Through the backup
+' service, only once it has been found.
+sub sendNowPlaying()
+    if m.nowPlayingTimer = invalid
+        m.nowPlayingTimer = CreateObject("roSGNode", "Timer")
+        m.nowPlayingTimer.duration = 30
+        m.nowPlayingTimer.repeat = true
+        m.nowPlayingTimer.ObserveField("fire", "onNowPlayingTimer")
+        m.top.AppendChild(m.nowPlayingTimer)
+    end if
+    m.nowPlayingTimer.control = "start"
+    onNowPlayingTimer()
+end sub
+
+sub onNowPlayingTimer()
+    device = m.store.callFunc("getDevice")
+    note = { deviceId: asString(device.deviceId), name: asString(device.deviceName), kind: "none", title: "", program: "", via: "" }
+    p = m.playing
+    if m.player <> invalid and type(p) = "roAssociativeArray"
+        note.kind = asString(p.kind)
+        note.title = asString(p.name)
+        note.via = "the provider"
+        if isTrue(p.buffered) then note.via = "the live buffer"
+        if not isTrue(p.buffered) and isTrue(p.converted) then note.via = "the Dolby converter"
+        if p.kind = "live"
+            programs = m.epg.callFunc("getPrograms", [p.id])
+            entry = programs[toInt(p.id).ToStr()]
+            if type(entry) = "roAssociativeArray" and type(entry.now) = "roAssociativeArray" then note.program = cardTitle(asString(entry.now.title))
+        end if
+    else
+        m.nowPlayingTimer.control = "stop"
+    end if
+    backupSend("nowPlaying", note)
+end sub
+
 sub onBufferKeepTimer()
     if m.player <> invalid then sendBufferNote(m.playing, "bk")
 end sub
@@ -392,6 +429,7 @@ sub startPlayer(play as Object, position as Integer)
         m.player.channelLabel = favoriteLabel(labelId)
     end if
     m.player.content = play
+    sendNowPlaying()
 
     if play.kind = "live"
         cached = m.epg.callFunc("getPrograms", [play.id])
@@ -468,6 +506,7 @@ sub onPlayerClosed()
     sendBufferNote(m.playing, "bq")
     m.bufferKeepTimer.control = "stop"
     m.playing = invalid
+    sendNowPlaying()        ' "none": nothing playing now
     if m.infoFor <> invalid and m.infoFor.source = "player" then m.infoFor = invalid
     m.stepTimer.control = "stop"
     m.stepTarget = invalid

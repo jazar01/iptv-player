@@ -268,6 +268,23 @@ class Handler(BaseHTTPRequestHandler):
         if not self.server.admin.handle(self, "POST"):
             self.send_json(404, {"error": "not found"})
 
+    def now_playing(self):
+        """A TV's note of what it's playing (the admin page's status tab),
+        kept in memory only, by its device ID."""
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            note = json.loads(self.rfile.read(min(length, 4096)) or b"{}")
+            device = str(note.get("deviceId", ""))
+            if not DEVICE_ID.match(device):
+                raise ValueError("no device ID")
+        except (ValueError, TypeError):
+            self.send_json(400, {"error": "bad note"})
+            return
+        keep = {k: str(note.get(k, ""))[:160] for k in ("name", "kind", "title", "program", "via")}
+        keep.update(address=self.client_address[0], at=int(time.time()))
+        self.server.now_playing[device] = keep
+        self.send_json(200, {"ok": True})
+
     def do_PUT(self):
         if not self.server.allowed(self.client_address[0]):
             self.send_json(403, {"error": "not on the home network"})
@@ -275,6 +292,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.server.admin.handle(self, "PUT"):
             return
         parts = self.parts()
+        if parts == ["now-playing"]:
+            self.now_playing()
+            return
         shared = parts == ["shared"]
         if not shared and (len(parts) != 2 or parts[0] != "devices" or not DEVICE_ID.match(parts[1])):
             self.send_json(404, {"error": "not found"})
@@ -317,6 +337,7 @@ class Server(ThreadingHTTPServer):
 
     def __init__(self, address, networks, store):
         super().__init__(address, Handler)
+        self.now_playing = {}       # device ID -> its latest now-playing note (now_playing)
         self.networks = networks
         self.store = store
 
@@ -376,6 +397,7 @@ def main():
     from admin import Admin
     page = os.path.join(os.path.dirname(os.path.abspath(__file__)), "admin.html")
     server.admin = Admin(store, key, args.admin_file, page, log, write_atomic)
+    server.admin.now_playing = server.now_playing
     threading.Thread(target=answer_discovery, args=(server, args.port), daemon=True).start()
     log.info("backup service %s on port %d (search on UDP %d), storing in %s, for %s",
              VERSION, args.port, DISCOVERY_PORT, args.data, ", ".join(map(str, networks)))

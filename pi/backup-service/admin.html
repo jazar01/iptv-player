@@ -468,17 +468,30 @@ async function loadStatus() {
     for (const a of conv.archives || []) add(a.clients, "archive: " + a.channel);
     for (const v of conv.vod || []) add(v.clients, "movie / episode with converted audio: " + v.file);
   }
+  // What each TV says it's playing (its note every 30 s), else what the
+  // converter is serving it.
+  const KIND = { live: "", movie: "movie: ", episode: "" };
   const tvRows = [];
+  let watching = 0;
   for (const t of s.tvs || []) {
     const using = now[t.name];
-    let setting = t.liveBuffer === null ? "setting unknown" : t.liveBuffer ? (t.converter ? "live buffer on" : "live buffer on, but no converter set") : "live buffer off";
-    tvRows.push([t.name, (using ? "NOW: " + using.join("; ") + "  -  " : "") + setting, using ? "ok" : t.liveBuffer && t.converter ? "" : "dim"]);
+    const setting = t.liveBuffer === null ? "setting unknown" : t.liveBuffer ? (t.converter ? "live buffer on" : "live buffer on, but no converter set") : "live buffer off";
+    const w = t.watching;
+    let text = setting, cls = t.liveBuffer && t.converter ? "" : "dim";
+    if (w) {
+      text = "WATCHING " + (KIND[w.kind] || "") + w.title + (w.program ? ": " + w.program : "") + " (through " + w.via + ")  -  " + setting;
+      cls = "ok"; watching++;
+    } else if (using) {
+      text = "NOW: " + using.join("; ") + "  -  " + setting;
+      cls = "ok"; watching++;
+    }
+    tvRows.push([t.name, text, cls]);
     delete now[t.name];
   }
-  for (const [name, list] of Object.entries(now)) tvRows.push([name === "?" ? "Unknown TV" : name, "NOW: " + list.join("; "), "ok"]);
-  const inUse = tvRows.filter((r) => r[1].startsWith("NOW")).length;
-  const tvCard = card("TVs and the live buffer");
-  tvCard.append(el("p", inUse ? inUse + " TV(s) playing through the Pi now." : "No TV is playing through the Pi right now.", "dim"));
+  for (const [name, list] of Object.entries(now)) { tvRows.push([name === "?" ? "Unknown TV" : name, "NOW: " + list.join("; "), "ok"]); watching++; }
+  tvRows.sort((a, b) => (b[2] === "ok") - (a[2] === "ok"));
+  const tvCard = card("TVs and what they're watching");
+  tvCard.append(el("p", watching ? watching + " TV(s) watching now." : "No TV is watching right now.", "dim"));
   kv(tvCard, tvRows.length ? tvRows : [["TVs", "none have backed up yet"]]);
 
   const memUsed = h.memoryTotal - h.memoryAvailable;

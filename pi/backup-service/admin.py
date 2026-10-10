@@ -115,6 +115,7 @@ class Admin:
         self.log = log
         self.write_atomic = write_atomic
         self.sessions = {}
+        self.now_playing = None      # the server's notes from the TVs (backup.py now_playing)
         self.lock = threading.Lock()
 
     # -- plumbing ---------------------------------------------------------
@@ -332,6 +333,10 @@ class Admin:
         for d in self.store.devices():
             entry = {"name": d.get("name") or "(no name)", "address": addresses.get(d["id"], ""),
                      "liveBuffer": None, "converter": ""}
+            note = self.now_playing.get(d["id"]) if self.now_playing is not None else None
+            if note and time.time() - note.get("at", 0) < 90 and note.get("kind") not in ("", "none"):
+                entry["watching"] = note
+                entry["address"] = entry["address"] or note.get("address", "")
             try:
                 doc = self.sealer.open(self.read_sealed(self.store.device_path(d["id"])))
                 settings = {str(k).lower(): v for k, v in (doc.get("settings") or {}).items()}
